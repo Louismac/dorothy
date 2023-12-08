@@ -33,6 +33,8 @@ MySketch()
 
 Launch your sketch (`.py`) from terminal. Your sketch **must** be in the same directory as ``Dorothy.py``
 
+Install requirements with `pip install -r requirements.txt`
+
 ### Closing the window
 
 Either hold `q` with the window in focus, or use `ctrl-z` in the terminal to close. You must close the current window before re-running to see changes.
