@@ -73,7 +73,7 @@ file_path = "../audio/hiphop.wav"
 dot.music.load_file(file_path, fft_size = 1024, buffer_size = 1024)
 ```
 
-Or pick a stream playing on your computer 
+Or pick a an output device playing on your computer. On MacOSX I use [Blackhole](https://existential.audio/blackhole/download/) and [Multioutput device](https://support.apple.com/en-gb/guide/audio-midi-setup/ams7c093f372/mac) to pump audio to here, and to listen in speakers as well. Should work on windows but I havent tested anything yet!
 
 ```
 print(sd.query_devices())
