@@ -23,9 +23,17 @@ class MySketch:
         dot.music.play()
         
     def draw(self):
+        
         dot.background((0))
-        for i,val in enumerate(dot.music.fft_vals[::8]):
-            line(dot.canvas, (i*5, dot.height), (0, dot.height-int(val*450)), (0,(1-val)*255,0), 1+int(10*val))
+
+        for bin_num, bin_val in enumerate(dot.music.fft_vals[::8]):
+           
+            pt1 = (bin_num*5, dot.height)
+            pt2 = (0, dot.height-int(bin_val*1000))
+            color = (0,(1-bin_val)*255,0)
+            thickness = 1+int(10*bin_val)
+           
+            line(dot.canvas, pt1, pt2, color, thickness)
 
 MySketch()
 
