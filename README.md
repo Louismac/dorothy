@@ -77,6 +77,8 @@ dot.music.load_file(file_path, fft_size = 1024, buffer_size = 1024)
 
 Or pick a an output device playing on your computer. On MacOSX I use [Blackhole](https://existential.audio/blackhole/download/) and [Multioutput device](https://support.apple.com/en-gb/guide/audio-midi-setup/ams7c093f372/mac) to pump audio to here, and to listen in speakers as well. Should work on windows but I havent tested anything yet!
 
+You could also use this approach to get in the stream of your laptops microphone, or an external microphone. `print(sd.query_devices())` will give the you list of available devices, and their device ids to pass to the set up function.
+
 ```
 print(sd.query_devices())
 dot.music.get_stream(2, fft_size=1024, buffer_size=2048)
