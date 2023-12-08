@@ -1,5 +1,4 @@
 from Dorothy import Dorothy
-from mosaic import get_images
 import numpy as np
 
 dot = Dorothy(300,300)
@@ -7,7 +6,7 @@ dot = Dorothy(300,300)
 class MySketch:
 
     thumbnail_size = (dot.width, dot.height)
-    dataset = get_images("../images/aligned_faces", thumbnail_size)
+    dataset = dot.get_images("../images/aligned_faces", thumbnail_size)
     current_image = 0
 
     def __init__(self):

@@ -12,6 +12,7 @@ import psutil
 import ctypes
 import time
 import traceback
+import glob
 
 #Class for analysing audio streams in realtime
 class AudioCapture:
@@ -334,6 +335,30 @@ class Dorothy:
             c2[0] = np.array(c2[0] + inverted_masked, dtype = np.uint8)
         self.canvas = self.layers[-1][0]
         self.layers = []
+
+    def get_images(self, root_dir = "data/animal_thumbnails/land_mammals/cat", thumbnail_size = (50,50)):
+        #Set the thumbnail size (you can change this but you won't want to make it too big!)
+        images = []
+        #Search through the separate file extensions 
+        for ext in ('*.jpeg', '*.jpg', '*.png'):
+            #Search through all the image files recursively in the directory
+            for file in glob.glob(f'{root_dir}/**/{ext}', recursive=True):
+                #Open the image using the file path
+                im = cv2.imread(file)
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+                #Create a downsampled image based on the thumbnail size
+                thumbnail = cv2.resize(im, thumbnail_size)
+                thumbnail = np.asarray(thumbnail)
+                #Check not grayscale (only has 2 dimensions)
+                if len(thumbnail.shape) == 3:
+                    #Append thumbnail to the list of all the images
+                    #Drop any channels beyond rbg (e.g. Alpha for .png files)
+                    images.append(thumbnail[:,:,:3])
+
+        print(f'There have been {len(images)} images found')
+        #Convert list of images to a numpy array
+        image_set_array = np.asarray(images)
+        return image_set_array
 
     def exit(self):
         self.music.stop()
