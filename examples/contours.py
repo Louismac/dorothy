@@ -1,7 +1,8 @@
 from Dorothy import Dorothy
-from skimage import measure
+from skimage import measure #(pip install scikit-image)
 import numpy as np
 import cv2
+import sounddevice as sd
 
 dot = Dorothy(1920,1080)
 
@@ -11,7 +12,7 @@ class MySketch:
     bbox = []
     mode = 0
     written = False
-    level = 0.1
+    level = 0.2
     topk = 150
 
     def __init__(self):
@@ -19,22 +20,24 @@ class MySketch:
 
     def setup(self):
         
-        #fp = "images/theo-van-rysselberghe_4.jpg"
-        fp = "images/theo-van-rysselberghe_10.jpg"
+        fp = "images/theo-van-rysselberghe_4.jpg"
+        fp = "/Users/louisbusby/Downloads/DSC00756_A.jpg"
 
         self.image = cv2.imread(fp)
         self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
         self.im_w = self.image.shape[1]
         self.im_h = self.image.shape[0]
+        print(self.im_w,self.im_h)
 
         if self.im_h > dot.height or self.im_w > dot.width:
             print("scaling down image to fit canvas")
-            self.image = cv2.resize(self.image, (dot.height, dot.width))
+            self.image = cv2.resize(self.image, (dot.width, dot.height))
             self.im_w = self.image.shape[1]
             self.im_h = self.image.shape[0]
+            print(self.im_w,self.im_h)
 
         self.gray_example = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
-        _, self.thresh= cv2.threshold(self.gray_example, 100, 255, cv2.THRESH_BINARY)
+        _, self.thresh= cv2.threshold(self.gray_example, 120, 255, cv2.THRESH_BINARY)
         
         #Get contours 
         self.contours = measure.find_contours(self.thresh, self.level)
@@ -67,26 +70,29 @@ class MySketch:
         self.top_x = (dot.width-self.im_w)//2
         self.theta_offset = np.pi
 
-        dot.music.load_file("../audio/disco.wav")
+        #Pick or just stream from your computer
+        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
+        print(sd.query_devices())
+        dot.music.get_stream(5)
         dot.music.play()
-        
+
         dot.background((0,0,0))
         #Draw image behind?
         dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
 
     def draw(self):
-
+        #dot.background((0,0,0))
         #Draw image behind?
-        dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
+        #dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
         
         #Transparency of contours
-        alpha = 0.99
+        alpha = 0.6
         #Chance of a direction change
         dir_change = 0.05
         #How many to draw
-        cut_off = 90
+        cut_off = 50
         #Scale of movement
-        scale = 1 
+        scale = 2
 
         #Get contours to draw
         to_use = self.contours[-cut_off:]

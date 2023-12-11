@@ -189,7 +189,7 @@ class MusicAnalyser:
             self.fft_vals = self.fft[:,current_fft_ptr]
             self.amplitude = self.audio_player.amplitude
             
-        self.audio_player = AudioPlayer(self.y, new_frame, buffer_size, sr)
+        self.audio_player = AudioPlayer(self.y, new_frame, buffer_size, self.sr)
 
     def play(self):
         if not self.audio_player is None:
