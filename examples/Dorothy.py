@@ -389,8 +389,11 @@ class Dorothy:
             print('You pressed Ctrl+C! Closing the window.')
             self.exit()
 
-        # Link the signal handler to SIGINT
-        signal.signal(signal.SIGTSTP, signal_handler)
+        try:
+            # Link the signal handler to SIGINT
+            signal.signal(signal.SIGTSTP, signal_handler)
+        except:
+            pass
 
         name = "hold q to quit or ctrl z in terminal"
         cv2.namedWindow(name)
