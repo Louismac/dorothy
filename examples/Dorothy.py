@@ -123,6 +123,7 @@ class RAVEPlayer(AudioDevice):
         else:
             audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
             self.ptr += self.buffer_size
+            #Currently dont do proper wrapping for buffer sizes that arent factors of 4096
             if self.ptr >= self.frame_size:
                 self.ptr = 0
                 self.current_buffer = self.next_buffer.copy()
