@@ -67,6 +67,16 @@ class AudioDevice:
             # If paused, skip processing
             return
         
+    def capture_audio(self):
+        print("play_audio", self.running)
+        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size) as stream:
+            while self.running:
+                if not self.pause_event.is_set():
+                    data = self.audio_callback()
+                    stream.write(data)
+                else:
+                    time.sleep(0.1)  
+        
     def play(self):
         self.running = True
         self.play_thread.start()
@@ -124,16 +134,6 @@ class RAVEPlayer(AudioDevice):
             self.do_analysis(audio_buffer)
             return audio_buffer
 
-    def capture_audio(self):
-        print("play_audio", self.running)
-        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size) as stream:
-            while self.running:
-                if not self.pause_event.is_set():
-                    data = self.audio_callback()
-                    stream.write(data)
-                else:
-                    time.sleep(0.1)  
-
 #Class for analysing audio streams in realtime
 class AudioCapture(AudioDevice):
     def __init__(self, device, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
@@ -184,16 +184,6 @@ class AudioPlayer(AudioDevice):
                 self.ptr = wrap_ptr
             self.do_analysis(audio_buffer)
             return audio_buffer
-
-    def capture_audio(self):
-        print("play_audio", self.running)
-        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size) as stream:
-            while self.running:
-                if not self.pause_event.is_set():
-                    data = self.audio_callback()
-                    stream.write(data)
-                else:
-                    time.sleep(0.1)  
 
 #Main class for music analysis
 class MusicAnalyser:
