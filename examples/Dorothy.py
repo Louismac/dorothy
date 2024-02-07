@@ -135,9 +135,8 @@ class RAVEPlayer(AudioDevice):
 
 #Class for analysing audio streams in realtime
 class AudioCapture(AudioDevice):
-    def __init__(self, device, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
+    def __init__(self, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
         super().__init__(new_frame, fft_size, buffer_size, sr)
-        self.device = device
         
     def audio_callback(self, indata, frames, time, status):
         if status:
@@ -199,7 +198,8 @@ class MusicAnalyser:
 
     def get_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100):
         print(sd.query_devices(device))
-        self.audio_device = AudioCapture(device=device, new_frame = self.new_frame, buffer_size=buffer_size, sr=sr, fft_size=fft_size)
+        sd.default.device = device
+        self.audio_device = AudioCapture(new_frame = self.new_frame, buffer_size=buffer_size, sr=sr, fft_size=fft_size)
 
     def load_file(self, file_path, fft_size=1024, buffer_size=1024, sr = 44100):
         #load file
