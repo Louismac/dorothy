@@ -13,15 +13,14 @@ import ctypes
 import time
 import traceback
 import glob
+#For Rave example, not normally needed
 try:
-    # Try importing the module
     import torch
     torch.set_grad_enabled(False)
 except ImportError:
-    # Handle the absence of the module
     print("torch not available, RAVE example won't work, otherwise ignore.")
 
-
+#Parent class for audio providers 
 class AudioDevice:
     def __init__(self, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
         self.running = True
@@ -60,12 +59,8 @@ class AudioDevice:
         # just return the most recent frame (for visualising)
         self.new_frame(self.fft_vals[-1], self.amplitude)
 
-    def audio_callback(self, indata, frames, time, status):
-        if status:
-            print(status)
-        if self.pause_event.is_set():
-            # If paused, skip processing
-            return
+    def audio_callback(self):
+        return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
         print("play_audio", self.running)
@@ -91,7 +86,7 @@ class AudioDevice:
         self.running = False
         self.play_thread.join()
     
-
+#Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
     def __init__(self, model_path, new_frame=lambda: 0, fft_size=512, buffer_size=2048, sr=44100):
         super().__init__(new_frame, fft_size, buffer_size, sr)
@@ -105,7 +100,9 @@ class RAVEPlayer(AudioDevice):
         self.model_path = model_path
         self.model = torch.jit.load(model_path).to(self.device)
         self.current_buffer = self.get_frame()
-        self.next_buffer = self.get_frame()
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        self.generate_thread.start()
         self.ptr = 0
     
     def fill_next_buffer(self):
@@ -127,10 +124,11 @@ class RAVEPlayer(AudioDevice):
             audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
             self.ptr += self.buffer_size
             if self.ptr >= self.frame_size:
-                self.current_buffer = self.next_buffer.copy()
-                self.generate_thread = threading.Thread(target=self.fill_next_buffer)
-                self.generate_thread.start()
                 self.ptr = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
             self.do_analysis(audio_buffer)
             return audio_buffer
 
@@ -143,7 +141,6 @@ class AudioCapture(AudioDevice):
     def audio_callback(self, indata, frames, time, status):
         if status:
             print(status)
-        # Perform FFT on the current chunk
         if self.pause_event.is_set():
             # If paused, skip processing
             return
