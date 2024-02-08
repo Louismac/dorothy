@@ -57,7 +57,7 @@ class AudioDevice:
 
         self.fft_vals = np.abs(fft_results)
         # just return the most recent frame (for visualising)
-        self.new_frame(self.fft_vals[-1], self.amplitude)
+        self.new_frame(np.mean(self.fft_vals, axis=0), self.amplitude)
 
     def audio_callback(self):
         return np.zeros(self.buffer_size) # Fill buffer with silence
@@ -177,7 +177,7 @@ class AudioPlayer(AudioDevice):
             if self.ptr > len(self.y):
                 wrap_ptr = self.ptr - len(self.y)
                 wrap_signal = self.y[0:wrap_ptr]
-                output_signal = np.concatenate((output_signal,wrap_signal))
+                audio_buffer = np.concatenate((audio_buffer,wrap_signal))
                 self.ptr = wrap_ptr
             self.do_analysis(audio_buffer)
             return audio_buffer
@@ -201,7 +201,7 @@ class MusicAnalyser:
         sd.default.device = device
         self.audio_device = AudioCapture(new_frame = self.new_frame, buffer_size=buffer_size, sr=sr, fft_size=fft_size)
 
-    def load_file(self, file_path, fft_size=1024, buffer_size=1024, sr = 44100):
+    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100):
         #load file
         self.y, self.sr = librosa.load(file_path, sr=sr)
         self.ptr = 0

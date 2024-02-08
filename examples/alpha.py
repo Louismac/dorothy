@@ -12,34 +12,37 @@ class MySketch:
 
     def setup(self):
         #Play file from your computer
-        file_path = "../audio/hiphop.wav"
+        file_path = "../audio/disco.wav"
         dot.music.load_file(file_path, fft_size=512)
         
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
-        # dot.music.get_stream(2)
+        # dot.music.get_stream(3)
         
         dot.music.play()
         
     def draw(self):
-        dot.background((226, 226, 43))
+        dot.background((255,255,255))
         win_size = 10
-        scale = 100
+        scale = 15
         alpha = 0.4
         #Only draw 20 rectangles
         for i in range(20):
             #Get max fft val in window of frequeny bins
             window = dot.music.fft_vals[i*win_size:(i+1)*win_size]
-            bottom_corner = int(np.max(window)*(i*scale))
+            val = int(np.max(window))
+            width = val*(i*scale)
+            top_left = (dot.width//2-width,dot.height//2-width)
+            bottom_right = (dot.width//2+width,dot.height//2+width)
             #draw to an alpha layer
             new_layer = dot.to_alpha(alpha)
-            rectangle(new_layer, (0,0), (bottom_corner,bottom_corner), (1,1,1), -1)
+            rectangle(new_layer, top_left, bottom_right, (226*val,226*val,43*val), -1)
         #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
         dot.update_canvas()
-        top_left = (dot.width//2-100,dot.height//2-100)
-        bottom_right = (dot.width//2+100,dot.height//2+100)
-        rectangle(dot.canvas, top_left, bottom_right, (0,0,0), -1)
+        top_left = (dot.width//2-10,dot.height//2-10)
+        bottom_right = (dot.width//2+10,dot.height//2+10)
+        rectangle(dot.canvas, top_left, bottom_right, (255,255,255), -1)
 
 MySketch()          
 
