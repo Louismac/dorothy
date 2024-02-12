@@ -56,9 +56,10 @@ class AudioDevice:
             fft_results[i] = np.fft.fft(windowed_frame)
 
         self.fft_vals = np.abs(fft_results)
-        # just return the most recent frame (for visualising)
+        # return the mean for visualising 
         self.new_frame(np.mean(self.fft_vals, axis=0), self.amplitude)
 
+    #stub (overwritten in subclass)
     def audio_callback(self):
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
@@ -161,7 +162,7 @@ class AudioCapture(AudioDevice):
                 time.sleep(0.1)
 
 #Class for playing back audio files
-class AudioPlayer(AudioDevice):
+class FilePlayer(AudioDevice):
 
     def __init__(self, y=[0], new_frame=lambda: 0, fft_size=1024, buffer_size=1024, sr=44100):
         super().__init__(new_frame, fft_size, buffer_size, sr)
@@ -209,7 +210,7 @@ class MusicAnalyser:
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
         
-        self.audio_device = AudioPlayer(self.y, self.new_frame,fft_size, buffer_size, self.sr)
+        self.audio_device = FilePlayer(self.y, self.new_frame,fft_size, buffer_size, self.sr)
 
     def play(self):
         if not self.audio_device is None:
@@ -409,7 +410,7 @@ class Dorothy:
             # Link the signal handler to SIGINT
             signal.signal(signal.SIGTSTP, signal_handler)
         except:
-            signal_handler()
+            pass
 
         name = "hold q to quit or ctrl z in terminal"
         cv2.namedWindow(name)
@@ -444,4 +445,3 @@ class Dorothy:
             self.exit()            
         
         self.exit()
-
