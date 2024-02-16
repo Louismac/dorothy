@@ -233,7 +233,7 @@ class MusicAnalyser:
             with torch.no_grad():
                 input_audio = torch.Tensor(self.audio_inputs[0].audio_buffer).reshape(1,1,-1)
                 for a in self.audio_outputs:
-                    if hasattr(a, 'model'):
+                    if isinstance(a, RAVEPlayer):
                         self.update_rave_latent(a.model.encode(input_audio))
         self.audio_inputs.append(AudioCapture(analyse=False, input_device=input_device, on_new_frame = on_new_frame))
 
@@ -243,7 +243,7 @@ class MusicAnalyser:
         self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, 
                                           buffer_size=buffer_size, sr=sr, fft_size=fft_size, output_device=output_device))
 
-    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None):
+    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
         #load file
         self.y, self.sr = librosa.load(file_path, sr=sr)
         self.ptr = 0
@@ -251,7 +251,7 @@ class MusicAnalyser:
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
         
-        self.audio_outputs.append(FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, 
+        self.audio_outputs.append(FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
                                         fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device))
 
     def play(self):
