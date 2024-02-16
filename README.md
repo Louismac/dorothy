@@ -68,11 +68,13 @@ We have
 
 * ``dot.music.is_beat()`` (call in ``draw()``, returns true if there has been a beat since last frame
 
+## Picking Music Source
+
 You can either play a soundfile 
 
 ```
 file_path = "../audio/hiphop.wav"
-dot.music.load_file(file_path, fft_size = 1024, buffer_size = 1024)
+dot.music.load_file(file_path)
 ```
 
 Or pick a an output device playing on your computer. On MacOSX I use [Blackhole](https://existential.audio/blackhole/download/) and [Multioutput device](https://support.apple.com/en-gb/guide/audio-midi-setup/ams7c093f372/mac) to pump audio to here, and to listen in speakers as well. Should work on windows but I havent tested anything yet!
@@ -81,7 +83,7 @@ You could also use this approach to get in the stream of your laptops microphone
 
 ```
 print(sd.query_devices())
-dot.music.get_stream(2, fft_size=1024, buffer_size=2048)
+dot.music.get_stream(2)
 ```
 
 Both use 
@@ -92,6 +94,20 @@ dot.music.stop()
 dot.music.pause()
 dot.music.resume()
 ```
+
+### Generating Audio with [RAVE](https://github.com/acids-ircam/RAVE)
+
+There is also a player to generate, visualise and interact with pretrained RAVE models. 
+
+``
+dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
+``
+
+Will load in a `.ts` model. Remember to `play()` to start!
+
+It will initially just start at a random place in latent space but there are two key ways to interact 
+
+1. Manually set the z vector using ``dot.music.update_rave_latent(z)`` where z is a torch tensor and has the shape (1, latent_dims, 1)
 
 ## Examples
 
