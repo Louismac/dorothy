@@ -109,6 +109,43 @@ It will initially just start at a random place in latent space but there are two
 
 1. Manually set the z vector using ``dot.music.update_rave_latent(z)`` where z is a torch tensor and has the shape (1, latent_dims, 1)
 
+2. Do timbre transfer from audio
+
+   * `dot.music.update_rave_from_stream(device)` will pipe audio from whatever device you have selected (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you can manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine (``dot.music.load_rave("vintage.ts", latent_dim=latent_dim, output_device=4)``).
+  
+   * You can specify an output device for the FilePlater with `dot.music.load_file("../audio/gospel.wav", output_device=2)` and then pick it up with the above function. This will mean the RAVE model takes input from whatever file you are playing.
+  
+#### Z Bias 
+
+You can also add a constant bias to the z vector to allow for some controllable / random variation. 
+
+If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the audio devide requests a new buffer and this function returns the size of that buffer
+
+##### New random bias every frame
+```
+def on_new_frame(n=2048):
+    #Update a new random 
+    #dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+
+dot.music.on_new_frame = on_new_frame
+```
+
+##### Oscillating bias at a given frequency 
+```
+self.ptr = 0
+def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
+    t = frame_number / sample_rate
+    value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
+    return value
+def on_new_frame(n=2048):
+    #update with oscilating bias
+    #val = sine_bias(self.ptr, 5, 0.4)
+    #dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
+    self.ptr += n
+
+dot.music.on_new_frame = on_new_frame
+```
+
 ## Examples
 
 ### [Seed](examples/seed.py) 
