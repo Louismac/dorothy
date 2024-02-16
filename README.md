@@ -99,6 +99,8 @@ dot.music.resume()
 
 There is also a player to generate, visualise and interact with pretrained RAVE models. 
 
+[Examples here](examples/rave.py)
+
 ``
 dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
 ``
@@ -214,6 +216,10 @@ Use `get_images()` to load in a dataset of images and `dot.paste()` to copy onto
 ### [Contours](examples/contours.py)
 
 Get contours and mask out, moving image sections radially in response to fft values. More complex example!
+
+### [RAVE](examples/rave.py)
+
+Examples on generating with / interacting with RAVE models
 
 
 
