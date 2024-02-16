@@ -13,6 +13,7 @@ import ctypes
 import time
 import traceback
 import glob
+
 #For Rave example, not normally needed
 try:
     import torch
@@ -22,15 +23,18 @@ except ImportError:
 
 #Parent class for audio providers 
 class AudioDevice:
-    def __init__(self, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
+    def __init__(self, on_analysis_complete = lambda:0, on_new_frame = lambda:0,
+                 analyse=True, fft_size=1024, buffer_size=2048, sr=44100, output_device=None):
         self.running = True
         self.sr = sr
         self.fft_size = fft_size
         self.fft_vals = np.zeros((fft_size//2)+1)
         self.buffer_size = buffer_size
         self.amplitude = 0
+        self.analyse = analyse
         print(os.name)
-        self.new_frame = new_frame
+        self.on_analysis_complete = on_analysis_complete
+        self.on_new_frame = on_new_frame
         if os.name == "posix":
             p = psutil.Process(os.getpid())
             p.nice(10)
@@ -38,34 +42,37 @@ class AudioDevice:
             thread_id = threading.get_native_id()
             ctypes.windll.kernel32.SetThreadPriority(thread_id, 2)
         sd.default.samplerate = self.sr
-        sd.default.channels = 1 
+        sd.default.channels = 1
+        self.output_device = output_device 
         self.pause_event = threading.Event()
         self.play_thread = threading.Thread(target=self.capture_audio)
 
     def do_analysis(self, audio_buffer):
-        #Get amplitude
-        self.amplitude = np.mean(audio_buffer**2)
-        num_frames = 1 + (len(audio_buffer) - self.fft_size) // self.fft_size//2
-        fft_results = np.zeros((num_frames, self.fft_size), dtype=complex)
-        window = np.hanning(self.fft_size)
-        for i in range(num_frames):
-            frame_start = i * self.fft_size//2
-            frame_end = frame_start + self.fft_size
-            frame = audio_buffer[frame_start:frame_end]
-            windowed_frame = frame * window
-            fft_results[i] = np.fft.fft(windowed_frame)
+        if self.analyse:
+            #Get amplitude
+            self.amplitude = np.mean(audio_buffer**2)
+            num_frames = 1 + (len(audio_buffer) - self.fft_size) // self.fft_size//2
+            fft_results = np.zeros((num_frames, self.fft_size), dtype=complex)
+            window = np.hanning(self.fft_size)
+            for i in range(num_frames):
+                frame_start = i * self.fft_size//2
+                frame_end = frame_start + self.fft_size
+                frame = audio_buffer[frame_start:frame_end]
+                windowed_frame = frame * window
+                fft_results[i] = np.fft.fft(windowed_frame)
 
-        self.fft_vals = np.abs(fft_results)
-        # return the mean for visualising 
-        self.new_frame(np.mean(self.fft_vals, axis=0), self.amplitude)
+            self.fft_vals = np.abs(fft_results)
+            # return the mean for visualising 
+            self.on_analysis_complete(np.mean(self.fft_vals, axis=0), self.amplitude)
 
     #stub (overwritten in subclass)
     def audio_callback(self):
+        self.on_new_frame()
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
         print("play_audio", self.running)
-        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size) as stream:
+        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size, device = self.output_device) as stream:
             while self.running:
                 if not self.pause_event.is_set():
                     data = self.audio_callback()
@@ -89,14 +96,16 @@ class AudioDevice:
     
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
-    def __init__(self, model_path, new_frame=lambda: 0, fft_size=512, buffer_size=2048, sr=44100):
-        super().__init__(new_frame, fft_size, buffer_size, sr)
+    def __init__(self, model_path, latent_dim=128, **kwargs):
+        super().__init__(**kwargs)
         
         torch.set_grad_enabled(False)
         torch.set_float32_matmul_precision('high')
         self.device = torch.device('cpu')
-
-        self.frame_size = 4096 #This is the RAVE buffer size 
+        self.frame_size = 4096//2 #This is the RAVE buffer size 
+        self.ptr = 0
+        self.latent_dim = latent_dim
+        self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
 
         self.model_path = model_path
         self.model = torch.jit.load(model_path).to(self.device)
@@ -104,19 +113,19 @@ class RAVEPlayer(AudioDevice):
         self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
         self.generate_thread = threading.Thread(target=self.fill_next_buffer)
         self.generate_thread.start()
-        self.ptr = 0
-    
+        
     def fill_next_buffer(self):
         self.next_buffer = self.get_frame()
 
     def get_frame(self):
-        latent_dims=128;
         y = 0
         with torch.no_grad():
-            z = torch.randn(1, latent_dims, 1).to(self.device)
+            z = self.current_latent
+            noise = torch.randn_like(z) * 0.05 # Add small amount of noise to randomly shift z each frame
             y = self.model.decode(z)
             y = y.reshape(-1).to(self.device).numpy()
-        return y
+        #Drop second half (RAVE gives us stereo end to end)
+        return y[:self.frame_size]
 
     def audio_callback(self):
         if self.pause_event.is_set():
@@ -124,7 +133,7 @@ class RAVEPlayer(AudioDevice):
         else:
             audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
             self.ptr += self.buffer_size
-            #Currently dont do proper wrapping for buffer sizes that arent factors of 4096
+            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
             if self.ptr >= self.frame_size:
                 self.ptr = 0
                 self.current_buffer = self.next_buffer.copy()
@@ -132,12 +141,15 @@ class RAVEPlayer(AudioDevice):
                     self.generate_thread = threading.Thread(target=self.fill_next_buffer)
                     self.generate_thread.start()
             self.do_analysis(audio_buffer)
+            self.on_new_frame()
             return audio_buffer
 
 #Class for analysing audio streams in realtime
 class AudioCapture(AudioDevice):
-    def __init__(self, new_frame = lambda:0, fft_size=1024, buffer_size=2048, sr=44100):
-        super().__init__(new_frame, fft_size, buffer_size, sr)
+    def __init__(self, input_device=None, **kwargs):
+        super().__init__(**kwargs)
+        self.audio_buffer = np.zeros(self.buffer_size)
+        self.input_device = input_device
         
     def audio_callback(self, indata, frames, time, status):
         if status:
@@ -147,8 +159,9 @@ class AudioCapture(AudioDevice):
             return
         else:
             #Window the current audio buffer and get fft 
-            audio_buffer = indata[:, 0]
-            self.do_analysis(audio_buffer)
+            self.audio_buffer = indata[:, 0]
+            self.do_analysis(self.audio_buffer)
+            self.on_new_frame()
 
     def capture_audio(self):
         print("capture_audio", self.running)
@@ -156,7 +169,8 @@ class AudioCapture(AudioDevice):
         with sd.InputStream(callback=self.audio_callback, 
                             channels=1, 
                             blocksize=self.buffer_size, 
-                            samplerate=self.sr):
+                            samplerate=self.sr,
+                            device = self.input_device):
             while self.running:
                 # Just sleep and let the callback do all the work
                 time.sleep(0.1)
@@ -164,8 +178,8 @@ class AudioCapture(AudioDevice):
 #Class for playing back audio files
 class FilePlayer(AudioDevice):
 
-    def __init__(self, y=[0], new_frame=lambda: 0, fft_size=1024, buffer_size=1024, sr=44100):
-        super().__init__(new_frame, fft_size, buffer_size, sr)
+    def __init__(self, y=[0], **kwargs):
+        super().__init__(**kwargs)
         self.y = y
         self.ptr = 0
     
@@ -181,28 +195,47 @@ class FilePlayer(AudioDevice):
                 audio_buffer = np.concatenate((audio_buffer,wrap_signal))
                 self.ptr = wrap_ptr
             self.do_analysis(audio_buffer)
+            self.on_new_frame()
+            self.audio_buffer = audio_buffer
             return audio_buffer
 
 #Main class for music analysis
 class MusicAnalyser:
     
-    audio_device = None
+    audio_outputs = []
+    audio_inputs = []
     fft_vals = np.zeros(2048)
     amplitude = 0
 
-    def new_frame(self, fft_vals, amplitude):
+    def on_analysis_complete(self, fft_vals, amplitude):
         self.fft_vals = fft_vals
         self.amplitude = amplitude
 
-    def load_rave(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100):
-        self.audio_device = RAVEPlayer(model_path=model_path, new_frame = self.new_frame, buffer_size=buffer_size, sr=sr, fft_size=fft_size)
+    def load_rave(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
+        self.audio_outputs.append(RAVEPlayer(model_path=model_path, 
+                                       on_analysis_complete = self.on_analysis_complete, 
+                                       buffer_size=buffer_size, 
+                                       sr=sr, fft_size=fft_size, 
+                                       latent_dim=latent_dim,
+                                       output_device = output_device))
+    
+    def update_rave_from_stream(self, input_device):
+        print(sd.query_devices(input_device))
+        def on_new_frame():
+            with torch.no_grad():
+                input_audio = torch.Tensor(self.audio_inputs[0].audio_buffer).reshape(1,1,-1)
+                for a in self.audio_outputs:
+                    if hasattr(a, 'model'):
+                        self.update_rave_latent(a.model.encode(input_audio))
+        self.audio_inputs.append(AudioCapture(analyse=False, input_device=input_device, on_new_frame = on_new_frame))
 
-    def get_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100):
+    def get_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None):
         print(sd.query_devices(device))
         sd.default.device = device
-        self.audio_device = AudioCapture(new_frame = self.new_frame, buffer_size=buffer_size, sr=sr, fft_size=fft_size)
+        self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, 
+                                          buffer_size=buffer_size, sr=sr, fft_size=fft_size, output_device=output_device))
 
-    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100):
+    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None):
         #load file
         self.y, self.sr = librosa.load(file_path, sr=sr)
         self.ptr = 0
@@ -210,15 +243,20 @@ class MusicAnalyser:
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
         
-        self.audio_device = FilePlayer(self.y, self.new_frame,fft_size, buffer_size, self.sr)
+        self.audio_outputs.append(FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, 
+                                        fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device))
 
     def play(self):
-        if not self.audio_device is None:
-            self.audio_device.play()
-    
+        for i in self.audio_inputs:
+            i.play()
+        for o in self.audio_outputs:
+            o.play()
+
     def stop(self):
-        if not self.audio_device is None:
-            self.audio_device.stop()
+        for i in self.audio_inputs:
+            i.stop()
+        for o in self.audio_outputs:
+            o.stop()
 
     #Has there been a beat since this was last called?
     def is_beat(self):
@@ -228,6 +266,17 @@ class MusicAnalyser:
             is_beat = True
             self.beat_ptr += 1
         return is_beat
+    
+    def update_rave_latent(self, new_latent):
+        for a in self.audio_outputs:
+            if isinstance(a,RAVEPlayer):
+                if isinstance(new_latent, torch.Tensor):
+                    if a.current_latent.shape == new_latent.shape:
+                        a.current_latent = new_latent
+                    else:
+                        print(f'new latent shape {new_latent.shape} does not match shape of existing latent {self.output_device.current_latent.shape} ')
+                else:
+                    print(f'the latent passed into this function should be a Torch tensor, not a {type(new_latent)}')
       
 #Main drawing class
 class Dorothy:
