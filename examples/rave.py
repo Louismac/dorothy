@@ -17,24 +17,26 @@ class MySketch:
         latent_dim = 16
         print(sd.query_devices())
         dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
-        #output file player to blackhole
-        dot.music.load_file("../audio/gospel.wav", output_device=2, analyse=False)
-        #feed blackhole into RAVE
-        dot.music.update_rave_from_stream(2)
+
 
         #Random
-        # z = torch.randn((1,16,1))
-        # dot.music.update_rave_latent(z) 
+        z = torch.randn((1,16,1))
+        dot.music.update_rave_latent(z) 
 
-        d0 = 1.09  # change in latent dimension 0
-        d1 = -3 
-        d2 = 0.02
-        d3 = 0.5 
-        z_bias = torch.zeros(1, latent_dim, 1)
-        z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
-        z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
-        z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
-        z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
+        # #output file player to blackhole
+        # dot.music.load_file("../audio/gospel.wav", output_device=2, analyse=False)
+        # #feed blackhole into RAVE
+        # dot.music.update_rave_from_stream(2)
+
+        # d0 = 1.09  # change in latent dimension 0
+        # d1 = -3 
+        # d2 = 0.02
+        # d3 = 0.5 
+        # z_bias = torch.zeros(1, latent_dim, 1)
+        # z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
+        # z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
+        # z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
+        # z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
         #Constant bias
         #dot.music.audio_outputs[0].z_bias = z_bias
 
@@ -47,7 +49,7 @@ class MySketch:
         def on_new_frame(n=2048):
 
             #Update a new random 
-            #dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+            dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
             #OR
             #update with oscilating bias
             #val = sine_bias(self.ptr, 5, 0.4)
