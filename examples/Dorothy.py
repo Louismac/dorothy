@@ -23,7 +23,7 @@ except ImportError:
 
 #Parent class for audio providers 
 class AudioDevice:
-    def __init__(self, on_analysis_complete = lambda:0, on_new_frame = lambda:0,
+    def __init__(self, on_analysis_complete = lambda:0, on_new_frame = lambda n=1:0,
                  analyse=True, fft_size=1024, buffer_size=2048, sr=44100, output_device=None):
         self.running = True
         self.sr = sr
@@ -106,7 +106,7 @@ class RAVEPlayer(AudioDevice):
         self.ptr = 0
         self.latent_dim = latent_dim
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
-
+        self.z_bias = torch.zeros(1,latent_dim,1)
         self.model_path = model_path
         self.model = torch.jit.load(model_path).to(self.device)
         self.current_buffer = self.get_frame()
@@ -121,8 +121,7 @@ class RAVEPlayer(AudioDevice):
         y = 0
         with torch.no_grad():
             z = self.current_latent
-            noise = torch.randn_like(z) * 0.05 # Add small amount of noise to randomly shift z each frame
-            y = self.model.decode(z)
+            y = self.model.decode(z + self.z_bias)
             y = y.reshape(-1).to(self.device).numpy()
         #Drop second half (RAVE gives us stereo end to end)
         return y[:self.frame_size]
@@ -141,7 +140,7 @@ class RAVEPlayer(AudioDevice):
                     self.generate_thread = threading.Thread(target=self.fill_next_buffer)
                     self.generate_thread.start()
             self.do_analysis(audio_buffer)
-            self.on_new_frame()
+            self.on_new_frame(len(audio_buffer))
             return audio_buffer
 
 #Class for analysing audio streams in realtime
@@ -161,7 +160,7 @@ class AudioCapture(AudioDevice):
             #Window the current audio buffer and get fft 
             self.audio_buffer = indata[:, 0]
             self.do_analysis(self.audio_buffer)
-            self.on_new_frame()
+            self.on_new_frame(len(self.audio_buffer))
 
     def capture_audio(self):
         print("capture_audio", self.running)
@@ -197,6 +196,7 @@ class FilePlayer(AudioDevice):
             self.do_analysis(audio_buffer)
             self.on_new_frame()
             self.audio_buffer = audio_buffer
+            self.on_new_frame(len(audio_buffer))
             return audio_buffer
 
 #Main class for music analysis
@@ -207,21 +207,29 @@ class MusicAnalyser:
     fft_vals = np.zeros(2048)
     amplitude = 0
 
+    def __init__(self):
+        #Empty stub for new_frame function 
+        def on_new_frame(n=1):
+            pass
+        self.on_new_frame = on_new_frame
+ 
     def on_analysis_complete(self, fft_vals, amplitude):
         self.fft_vals = fft_vals
         self.amplitude = amplitude
 
     def load_rave(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
         self.audio_outputs.append(RAVEPlayer(model_path=model_path, 
-                                       on_analysis_complete = self.on_analysis_complete, 
-                                       buffer_size=buffer_size, 
-                                       sr=sr, fft_size=fft_size, 
-                                       latent_dim=latent_dim,
-                                       output_device = output_device))
+                                            on_new_frame = self.on_new_frame,
+                                            on_analysis_complete = self.on_analysis_complete, 
+                                            buffer_size=buffer_size, 
+                                            sr=sr, fft_size=fft_size, 
+                                            latent_dim=latent_dim,
+                                            output_device = output_device))
     
     def update_rave_from_stream(self, input_device):
         print(sd.query_devices(input_device))
-        def on_new_frame():
+        def on_new_frame(n):
+            self.on_new_frame(n)
             with torch.no_grad():
                 input_audio = torch.Tensor(self.audio_inputs[0].audio_buffer).reshape(1,1,-1)
                 for a in self.audio_outputs:
