@@ -109,13 +109,32 @@ Will load in a `.ts` model. Remember to `play()` to start!
 
 It will initially just start at a random place in latent space but there are two key ways to interact 
 
-1. Manually set the z vector using ``dot.music.update_rave_latent(z)`` where z is a torch tensor and has the shape (1, latent_dims, 1)
+1. Manually set the z vector using  where z is a torch tensor and has the shape (1, latent_dims, 1)
 
-2. Do timbre transfer from audio
+```
+z = torch.randn((1,16,1))
+dot.music.update_rave_latent(z)
+```
 
-   * `dot.music.update_rave_from_stream(device)` will pipe audio from whatever device you have selected (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you can manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine (``dot.music.load_rave("vintage.ts", latent_dim=latent_dim, output_device=4)``).
+3. Do timbre transfer from audio
+
+   * Pipe audio from whatever device you have selected (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you can manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine.
+
+```
+dot.music.load_rave("vintage.ts", output_device=4, latent_dim=latent_dim)
+#feed blackhole into RAVE
+dot.music.update_rave_from_stream(2)
+```
   
-   * You can specify an output device for the FilePlater with `dot.music.load_file("../audio/gospel.wav", output_device=2)` and then pick it up with the above function. This will mean the RAVE model takes input from whatever file you are playing.
+   * You can specify an `output device` for the FilePlayer and then pick it up with the above function. This will mean the RAVE model takes input from whatever file you are playing.
+
+```
+dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
+#output file player to blackhole
+dot.music.load_file("../audio/gospel.wav", output_device=2, analyse=False)
+#feed blackhole into RAVE
+dot.music.update_rave_from_stream(2)
+```
   
 #### Z Bias 
 
