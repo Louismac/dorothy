@@ -127,22 +127,23 @@ If you want to change this over time, you can use the `on_new_frame` callback. T
 ```
 def on_new_frame(n=2048):
     #Update a new random 
-    #dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+    dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
 
 dot.music.on_new_frame = on_new_frame
 ```
 
 ##### Oscillating bias at a given frequency 
 ```
-self.ptr = 0
 def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
     t = frame_number / sample_rate
     value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
     return value
+
+self.ptr = 0
 def on_new_frame(n=2048):
     #update with oscilating bias
-    #val = sine_bias(self.ptr, 5, 0.4)
-    #dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
+    val = sine_bias(self.ptr, 5, 0.4)
+    dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
     self.ptr += n
 
 dot.music.on_new_frame = on_new_frame
