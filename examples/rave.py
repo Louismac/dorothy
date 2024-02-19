@@ -16,17 +16,22 @@ class MySketch:
         #Output RAVE from speakers
         latent_dim = 16
         print(sd.query_devices())
-        dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
-
+        #Explicitly set output device if you are using blackhole to direct audio as
+        #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
+        dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
 
         #Random
         z = torch.randn((1,16,1))
         dot.music.update_rave_latent(z) 
+        
+        # start stream, pass in the number of the device you want to input to RAVE e.g. blackhole
+        # device_id = dot.music.start_device_stream(3)
+        # dot.music.update_rave_from_stream(device_id)
 
-        # #output file player to blackhole
-        # dot.music.load_file("../audio/gospel.wav", output_device=2, analyse=False)
-        # #feed blackhole into RAVE
-        # dot.music.update_rave_from_stream(2)
+        # start file stream (to be used as input to RAVE)
+        # device_id = dot.music.start_file_stream("../audio/gospel.wav")
+        # set as input to rave (this mutes the source stream, use .gain to hear both)
+        #dot.music.update_rave_from_stream(device_id)
 
         # d0 = 1.09  # change in latent dimension 0
         # d1 = -3 

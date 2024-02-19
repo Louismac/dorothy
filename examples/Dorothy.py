@@ -46,6 +46,7 @@ class AudioDevice:
         self.output_device = output_device 
         self.pause_event = threading.Event()
         self.play_thread = threading.Thread(target=self.capture_audio)
+        self.gain = 1
 
     def do_analysis(self, audio_buffer):
         if self.analyse:
@@ -144,12 +145,14 @@ class RAVEPlayer(AudioDevice):
             return audio_buffer
 
 #Class for analysing audio streams in realtime
+#Doesnt actually play any audio, just analyses and reroutes 
 class AudioCapture(AudioDevice):
     def __init__(self, input_device=None, **kwargs):
         super().__init__(**kwargs)
         self.audio_buffer = np.zeros(self.buffer_size)
         self.input_device = input_device
-        
+
+    #Doesnt actually return any audio (its already playing elsewhere)!    
     def audio_callback(self, indata, frames, time, status):
         if status:
             print(status)
@@ -194,16 +197,14 @@ class FilePlayer(AudioDevice):
                 audio_buffer = np.concatenate((audio_buffer,wrap_signal))
                 self.ptr = wrap_ptr
             self.do_analysis(audio_buffer)
-            self.on_new_frame()
             self.audio_buffer = audio_buffer
             self.on_new_frame(len(audio_buffer))
-            return audio_buffer
+            return audio_buffer * self.gain
 
 #Main class for music analysis
 class MusicAnalyser:
     
     audio_outputs = []
-    audio_inputs = []
     fft_vals = np.zeros(2048)
     amplitude = 0
 
@@ -217,7 +218,7 @@ class MusicAnalyser:
         self.fft_vals = fft_vals
         self.amplitude = amplitude
 
-    def load_rave(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
+    def start_rave_stream(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
         self.audio_outputs.append(RAVEPlayer(model_path=model_path, 
                                             on_new_frame = self.on_new_frame,
                                             on_analysis_complete = self.on_analysis_complete, 
@@ -225,25 +226,29 @@ class MusicAnalyser:
                                             sr=sr, fft_size=fft_size, 
                                             latent_dim=latent_dim,
                                             output_device = output_device))
+        return len(self.audio_outputs)-1
     
-    def update_rave_from_stream(self, input_device):
-        print(sd.query_devices(input_device))
+    def update_rave_from_stream(self, input=0):
+        input_device = self.audio_outputs[input]
         def on_new_frame(n):
             self.on_new_frame(n)
             with torch.no_grad():
-                input_audio = torch.Tensor(self.audio_inputs[0].audio_buffer).reshape(1,1,-1)
+                input_audio = torch.Tensor(input_device.audio_buffer).reshape(1,1,-1)
                 for a in self.audio_outputs:
                     if isinstance(a, RAVEPlayer):
                         self.update_rave_latent(a.model.encode(input_audio))
-        self.audio_inputs.append(AudioCapture(analyse=False, input_device=input_device, on_new_frame = on_new_frame))
+        input_device.gain = 0
+        input_device.analyse = False
+        input_device.on_new_frame = on_new_frame
 
-    def get_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None):
+    def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True):
         print(sd.query_devices(device))
         sd.default.device = device
-        self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, 
+        self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, analyse=analyse,
                                           buffer_size=buffer_size, sr=sr, fft_size=fft_size, output_device=output_device))
+        return len(self.audio_outputs)-1
 
-    def load_file(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
+    def start_file_stream(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
         #load file
         self.y, self.sr = librosa.load(file_path, sr=sr)
         self.ptr = 0
@@ -253,16 +258,13 @@ class MusicAnalyser:
         
         self.audio_outputs.append(FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
                                         fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device))
+        return len(self.audio_outputs)-1
 
     def play(self):
-        for i in self.audio_inputs:
-            i.play()
         for o in self.audio_outputs:
             o.play()
 
     def stop(self):
-        for i in self.audio_inputs:
-            i.stop()
         for o in self.audio_outputs:
             o.stop()
 

@@ -74,7 +74,7 @@ You can either play a soundfile
 
 ```
 file_path = "../audio/hiphop.wav"
-dot.music.load_file(file_path)
+dot.music.start_file_stream(file_path)
 ```
 
 Or pick a an output device playing on your computer. On MacOSX I use [Blackhole](https://existential.audio/blackhole/download/) and [Multioutput device](https://support.apple.com/en-gb/guide/audio-midi-setup/ams7c093f372/mac) to pump audio to here, and to listen in speakers as well. Should work on windows but I havent tested anything yet!
@@ -83,7 +83,7 @@ You could also use this approach to get in the stream of your laptops microphone
 
 ```
 print(sd.query_devices())
-dot.music.get_stream(2)
+dot.music.start_device_stream(2)
 ```
 
 Both use 
@@ -102,7 +102,7 @@ There is also a player to generate, visualise and interact with pretrained RAVE 
 [Examples here](examples/rave.py)
 
 ``
-dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
+dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
 ``
 
 Will load in a `.ts` model. Remember to `play()` to start!
@@ -118,22 +118,25 @@ dot.music.update_rave_latent(z)
 
 3. Do timbre transfer from audio
 
-   * Pipe audio from whatever device you have selected (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you can manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine.
+   * Pipe audio from a stream you have already started (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you should manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine.
 
 ```
-dot.music.load_rave("vintage.ts", output_device=4, latent_dim=latent_dim)
-#feed blackhole into RAVE
-dot.music.update_rave_from_stream(2)
+# Give an output device (e.g. your speakers) so you can hear the output
+dot.music.start_rave_stream("vintage.ts", output_device=4, latent_dim=latent_dim)
+# Set stream to be blackhole / microphone device
+device_id = dot.music.start_device_stream(2)
+dot.music.update_rave_from_stream(device_id)
+dot.music.play()
 ```
   
-   * You can specify an `output device` for the FilePlayer and then pick it up with the above function. This will mean the RAVE model takes input from whatever file you are playing.
+   * Or a file player stream
 
 ```
-dot.music.load_rave("vintage.ts", latent_dim=latent_dim)
-#output file player to blackhole
-dot.music.load_file("../audio/gospel.wav", output_device=2, analyse=False)
-#feed blackhole into RAVE
-dot.music.update_rave_from_stream(2)
+dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+device_id = dot.music.start_file_stream("../audio/gospel.wav")
+# Set as input to rave (this mutes the source stream, use .gain property to hear both)
+dot.music.update_rave_from_stream(device_id)
+dot.music.play()
 ```
   
 #### Z Bias 
