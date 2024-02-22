@@ -1,6 +1,6 @@
 import numpy as np
 from cv2 import rectangle, circle
-from Dorothy import Dorothy
+from examples.src.Dorothy import Dorothy
 import sounddevice as sd
 
 dot = Dorothy()

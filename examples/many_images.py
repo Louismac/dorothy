@@ -1,4 +1,4 @@
-from Dorothy import Dorothy
+from src.Dorothy import Dorothy
 import numpy as np
 
 dot = Dorothy(300,300)

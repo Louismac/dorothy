@@ -1,6 +1,6 @@
 import numpy as np
-from cv2 import rectangle, circle
-from Dorothy import Dorothy
+from cv2 import rectangle
+from src.Dorothy import Dorothy
 import sounddevice as sd
 import torch 
 import math
@@ -14,38 +14,38 @@ class MySketch:
 
     def setup(self):
         #Output RAVE from speakers
-        latent_dim = 16
+        latent_dim = 128
         print(sd.query_devices())
         
-        dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+        #dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
-        #dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim, output_device = 4)
+        dot.music.start_rave_stream("models/rave_first.ts", latent_dim=latent_dim, output_device = 4)
 
         #Random
         z = torch.randn((1,16,1))
         dot.music.update_rave_latent(z) 
         
         # start stream, pass in the number of the device you want to input to RAVE e.g. blackhole
-        # device_id = dot.music.start_device_stream(3)
-        # dot.music.update_rave_from_stream(device_id)
+        device_id = dot.music.start_device_stream(2)
+        dot.music.update_rave_from_stream(device_id)
 
         # start file stream (to be used as input to RAVE)
         # device_id = dot.music.start_file_stream("../audio/gospel.wav")
         # set as input to rave (this mutes the source stream, use .gain to hear both)
         #dot.music.update_rave_from_stream(device_id)
 
-        # d0 = 1.09  # change in latent dimension 0
-        # d1 = -3 
-        # d2 = 0.02
-        # d3 = 0.5 
-        # z_bias = torch.zeros(1, latent_dim, 1)
-        # z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
-        # z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
-        # z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
-        # z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
+        d0 = 1.09  # change in latent dimension 0
+        d1 = -3 
+        d2 = 0.02
+        d3 = 0.5 
+        z_bias = torch.zeros(1, latent_dim, 1)
+        z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
+        z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
+        z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
+        z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
         #Constant bias
-        #dot.music.audio_outputs[0].z_bias = z_bias
+        dot.music.audio_outputs[0].z_bias = z_bias
 
         def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
             t = frame_number / sample_rate
@@ -56,11 +56,11 @@ class MySketch:
         def on_new_frame(n=2048):
 
             #Update a new random 
-            dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+            #dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
             #OR
             #update with oscilating bias
-            #val = sine_bias(self.ptr, 5, 0.4)
-            #dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
+            val = sine_bias(self.ptr, 10,0.3)
+            # dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
 
             self.ptr += n
 
@@ -82,7 +82,7 @@ class MySketch:
             bottom_right = (dot.width//2+width,dot.height//2+width)
             #draw to an alpha layer
             new_layer = dot.to_alpha(alpha)
-            rectangle(new_layer, top_left, bottom_right, (226*val,226*val,43*val), -1)
+            rectangle(new_layer, top_left, bottom_right, (10*val,26*val,143*val), -1)
         #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
         dot.update_canvas()
         top_left = (dot.width//2-10,dot.height//2-10)

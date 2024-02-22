@@ -1,5 +1,5 @@
 from cv2 import rectangle
-from Dorothy import Dorothy
+from examples.src.Dorothy import Dorothy
 
 dot = Dorothy(640,480)
 

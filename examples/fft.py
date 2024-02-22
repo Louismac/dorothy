@@ -1,5 +1,5 @@
 from cv2 import line
-from Dorothy import Dorothy
+from src.Dorothy import Dorothy
 import sounddevice as sd
 
 dot = Dorothy()

@@ -244,6 +244,18 @@ Get contours and mask out, moving image sections radially in response to fft val
 
 Examples on generating with / interacting with RAVE models
 
+### [YOLO Body Tracking](examples/yolo.py)
+
+Example drawing pose from web cam
+
+### [Interactive GAN](examples/gan.py)
+
+Use the mouse to move through the latent space of an MNIST GAN
+
+### [Interactive RAVE / YOLO](examples/yolo_rave.py)
+
+Control interpolation points of RAVE with pose tracked hand position 
+
 
 
 

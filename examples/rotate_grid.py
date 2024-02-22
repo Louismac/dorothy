@@ -1,5 +1,5 @@
 from cv2 import rectangle
-from Dorothy import Dorothy
+from src.Dorothy import Dorothy
 import numpy as np
 
 dot = Dorothy()
