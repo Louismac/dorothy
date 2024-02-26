@@ -19,7 +19,7 @@ try:
     import torch
     torch.set_grad_enabled(False)
 except ImportError:
-    print("torch not available, RAVE example won't work, otherwise ignore.")
+    print("torch not available, machine learning examples won't work, otherwise ignore.")
 
 #Parent class for audio providers 
 class AudioDevice:
@@ -35,6 +35,7 @@ class AudioDevice:
         print(os.name)
         self.on_analysis_complete = on_analysis_complete
         self.on_new_frame = on_new_frame
+        self.internal_callback = lambda:0
         if os.name == "posix":
             p = psutil.Process(os.getpid())
             p.nice(10)
@@ -69,6 +70,7 @@ class AudioDevice:
     #stub (overwritten in subclass)
     def audio_callback(self):
         self.on_new_frame()
+        self.internal_callback()
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
@@ -141,6 +143,7 @@ class RAVEPlayer(AudioDevice):
                     self.generate_thread = threading.Thread(target=self.fill_next_buffer)
                     self.generate_thread.start()
             self.do_analysis(audio_buffer)
+            self.internal_callback()
             self.on_new_frame(len(audio_buffer))
             return audio_buffer
 
@@ -163,10 +166,11 @@ class AudioCapture(AudioDevice):
             #Window the current audio buffer and get fft 
             self.audio_buffer = indata[:, 0]
             self.do_analysis(self.audio_buffer)
+            self.internal_callback()
             self.on_new_frame(len(self.audio_buffer))
 
     def capture_audio(self):
-        print("capture_audio", self.running)
+        print("capture_audio (AudioCapture)", self.running, self.input_device)
         
         with sd.InputStream(callback=self.audio_callback, 
                             channels=1, 
@@ -198,6 +202,7 @@ class FilePlayer(AudioDevice):
                 self.ptr = wrap_ptr
             self.do_analysis(audio_buffer)
             self.audio_buffer = audio_buffer
+            self.internal_callback()
             self.on_new_frame(len(audio_buffer))
             return audio_buffer * self.gain
 
@@ -209,29 +214,26 @@ class MusicAnalyser:
     amplitude = 0
 
     def __init__(self):
-        #Empty stub for new_frame function 
-        def on_new_frame(n=1):
-            pass
-        self.on_new_frame = on_new_frame
+        print("init")
  
     def on_analysis_complete(self, fft_vals, amplitude):
+        # print(fft_vals, amplitude)
         self.fft_vals = fft_vals
         self.amplitude = amplitude
 
     def start_rave_stream(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
-        self.audio_outputs.append(RAVEPlayer(model_path=model_path, 
-                                            on_new_frame = self.on_new_frame,
+        device = RAVEPlayer(model_path=model_path, 
                                             on_analysis_complete = self.on_analysis_complete, 
                                             buffer_size=buffer_size, 
                                             sr=sr, fft_size=fft_size, 
                                             latent_dim=latent_dim,
-                                            output_device = output_device))
+                                            output_device = output_device)
+        self.audio_outputs.append(device)
         return len(self.audio_outputs)-1
     
     def update_rave_from_stream(self, input=0):
         input_device = self.audio_outputs[input]
-        def on_new_frame(n):
-            self.on_new_frame(n)
+        def internal_callback():
             with torch.no_grad():
                 input_audio = torch.Tensor(input_device.audio_buffer).reshape(1,1,-1)
                 for a in self.audio_outputs:
@@ -239,13 +241,13 @@ class MusicAnalyser:
                         self.update_rave_latent(a.model.encode(input_audio))
         input_device.gain = 0
         input_device.analyse = False
-        input_device.on_new_frame = on_new_frame
+        input_device.internal_callback = internal_callback
 
     def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True):
         print(sd.query_devices(device))
         sd.default.device = device
         self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, analyse=analyse,
-                                          buffer_size=buffer_size, sr=sr, fft_size=fft_size, output_device=output_device))
+                                          buffer_size=buffer_size, sr=sr, fft_size=fft_size, input_device=device))
         return len(self.audio_outputs)-1
 
     def start_file_stream(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
@@ -256,8 +258,9 @@ class MusicAnalyser:
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
         
-        self.audio_outputs.append(FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
-                                        fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device))
+        device = FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
+                                        fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
+        self.audio_outputs.append(device)
         return len(self.audio_outputs)-1
 
     def play(self):

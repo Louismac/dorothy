@@ -102,7 +102,7 @@ There is also a player to generate, visualise and interact with pretrained RAVE 
 [Examples here](examples/rave.py)
 
 ``
-dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
 ``
 
 Will load in a `.ts` model. Remember to `play()` to start!
@@ -122,7 +122,7 @@ dot.music.update_rave_latent(z)
 
 ```
 # Give an output device (e.g. your speakers) so you can hear the output
-dot.music.start_rave_stream("vintage.ts", output_device=4, latent_dim=latent_dim)
+rave_id = dot.music.start_rave_stream("vintage.ts", output_device=4, latent_dim=latent_dim)
 # Set stream to be blackhole / microphone device
 device_id = dot.music.start_device_stream(2)
 dot.music.update_rave_from_stream(device_id)
@@ -132,7 +132,7 @@ dot.music.play()
    * Or a file player stream
 
 ```
-dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
 device_id = dot.music.start_file_stream("../audio/gospel.wav")
 # Set as input to rave (this mutes the source stream, use .gain property to hear both)
 dot.music.update_rave_from_stream(device_id)
@@ -143,7 +143,7 @@ dot.music.play()
 
 You can also add a constant bias to the z vector to allow for some controllable / random variation. 
 
-If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the audio devide requests a new buffer and this function returns the size of that buffer
+If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the chosen audio device (in this case the RAVE audio player) requests a new buffer and this function returns the size of that buffer
 
 ##### New random bias every frame
 ```
@@ -151,7 +151,7 @@ def on_new_frame(n=2048):
     #Update a new random 
     dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
 
-dot.music.on_new_frame = on_new_frame
+dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
 ```
 
 ##### Oscillating bias at a given frequency 
@@ -168,7 +168,7 @@ def on_new_frame(n=2048):
     dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
     self.ptr += n
 
-dot.music.on_new_frame = on_new_frame
+dot.music.audio_outputs[rave_id] = on_new_frame
 ```
 
 ## Examples

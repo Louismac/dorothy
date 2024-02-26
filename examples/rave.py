@@ -14,26 +14,26 @@ class MySketch:
 
     def setup(self):
         #Output RAVE from speakers
-        latent_dim = 128
+        latent_dim = 16
         print(sd.query_devices())
         
-        #dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+        rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
-        dot.music.start_rave_stream("models/rave_first.ts", latent_dim=latent_dim, output_device = 4)
+        # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 5)
 
         #Random
-        z = torch.randn((1,16,1))
-        dot.music.update_rave_latent(z) 
+        # z = torch.randn((1,latent_dim,1))
+        # dot.music.update_rave_latent(z) 
         
-        # start stream, pass in the number of the device you want to input to RAVE e.g. blackhole
+        #start stream, pass in the number of the device you want to input to RAVE e.g. blackhole
         device_id = dot.music.start_device_stream(2)
-        dot.music.update_rave_from_stream(device_id)
+        # dot.music.update_rave_from_stream(device_id)
 
         # start file stream (to be used as input to RAVE)
-        # device_id = dot.music.start_file_stream("../audio/gospel.wav")
+        #device_id = dot.music.start_file_stream("../audio/gospel.wav")
         # set as input to rave (this mutes the source stream, use .gain to hear both)
-        #dot.music.update_rave_from_stream(device_id)
+        dot.music.update_rave_from_stream(device_id)
 
         d0 = 1.09  # change in latent dimension 0
         d1 = -3 
@@ -45,7 +45,7 @@ class MySketch:
         z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
         z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
         #Constant bias
-        dot.music.audio_outputs[0].z_bias = z_bias
+        #dot.music.audio_outputs[0].z_bias = z_bias
 
         def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
             t = frame_number / sample_rate
@@ -54,17 +54,22 @@ class MySketch:
         
         self.ptr = 0
         def on_new_frame(n=2048):
-
+            print(n)
             #Update a new random 
-            #dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+            dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
+            # if self.ptr > (2048*100):
+            #     z = torch.randn((1,latent_dim,1))
+            #     dot.music.update_rave_latent(z) 
+            #     print("new z!")
+            #     self.ptr = 0
             #OR
             #update with oscilating bias
-            val = sine_bias(self.ptr, 10,0.3)
+            # val = sine_bias(self.ptr, 0.2,0.2)
             # dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
 
             self.ptr += n
 
-        dot.music.on_new_frame = on_new_frame
+        dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
         dot.music.play()
         
     def draw(self):
@@ -76,7 +81,7 @@ class MySketch:
         for i in range(20):
             #Get max fft val in window of frequeny bins
             window = dot.music.fft_vals[i*win_size:(i+1)*win_size]
-            val = int(np.max(window))
+            val = int(np.mean(window))
             width = val*(i*scale)
             top_left = (dot.width//2-width,dot.height//2-width)
             bottom_right = (dot.width//2+width,dot.height//2+width)
@@ -85,9 +90,9 @@ class MySketch:
             rectangle(new_layer, top_left, bottom_right, (10*val,26*val,143*val), -1)
         #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
         dot.update_canvas()
-        top_left = (dot.width//2-10,dot.height//2-10)
-        bottom_right = (dot.width//2+10,dot.height//2+10)
-        rectangle(dot.canvas, top_left, bottom_right, (255,255,255), -1)
+        # top_left = (dot.width//2-10,dot.height//2-10)
+        # bottom_right = (dot.width//2+10,dot.height//2+10)
+        # rectangle(dot.canvas, top_left, bottom_right, (255,255,255), -1)
 
 MySketch()          
 
