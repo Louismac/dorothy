@@ -171,6 +171,16 @@ def on_new_frame(n=2048):
 dot.music.audio_outputs[rave_id] = on_new_frame
 ```
 
+### Generating Audio with [MAGNet](https://github.com/Louismac/MAGNet)
+
+MAGNet is a lightweight LSTM spectral model. You can train models [here](https://github.com/Louismac/MAGNet) with as little as 30 seconds of audio in minutes. 
+
+This generates in realtime given a trained model the original source audio file / dataset (to use as an impulse)
+
+```
+dot.music.start_magnet_stream("models/magnet_wiley.pth", "../audio/Wiley.wav")
+```
+
 ## Examples
 
 ### [Seed](examples/seed.py) 
@@ -243,6 +253,10 @@ Get contours and mask out, moving image sections radially in response to fft val
 ### [RAVE](examples/rave.py)
 
 Examples on generating with / interacting with RAVE models
+
+### [MAGNet](examples/magnet.py)
+
+Examples on generating with / interacting with MAGNet models
 
 ### [YOLO Body Tracking](examples/yolo.py)
 

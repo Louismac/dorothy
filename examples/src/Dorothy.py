@@ -18,6 +18,7 @@ import glob
 try:
     import torch
     torch.set_grad_enabled(False)
+    from utils.magnet import preprocess_data, RNNModel, generate
 except ImportError:
     print("torch not available, machine learning examples won't work, otherwise ignore.")
 
@@ -96,6 +97,77 @@ class AudioDevice:
     def stop(self):
         self.running = False
         self.play_thread.join()
+
+#Generating audio from RAVE models https://github.com/acids-ircam/RAVE
+class MAGNetPlayer(AudioDevice):
+    def __init__(self, model_path, dataset_path, **kwargs):
+        super().__init__(**kwargs)
+        
+        torch.set_grad_enabled(False)
+        torch.set_float32_matmul_precision('high')
+        self.device = torch.device('cpu')
+        
+        self.x_frames = self.load_dataset(dataset_path)
+        self.model = self.load_model(model_path)
+        
+        self.ptr = 0
+        self.impulse = self.x_frames[np.random.randint(self.x_frames.shape[1])]
+        self.sequence_length = 40
+        self.frame_size = 1024*75
+
+        self.current_buffer = self.get_frame()
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        self.generate_thread.start()
+        
+    def load_model(self, path):
+        model = RNNModel(input_size=1025, hidden_size=128, num_layers=2, output_size=1025)
+        checkpoint = path
+        model.load_state_dict(torch.load(checkpoint))
+        model.eval()
+        return model
+
+    def load_dataset(self, path):
+        n_fft=2048
+        hop_length=512
+        win_length=2048
+        sequence_length = 40
+        x_frames, _ = preprocess_data(path, n_fft=n_fft, 
+                                            hop_length=hop_length, win_length=win_length, 
+                                            sequence_length=sequence_length)
+        return x_frames
+
+    def fill_next_buffer(self):
+        self.next_buffer = self.get_frame()
+        print("next buffer filled", self.next_buffer.shape)
+
+    def get_frame(self):
+        y = 0
+        hop_length=512
+        frames_to_get = int(np.ceil(self.frame_size/hop_length))+1
+        print("requesting new buffer", self.frame_size, frames_to_get)
+        with torch.no_grad():
+            y, self.impulse = generate(self.model, self.impulse, frames_to_get, self.x_frames)
+        return y[:self.frame_size]
+
+    def audio_callback(self):
+        if self.pause_event.is_set():
+            return np.zero(self.buffer_size, dtype = np.float32) # Fill buffer with silence if paused
+        else:
+            audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
+            self.ptr += self.buffer_size
+            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
+            if self.ptr >= self.frame_size:
+                self.ptr = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
+            self.do_analysis(audio_buffer)
+            self.internal_callback()
+            self.on_new_frame(len(audio_buffer))
+            return audio_buffer
     
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
@@ -220,6 +292,14 @@ class MusicAnalyser:
         # print(fft_vals, amplitude)
         self.fft_vals = fft_vals
         self.amplitude = amplitude
+
+    def start_magnet_stream(self, model_path, dataset_path, buffer_size=2048, sr = 44100, output_device=None):
+        device = MAGNetPlayer(model_path, dataset_path,
+                            on_analysis_complete = self.on_analysis_complete, 
+                            buffer_size=buffer_size, 
+                            sr=sr,output_device = output_device)
+        self.audio_outputs.append(device)
+        return len(self.audio_outputs)-1
 
     def start_rave_stream(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
         device = RAVEPlayer(model_path=model_path, 
