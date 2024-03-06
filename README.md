@@ -143,11 +143,12 @@ dot.music.play()
 
 You can also add a constant bias to the z vector to allow for some controllable / random variation. 
 
-If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the chosen audio device (in this case the RAVE audio player) requests a new buffer and this function returns the size of that buffer
+If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the chosen audio device (in this case the RAVE audio player) requests a new buffer and this function returns that buffer (so you can get the size, or do any custom analysis)
 
 ##### New random bias every frame
 ```
-def on_new_frame(n=2048):
+def on_new_frame(buffer=np.zeros(2048)):
+    n= len(buffer)
     #Update a new random 
     dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
 
@@ -162,7 +163,8 @@ def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=441
     return value
 
 self.ptr = 0
-def on_new_frame(n=2048):
+def on_new_frame(buffer=np.zeros(2048)):
+    n= len(buffer)
     #update with oscilating bias
     val = sine_bias(self.ptr, 5, 0.4)
     dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))

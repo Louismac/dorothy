@@ -10,7 +10,9 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
-        dot.music.start_magnet_stream("models/magnet_wiley.pth", "../audio/Wiley.wav")
+        #Pass in the original dataset to use as seeds to generation 
+        dot.music.start_magnet_stream(model_path="models/magnet_wiley.pth",
+                                      dataset_path="../audio/Wiley.wav")
         dot.music.play()
         
     def draw(self):
@@ -29,17 +31,6 @@ class MySketch:
             #draw to an alpha layer
             new_layer = dot.to_alpha(alpha)
             rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
-        #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
         dot.update_canvas()
-        top_left = (dot.width//2-10,dot.height//2-10)
-        bottom_right = (dot.width//2+10,dot.height//2+10)
-        rectangle(dot.canvas, top_left, bottom_right, (255,255,255), -1)
 
 MySketch()          
-
-
-
-
-
-
-

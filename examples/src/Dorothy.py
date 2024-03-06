@@ -33,6 +33,7 @@ class AudioDevice:
         self.buffer_size = buffer_size
         self.amplitude = 0
         self.analyse = analyse
+        self.output_device = output_device
         print(os.name)
         self.on_analysis_complete = on_analysis_complete
         self.on_new_frame = on_new_frame
@@ -44,8 +45,10 @@ class AudioDevice:
             thread_id = threading.get_native_id()
             ctypes.windll.kernel32.SetThreadPriority(thread_id, 2)
         sd.default.samplerate = self.sr
-        sd.default.channels = 1
-        self.output_device = output_device 
+        self.channels = 1
+        print("output_device", output_device)
+        if output_device is not None:
+            self.channels = sd.query_devices(output_device)['max_output_channels']
         self.pause_event = threading.Event()
         self.play_thread = threading.Thread(target=self.capture_audio)
         self.gain = 1
@@ -75,12 +78,16 @@ class AudioDevice:
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
-        print("play_audio", self.running)
-        with sd.OutputStream(channels=1, samplerate=self.sr, blocksize=self.buffer_size, device = self.output_device) as stream:
+        print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
+        with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device = self.output_device) as stream:
             while self.running:
                 if not self.pause_event.is_set():
-                    data = self.audio_callback()
-                    stream.write(data)
+                    audio_data = self.audio_callback()
+                    #duplicate to fill channels (mostly generating mono)
+                    if audio_data.ndim < self.channels:
+                        audio_data = np.tile(audio_data[:, None], (1, self.channels))
+                    if self.output_device is not None:
+                        stream.write(audio_data)
                 else:
                     time.sleep(0.1)  
         
@@ -138,6 +145,10 @@ class MAGNetPlayer(AudioDevice):
                                             sequence_length=sequence_length)
         return x_frames
 
+    def skip(self, index = 0):
+        if index < len(self.x_frames):
+            self.impulse = self.x_frames[index]
+
     def fill_next_buffer(self):
         self.next_buffer = self.get_frame()
         print("next buffer filled", self.next_buffer.shape)
@@ -166,8 +177,8 @@ class MAGNetPlayer(AudioDevice):
                     self.generate_thread.start()
             self.do_analysis(audio_buffer)
             self.internal_callback()
-            self.on_new_frame(len(audio_buffer))
-            return audio_buffer
+            self.on_new_frame(audio_buffer)
+            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
     
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
@@ -203,7 +214,8 @@ class RAVEPlayer(AudioDevice):
 
     def audio_callback(self):
         if self.pause_event.is_set():
-            return np.zeros(self.buffer_size, dtype = np.float32) # Fill buffer with silence if paused
+            print("paused")
+            return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
         else:
             audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
             self.ptr += self.buffer_size
@@ -216,8 +228,8 @@ class RAVEPlayer(AudioDevice):
                     self.generate_thread.start()
             self.do_analysis(audio_buffer)
             self.internal_callback()
-            self.on_new_frame(len(audio_buffer))
-            return audio_buffer
+            self.on_new_frame(audio_buffer)
+            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
 
 #Class for analysing audio streams in realtime
 #Doesnt actually play any audio, just analyses and reroutes 
@@ -239,7 +251,7 @@ class AudioCapture(AudioDevice):
             self.audio_buffer = indata[:, 0]
             self.do_analysis(self.audio_buffer)
             self.internal_callback()
-            self.on_new_frame(len(self.audio_buffer))
+            self.on_new_frame(self.audio_buffer)
 
     def capture_audio(self):
         print("capture_audio (AudioCapture)", self.running, self.input_device)
@@ -275,8 +287,8 @@ class FilePlayer(AudioDevice):
             self.do_analysis(audio_buffer)
             self.audio_buffer = audio_buffer
             self.internal_callback()
-            self.on_new_frame(len(audio_buffer))
-            return audio_buffer * self.gain
+            self.on_new_frame(audio_buffer)
+            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
 
 #Main class for music analysis
 class MusicAnalyser:

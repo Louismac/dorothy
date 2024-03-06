@@ -14,61 +14,63 @@ class MySketch:
 
     def setup(self):
         #Output RAVE from speakers
-        latent_dim = 16
+        latent_dim = 8
         print(sd.query_devices())
         
-        rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim)
+        rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device=1)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
-        # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 5)
+        # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
 
         #Random
-        # z = torch.randn((1,latent_dim,1))
-        # dot.music.update_rave_latent(z) 
+        z = torch.randn((1,latent_dim,1))
+        dot.music.update_rave_latent(z) 
         
         #start stream, pass in the number of the device you want to input to RAVE e.g. blackhole
-        device_id = dot.music.start_device_stream(2)
+        # device_id = dot.music.start_device_stream(2)
         # dot.music.update_rave_from_stream(device_id)
 
         # start file stream (to be used as input to RAVE)
-        #device_id = dot.music.start_file_stream("../audio/gospel.wav")
+        #device_id = dot.music.start_file_stream("../audio/Wiley.wav")
         # set as input to rave (this mutes the source stream, use .gain to hear both)
-        dot.music.update_rave_from_stream(device_id)
+        #dot.music.update_rave_from_stream(device_id)
 
-        d0 = 1.09  # change in latent dimension 0
-        d1 = -3 
-        d2 = 0.02
-        d3 = 0.5 
-        z_bias = torch.zeros(1, latent_dim, 1)
-        z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
-        z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
-        z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
-        z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
+        # d0 = 1.09  # change in latent dimension 0
+        # d1 = -3 
+        # d2 = 0.02
+        # d3 = 0.5 
+        # z_bias = torch.zeros(1, latent_dim, 1)
+        # z_bias[:, 0] = torch.linspace(d0, d0, z_bias.shape[-1])
+        # z_bias[:, 1] = torch.linspace(d1, d1, z_bias.shape[-1])
+        # z_bias[:, 2] = torch.linspace(d2, d2, z_bias.shape[-1])
+        # z_bias[:, 3] = torch.linspace(d3, d3, z_bias.shape[-1])
         #Constant bias
         #dot.music.audio_outputs[0].z_bias = z_bias
 
-        def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
-            t = frame_number / sample_rate
-            value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
-            return value
+        # def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
+        #     t = frame_number / sample_rate
+        #     value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
+        #     return value
         
         self.ptr = 0
-        def on_new_frame(n=2048):
-            print(n)
-            #Update a new random 
-            dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
-            # if self.ptr > (2048*100):
+        # target = [1,2,4,8,16,32,64,128,256]
+        # self.t = target[np.random.randint(len(target))]
+        def on_new_frame(buffer=np.zeros(2048)):
+            n= len(buffer)
+            # #Update a new random 
+            # # dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.1
+            # if self.ptr > (self.t*2048):
+            #     self.t = target[np.random.randint(len(target))]
             #     z = torch.randn((1,latent_dim,1))
             #     dot.music.update_rave_latent(z) 
-            #     print("new z!")
+            #     print("new z!", self.t)
             #     self.ptr = 0
-            #OR
-            #update with oscilating bias
-            # val = sine_bias(self.ptr, 0.2,0.2)
+            # #ORconda
+            # #update with oscilating bias
+            # val = sine_bias(self.ptr, 0.4, 0.2)
             # dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
 
             self.ptr += n
-
         dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
         dot.music.play()
         
