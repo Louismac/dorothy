@@ -1,5 +1,5 @@
 # Dorothy
-A Creative Computing Python Library for Audio Reactive Drawing
+A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing 
 
 Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Processing / p5.js`` -like API, make some easy sketching with shapes and images reacting to FFT, Beats and Amplitude in Python! Also, as its Python and the canvas is just a `numpy` pixel array, you can do any of the cool Python stuff you would normally do, or use other powerful libraries like `NumPy`, `PyTorch` or `Tensorflow`.
 
