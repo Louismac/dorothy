@@ -87,6 +87,7 @@ class AudioDevice:
                     if audio_data.ndim < self.channels:
                         audio_data = np.tile(audio_data[:, None], (1, self.channels))
                     if self.output_device is not None:
+                        # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
                         stream.write(audio_data)
                 else:
                     time.sleep(0.1)  
@@ -178,7 +179,7 @@ class MAGNetPlayer(AudioDevice):
             self.do_analysis(audio_buffer)
             self.internal_callback()
             self.on_new_frame(audio_buffer)
-            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
+            return audio_buffer * self.gain
     
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
@@ -229,7 +230,7 @@ class RAVEPlayer(AudioDevice):
             self.do_analysis(audio_buffer)
             self.internal_callback()
             self.on_new_frame(audio_buffer)
-            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
+            return audio_buffer * self.gain
 
 #Class for analysing audio streams in realtime
 #Doesnt actually play any audio, just analyses and reroutes 
@@ -288,7 +289,7 @@ class FilePlayer(AudioDevice):
             self.audio_buffer = audio_buffer
             self.internal_callback()
             self.on_new_frame(audio_buffer)
-            return np.array([audio_buffer * self.gain for _ in range(self.channels)])
+            return audio_buffer * self.gain
 
 #Main class for music analysis
 class MusicAnalyser:
