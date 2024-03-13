@@ -17,7 +17,7 @@ class MySketch:
         latent_dim = 16
         print(sd.query_devices())
         
-        rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device=3)
+        rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
         # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
@@ -30,7 +30,7 @@ class MySketch:
         # device_id = dot.music.start_device_stream(2)
         # dot.music.update_rave_from_stream(device_id)
 
-        # start file stream (to be used as input to RAVE)
+        # # start file stream (to be used as input to RAVE)
         device_id = dot.music.start_file_stream("../audio/Wiley.wav")
         # set as input to rave (this mutes the source stream, use .gain to hear both)
         dot.music.update_rave_from_stream(device_id)
@@ -65,7 +65,7 @@ class MySketch:
             #     dot.music.update_rave_latent(z) 
             #     print("new z!", self.t)
             #     self.ptr = 0
-            # #ORconda
+            # #OR
             # #update with oscilating bias
             # val = sine_bias(self.ptr, 0.4, 0.2)
             # dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))

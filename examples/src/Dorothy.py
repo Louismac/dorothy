@@ -78,17 +78,19 @@ class AudioDevice:
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
+        #Set to default if no device provided
+        if self.output_device is not None:
+            self.output_device = sd.default.device
         print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
-        with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device = self.output_device) as stream:
+        with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device=self.output_device) as stream:
             while self.running:
                 if not self.pause_event.is_set():
                     audio_data = self.audio_callback()
                     #duplicate to fill channels (mostly generating mono)
                     if audio_data.ndim < self.channels:
                         audio_data = np.tile(audio_data[:, None], (1, self.channels))
-                    if self.output_device is not None:
-                        # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
-                        stream.write(audio_data)
+                    # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
+                    stream.write(audio_data)
                 else:
                     time.sleep(0.1)  
         
@@ -255,7 +257,7 @@ class AudioCapture(AudioDevice):
             self.on_new_frame(self.audio_buffer)
 
     def capture_audio(self):
-        print("capture_audio (AudioCapture)", self.running, self.input_device)
+        print("capture_audio (AudioCapture)", self.running, self.input_device, self.channels)
         
         with sd.InputStream(callback=self.audio_callback, 
                             channels=1, 
@@ -338,7 +340,6 @@ class MusicAnalyser:
 
     def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True):
         print(sd.query_devices(device))
-        sd.default.device = device
         self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, analyse=analyse,
                                           buffer_size=buffer_size, sr=sr, fft_size=fft_size, input_device=device))
         return len(self.audio_outputs)-1
