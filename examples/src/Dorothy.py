@@ -79,7 +79,7 @@ class AudioDevice:
         
     def capture_audio(self):
         #Set to default if no device provided
-        if self.output_device is not None:
+        if self.output_device == None:
             self.output_device = sd.default.device
         print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
         with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device=self.output_device) as stream:
