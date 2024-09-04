@@ -24,6 +24,8 @@ This is the main class of the Library
   - `int` giving frame counter since program launched
 - `millis`
   - `int` giving milliseconds since program launched
+- `recording`
+  - `bool` returns True if we are currently screen capturing 
 - `music`
   - an instance of `Audio` that controls the music analysis and generation
 - Also has a convenience property to get RGB tuple for any CSS colour by name
@@ -55,7 +57,13 @@ This is the main class of the Library
   - paste a given image (`np.array` of pixels) onto a given `layer` at `coords` (given for the top left). Returns the `layer` after paste operation
     
 - `update_canvas()`
-  - Render the `layers` to the `canvas` 
+  - Render the `layers` to the `canvas`
+
+- `start_record()`
+  - function to start recording (collecting frames)
+ 
+- `stop_record(output_video_path = "output.mp4", fps = 25)`
+  - function to stop collecting and render the collected frames to `output_video_path`
 
 ## Class `Audio`
 
