@@ -111,7 +111,7 @@ This is the parent class for all audio devices / players. Not actually instantia
 - `resume(self)`
 - `stop(self)`
 
-- ## Class `FilePlayer` (inherits from `AudioDevice`)
+## Class `FilePlayer` (inherits from `AudioDevice`)
 
 ### Properties:
 
