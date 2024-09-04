@@ -26,6 +26,8 @@ This is the main class of the Library
   - `int` giving milliseconds since program launched
 - `music`
   - an instance of `Audio` that controls the music analysis and generation
+- Also has a convenience property to get RGB tuple for any CSS colour by name
+  - e.g. `dot.red` returns (255,0,0) and `dot.lawngreen` returns (124,252,0)   
 
 ### Methods:
 - `push_layer()`
