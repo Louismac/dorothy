@@ -18,7 +18,7 @@ This is the main class of the Library
   - `int` giving mouse x corrdinate on screen. 0 is left most edge.
 - `mouse_y`
   - `int` giving mouse y corrdinate on screen. 0 is top most edge.
-- mouse_down
+- `mouse_down`
   - 'bool' is the mouse is currently pressed. 
 - `frame`
   - `int` giving frame counter since program launched
