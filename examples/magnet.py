@@ -31,6 +31,5 @@ class MySketch:
             #draw to an alpha layer
             new_layer = dot.to_alpha(alpha)
             rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
-        dot.update_canvas()
 
 MySketch()          

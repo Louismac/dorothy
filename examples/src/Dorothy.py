@@ -13,6 +13,7 @@ import ctypes
 import time
 import traceback
 import glob
+import pandas as pd
 
 #For Rave example, not normally needed
 try:
@@ -108,7 +109,7 @@ class AudioDevice:
         self.running = False
         self.play_thread.join()
 
-#Generating audio from RAVE models https://github.com/acids-ircam/RAVE
+#Generating audio from MAGNet models https://github.com/Louismac/MAGNet
 class MAGNetPlayer(AudioDevice):
     def __init__(self, model_path, dataset_path, **kwargs):
         super().__init__(**kwargs)
@@ -169,7 +170,9 @@ class MAGNetPlayer(AudioDevice):
         if self.pause_event.is_set():
             return np.zero(self.buffer_size, dtype = np.float32) # Fill buffer with silence if paused
         else:
-            audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
+            start = self.ptr
+            end = self.ptr + self.buffer_size
+            audio_buffer = self.current_buffer[start:end]
             self.ptr += self.buffer_size
             #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
             if self.ptr >= self.frame_size:
@@ -293,8 +296,8 @@ class FilePlayer(AudioDevice):
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain
 
-#Main class for music analysis
-class MusicAnalyser:
+#Main class for music analysis and generation
+class Audio:
     
     audio_outputs = []
     fft_vals = np.zeros(2048)
@@ -316,7 +319,7 @@ class MusicAnalyser:
         self.audio_outputs.append(device)
         return len(self.audio_outputs)-1
 
-    def start_rave_stream(self, model_path="vintage.ts",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
+    def start_rave_stream(self, model_path="",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
         device = RAVEPlayer(model_path=model_path, 
                                             on_analysis_complete = self.on_analysis_complete, 
                                             buffer_size=buffer_size, 
@@ -373,17 +376,7 @@ class MusicAnalyser:
             is_beat = True
             self.beat_ptr += 1
         return is_beat
-    
-    def update_rave_latent(self, new_latent):
-        for a in self.audio_outputs:
-            if isinstance(a,RAVEPlayer):
-                if isinstance(new_latent, torch.Tensor):
-                    if a.current_latent.shape == new_latent.shape:
-                        a.current_latent = new_latent
-                    else:
-                        print(f'new latent shape {new_latent.shape} does not match shape of existing latent {self.audio_outputs[0].current_latent.shape} ')
-                else:
-                    print(f'the latent passed into this function should be a Torch tensor, not a {type(new_latent)}')
+
       
 #Main drawing class
 class Dorothy:
@@ -397,13 +390,25 @@ class Dorothy:
     start_time_millis = int(round(time.time() * 1000))
     millis = 0
     layers = []
-    music = MusicAnalyser()
+    music = Audio()
     recording = False
 
     def __init__(self, width = 640, height = 480):
         self.width = width
         self.height = height
         self.canvas = np.ones((height,width,3), np.uint8)*255
+        self.load_colours()
+    
+    def load_colours(self):
+        csv_file = "css_colours.csv"
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        csv_file_path = os.path.join(base_path, csv_file)
+        if os.path.exists(csv_file_path):
+            df = pd.read_csv(csv_file_path)
+            for _, row in df.iterrows():
+                colour_name = row['Colour Name'].replace(" ", "_")
+                rgb_values = [row['R'], row['G'], row['B']]
+                setattr(self, colour_name, rgb_values)
 
     #Get a new layer for drawing
     def push_layer(self):
@@ -479,16 +484,16 @@ class Dorothy:
         rectangle(canvas, (0,0), (self.width,self.height), col, -1)
 
     #Paste image
-    def paste(self, canvas, to_paste, coords = (0,0)):
+    def paste(self, layer, to_paste, coords = (0,0)):
         x = coords[0]
         y = coords[1]
         w = to_paste.shape[1]
         h = to_paste.shape[0]
-        cw = canvas.shape[1]
-        ch = canvas.shape[0]
+        cw = layer.shape[1]
+        ch = layer.shape[0]
         if x + w <= cw and y + h <= ch and x >= 0 and y >= 0:
-            canvas[y:y+h,x:x+w] = to_paste
-        return canvas
+            layer[y:y+h,x:x+w] = to_paste
+        return layer
 
     #Some complicated stuff to try and do alpha blending
     def update_canvas(self):

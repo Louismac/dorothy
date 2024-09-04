@@ -7,10 +7,13 @@ import math
 
 dot = Dorothy()
 
+
+
 class MySketch:
 
     def __init__(self):
         dot.start_loop(self.setup, self.draw)
+
 
     def setup(self):
         #Output RAVE from speakers
@@ -73,12 +76,16 @@ class MySketch:
             self.ptr += n
         dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
         dot.music.play()
+
         
     def draw(self):
         dot.background((255,255,255))
         win_size = 10
         scale = 15
         alpha = 0.4
+
+        
+
         #Only draw 20 rectangles
         for i in range(20):
             #Get max fft val in window of frequeny bins

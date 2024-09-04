@@ -10,27 +10,9 @@ class MySketch:
 
     def setup(self):
         print("setup")
-        #Play file from your computer
-        file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
         
-        #Pick or just stream from your computer
-        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        # print(sd.query_devices())
-        #dot.music.start_device_stream(3)
-
-        dot.music.play()
-    
     def draw(self):
-        dot.background((255,255,255))
-        line(dot.canvas, (0,0),(dot.frame%dot.width, dot.height), (0), 1)
+        line(dot.canvas, (0,0),(dot.frame%dot.width, dot.height), dot.red, 1)
         return
 
 MySketch()          
-
-
-
-
-
-
-
