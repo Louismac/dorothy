@@ -9,7 +9,7 @@ Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Proc
 
 * [Examples](https://github.com/Louismac/dorothy/edit/main/README.md#examples)
 
-* [Full API Reference](https://github.com/Louismac/dorothy/blob/main/requirements.txt)
+* [Full API Reference](https://github.com/Louismac/dorothy/blob/main/Reference.md)
 
 * [Generating Music](https://github.com/Louismac/dorothy/edit/main/README.md#music-generation)
 
