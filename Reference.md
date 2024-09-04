@@ -47,7 +47,7 @@ This is the main class of the Library
 - `update_canvas()`
   - Render the `layers` to the `canvas` 
 
-- ## Class `Audio`
+## Class `Audio`
 
 Controls the music analysis and generation. Is accessed through the `dot.music` property.
 
@@ -60,66 +60,100 @@ Controls the music analysis and generation. Is accessed through the `dot.music` 
   - `float` giving current mean amplitude.
 - `tempo`
   - `float` of the tempo track (if a `FilePlayer` is being used (not a stream))
--   
+
 
 ### Methods:
-- `on_analysis_complete(self, fft_vals, amplitude)`
-- `start_magnet_stream(self, model_path, dataset_path, buffer_size=2048, sr=44100, output_device=None)`
+- `start_magnet_stream(model_path, dataset_path, buffer_size=2048, sr=44100, output_device=None)`
+  - Given a `model_path` to a trained MAGNet model and a `dataset_path` to an seed audio `.wav` file, make a `MAGNetPlayer`. `output_device` is the audio device to output the generated audio to. A list of ids can be  found by executing `print(sd.query_devices())`. Returns index to device on the `audio_outputs` list.
+- `start_rave_stream(model_path="",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None)`
+  - Given a `model_path` to a trained RAVE model, make a `RAVEPlayer`. Returns index to device on the `audio_outputs` list. `output_device` is the audio device to output the generated audio to. A list of ids can be  found by executing `print(sd.query_devices())`. Returns index to device on the `audio_outputs` list.
+- `start_device_stream(device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True)`
+  - Capture audio from an input (e.g. a microphone), passing the `device` id.  If using `output_device`, be careful of feedback!. A list of ids can be  found by executing `print(sd.query_devices())`. Returns index to device on the `audio_outputs` list.
+- `start_file_stream(file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True)`
+  - Start playback of a `.wav` file at `file_path`. `output_device` is the audio device to output the audio to, although this can be left empty if using the stream as input to another device (e.g a `RAVEPlayer`). A list of ids can be  found by executing `print(sd.query_devices())`. Returns index to device on the `audio_outputs` list.
+- `update_rave_from_stream(input=0)`
+  - Select the input stream to drive RAVE with if doing timbre transfer.  A list of ids can be  found by executing `print(sd.query_devices())`.
+- `play()` 
+  - Starts all `audio_outputs`.
+- `stop()`
+  - Stops all `audio_outputs`
+- `is_beat()`
+  - Return `True` if there as a beat since the last time this function was called. Should be called from within the `draw()` loop on every frame for best results.     
 
 ## Class `AudioDevice`
 
+This is the parent class for all audio devices / players. Not actually instantiated.
+
 ### Properties:
 - `analyse`
+  - `bool` that determines if audio analysis is conducted on this stream. This can be turned off for certain streams if not needed for effiecency.    
 - `amplitude`
-- `on_analysis_complete`
+  - `float` of the current amplitude 
 - `on_new_frame`
+  - `callback` called whenever a new audio buffer is passed to the output with the `audio_buffer` as an argument.  
 - `channels`
-- `play_thread`
+  - `int` set to the `max_output_channels` of the `output_device` 
 - `gain`
-- `running`
+  - `float` gain of the device 
 - `output_device`
+  - `int` index of given output device.  A list of ids can be  found by executing `print(sd.query_devices())`.
 - `fft_size`
+  - `int`  
 - `sr`
+  - `int` sample rate 
 - `buffer_size`
-- `pause_event`
-- `audio_callback`
-- `internal_callback`
-- `fft_vals`
+  - `int` 
 
 ### Methods:
-- `__init__(self, on_analysis_complete=<expression>, on_new_frame=<expression>, analyse=True, fft_size=1024, buffer_size=2048, sr=44100, output_device=None)`
-- `do_analysis(self, audio_buffer)`
-- `audio_callback(self)`
-- `capture_audio(self)`
+
 - `play(self)`
 - `pause(self)`
 - `resume(self)`
 - `stop(self)`
 
+- ## Class `FilePlayer` (inherits from `AudioDevice`)
+
+### Properties:
+
+- `y`
+  - `np.array` of the loaded audio file
+
+### Methods:
+
+No public facing API
+
+## Class `AudioCapture` (inherits from `AudioDevice`)
+
+### Properties:
+
+- `input_buffer`
+  - `int` id of audio device being captured
+- `ptr`
+  - `int` of the current frame being played back (start of buffer) in samples
+
+### Methods:
+
+No public facing API
+
 ## Class `MAGNetPlayer` (inherits from `AudioDevice`)
 
 ### Properties:
-- `running`
-- `model`
-- `sequence_length`
-- `x_frames`
-- `current_buffer`
+
+No public facing API
 
 ### Methods:
-- `__init__(self, on_analysis_complete=<expression>, on_new_frame=<expression>, analyse=True, fft_size=1024, buffer_size=2048, sr=44100, output_device=None)`
-- `load_model(self, path)`
-- `load_dataset(self, path)`
-- `skip(self, index=0)`
-- `fill_next_buffer(self)`
-- `get_frame(self)`
-- `audio_callback(self)`
+
+No public facing API
 
 ## Class `RAVEPlayer` (inherits from `AudioDevice`)
 
 ### Properties:
 - `current_latent`
+  - Set this to update the z vector 
 - `latent_dim`
+  - Size of latent space 
 - `z_bias`
+  - constant bias to add to `current_latent`
 
 
 
