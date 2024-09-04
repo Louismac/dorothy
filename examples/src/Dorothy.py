@@ -80,7 +80,7 @@ class AudioDevice:
         
     def capture_audio(self):
         #Set to default if no device provided
-        if self.output_device == None:
+        if self.output_device is not None:
             self.output_device = sd.default.device
         print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
         with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device=self.output_device) as stream:
@@ -272,7 +272,7 @@ class AudioCapture(AudioDevice):
                 time.sleep(0.1)
 
 #Class for playing back audio files
-class FilePlayer(AudioDevice):
+class SamplePlayer(AudioDevice):
 
     def __init__(self, y=[0], **kwargs):
         super().__init__(**kwargs)
@@ -349,14 +349,19 @@ class Audio:
 
     def start_file_stream(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
         #load file
-        self.y, self.sr = librosa.load(file_path, sr=sr)
+        y, sr = librosa.load(file_path, sr=sr)
+        return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
+    
+    #Start stream of given audio samples (e.g. we can use this to playback things we make in class)
+    def start_sample_stream(self, y, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
         self.ptr = 0
+        self.y = y
+        self.sr = sr
         #Beat info
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
-        
-        device = FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
-                                        fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
+        device = SamplePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
+                            fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
         self.audio_outputs.append(device)
         return len(self.audio_outputs)-1
 
@@ -392,6 +397,8 @@ class Dorothy:
     layers = []
     music = Audio()
     recording = False
+    recording_buffer = []
+    prev_frame = 0
 
     def __init__(self, width = 640, height = 480):
         self.width = width
@@ -544,16 +551,32 @@ class Dorothy:
         cv2.waitKey(1)
         sys.exit(0)
     
-    def start_record(self, fps=40):
-        output_video_path = "output.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        self.out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
-        self.recording = True
+    def start_record(self):
+        if not self.recording:
+            print("starting record")
+            self.recording_buffer = []
+            self.recording = True
     
-    def stop_record(self):
-        print("stopping record, writing file")
-        self.out.release()
-        self.recording = False
+    def stop_record(self, output_video_path = "output.mp4", fps = 25):
+        if self.recording:
+            print("stopping record, writing file")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
+            frame_interval = (1.0 / fps) * 1000
+            next_frame_time = 0.0
+
+            for i in range(1, len(self.recording_buffer)):
+                current_frame = self.recording_buffer[i]["frame"]
+                current_time = self.recording_buffer[i]["timestamp"]
+                
+                while next_frame_time <= current_time:
+                    print(next_frame_time, current_time)
+                    out.write(current_frame) 
+                    next_frame_time += frame_interval
+
+            out.release()
+            self.recording = False
+            self.recording_buffer = []
 
     #Main drawing loop
     def start_loop(self, 
@@ -587,7 +610,7 @@ class Dorothy:
                 #Draw to window
                 cv2.imshow(name, canvas_rgb)
                 if self.recording:
-                    self.out.write(canvas_rgb)
+                    self.recording_buffer.append({"frame":canvas_rgb,"timestamp":self.millis})
 
                 if cv2.waitKey(1) & 0xFF==ord('p'): # print when 'p' is pressed
                     print("PRINT")
