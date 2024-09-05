@@ -100,7 +100,7 @@ class MySketch:
         
         #Get new canvas (for transparency)
         new_canvas = dot.to_alpha(alpha)
-        fft_vals = dot.music.fft_vals
+        fft_vals = dot.music.fft(0)
         
         #Should we change direction?
         if np.random.random()<dir_change:

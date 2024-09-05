@@ -29,7 +29,7 @@ class MySketch:
         if dot.mouse_down:
             color = (255,0,255)
         
-        size = dot.music.amplitude*1000
+        size = dot.music.amplitude()*1000
 
         circle(dot.canvas,(int(dot.mouse_x), int(dot.mouse_y)),int(size) ,color,-1)
 

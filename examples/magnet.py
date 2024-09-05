@@ -23,7 +23,7 @@ class MySketch:
         #Only draw 20 rectangles
         for i in range(20):
             #Get max fft val in window of frequeny bins
-            window = dot.music.fft_vals[i*win_size:(i+1)*win_size]
+            window = dot.music.fft()[i*win_size:(i+1)*win_size]
             val = int(np.max(window))
             width = val*(i*scale)
             top_left = (dot.width//2-width,dot.height//2-width)

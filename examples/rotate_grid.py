@@ -13,7 +13,7 @@ class MySketch:
         print("setup")
         #Play file from your computer
         file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
+        dot.music.start_file_stream(file_path)
         
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
@@ -44,7 +44,7 @@ class MySketch:
                 bottom_right = (x+size, y+size)
                 rectangle(new_canvas, top_left, bottom_right, (77, 72, 79), -1)
 
-                theta = dot.music.amplitude * 15 * 2 * np.pi
+                theta = dot.music.amplitude() * 15 * 2 * np.pi
         
                 origin = (x+size/2, y+size/2)
                 new_canvas = dot.rotate(new_canvas, theta, origin)

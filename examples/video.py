@@ -35,7 +35,7 @@ class MySketch:
             dot.paste(new_layer, camera_feed[top_left[0]:bottom_right[1],top_left[1]:bottom_right[1]], top_left)
             
             #scale to amplitude
-            factor = (dot.music.amplitude * 5) + 1
+            factor = (dot.music.amplitude() * 5) + 1
             origin = (dot.width//2,dot.height//2)
             new_layer = dot.scale(new_layer, factor, factor, origin)
             

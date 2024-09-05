@@ -25,20 +25,25 @@ except ImportError:
 
 #Parent class for audio providers 
 class AudioDevice:
-    def __init__(self, on_analysis_complete = lambda:0, on_new_frame = lambda n=1:0,
+    def __init__(self, on_new_frame = lambda n=1:0,
                  analyse=True, fft_size=1024, buffer_size=2048, sr=44100, output_device=None):
         self.running = True
         self.sr = sr
         self.fft_size = fft_size
-        self.fft_vals = np.zeros((fft_size//2)+1)
+        self.audio_latency = 5
+        self.abuf_ptr = 0
+        self.fft_vals = [np.zeros((fft_size//2)+1) for i in range(self.audio_latency)]
         self.buffer_size = buffer_size
-        self.amplitude = 0
+        self.amplitude = np.zeros(self.audio_latency)
         self.analyse = analyse
         self.output_device = output_device
         print(os.name)
-        self.on_analysis_complete = on_analysis_complete
         self.on_new_frame = on_new_frame
         self.internal_callback = lambda:0
+
+        if self.fft_size > self.buffer_size:
+            print("warning, fft window is bigger than buffer, numpy will zero pad, which may lead to unexpected results")
+
         if os.name == "posix":
             p = psutil.Process(os.getpid())
             p.nice(10)
@@ -48,8 +53,9 @@ class AudioDevice:
         sd.default.samplerate = self.sr
         self.channels = 1
         print("output_device", output_device)
-        if output_device is not None:
-            self.channels = sd.query_devices(output_device)['max_output_channels']
+        #Set to default if no device provided
+        
+
         self.pause_event = threading.Event()
         self.play_thread = threading.Thread(target=self.capture_audio)
         self.gain = 1
@@ -57,7 +63,7 @@ class AudioDevice:
     def do_analysis(self, audio_buffer):
         if self.analyse:
             #Get amplitude
-            self.amplitude = np.mean(audio_buffer**2)
+            self.amplitude[self.abuf_ptr] = np.mean(audio_buffer**2)
             num_frames = 1 + (len(audio_buffer) - self.fft_size) // self.fft_size//2
             fft_results = np.zeros((num_frames, self.fft_size), dtype=complex)
             window = np.hanning(self.fft_size)
@@ -68,9 +74,9 @@ class AudioDevice:
                 windowed_frame = frame * window
                 fft_results[i] = np.fft.fft(windowed_frame)
 
-            self.fft_vals = np.abs(fft_results)
-            # return the mean for visualising 
-            self.on_analysis_complete(np.mean(self.fft_vals, axis=0), self.amplitude)
+            self.fft_vals[self.abuf_ptr] = np.mean(np.abs(fft_results),axis=0)
+
+            self.abuf_ptr = (self.abuf_ptr + 1) % self.audio_latency
 
     #stub (overwritten in subclass)
     def audio_callback(self):
@@ -79,9 +85,17 @@ class AudioDevice:
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
+        
         #Set to default if no device provided
-        if self.output_device == None:
-            self.output_device = sd.default.device
+        if self.output_device is None:
+            self.output_device = sd.default.device[1]
+            print(sd.query_devices())
+            print("output_device set to default", sd.default.device[1])
+
+        if self.output_device is not None:
+            self.channels = sd.query_devices(self.output_device)['max_output_channels']
+            print("channels:", self.channels)
+        
         print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
         with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device=self.output_device) as stream:
             while self.running:
@@ -90,8 +104,12 @@ class AudioDevice:
                     #duplicate to fill channels (mostly generating mono)
                     if audio_data.ndim < self.channels:
                         audio_data = np.tile(audio_data[:, None], (1, self.channels))
+                    else:
+
+                        audio_data = audio_data[np.newaxis, :]
                     # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
                     stream.write(audio_data)
+                    self.do_analysis(audio_data[:,0])
                 else:
                     time.sleep(0.1)  
         
@@ -121,7 +139,7 @@ class MAGNetPlayer(AudioDevice):
         self.x_frames = self.load_dataset(dataset_path)
         self.model = self.load_model(model_path)
         
-        self.ptr = 0
+        self.current_sample = 0
         self.impulse = self.x_frames[np.random.randint(self.x_frames.shape[1])]
         self.sequence_length = 40
         self.frame_size = 1024*75
@@ -170,18 +188,18 @@ class MAGNetPlayer(AudioDevice):
         if self.pause_event.is_set():
             return np.zero(self.buffer_size, dtype = np.float32) # Fill buffer with silence if paused
         else:
-            start = self.ptr
-            end = self.ptr + self.buffer_size
+            start = self.current_sample
+            end = self.current_sample + self.buffer_size
             audio_buffer = self.current_buffer[start:end]
-            self.ptr += self.buffer_size
+            self.current_sample += self.buffer_size
             #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
-            if self.ptr >= self.frame_size:
-                self.ptr = 0
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
                 self.current_buffer = self.next_buffer.copy()
                 if not self.generate_thread.is_alive():
                     self.generate_thread = threading.Thread(target=self.fill_next_buffer)
                     self.generate_thread.start()
-            self.do_analysis(audio_buffer)
+            
             self.internal_callback()
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain
@@ -195,7 +213,7 @@ class RAVEPlayer(AudioDevice):
         torch.set_float32_matmul_precision('high')
         self.device = torch.device('cpu')
         self.frame_size = 4096//2 #This is the RAVE buffer size 
-        self.ptr = 0
+        self.current_sample = 0
         self.latent_dim = latent_dim
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
         self.z_bias = torch.zeros(1,latent_dim,1)
@@ -223,16 +241,15 @@ class RAVEPlayer(AudioDevice):
             print("paused")
             return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
         else:
-            audio_buffer = self.current_buffer[self.ptr:self.ptr +self.buffer_size]
-            self.ptr += self.buffer_size
+            audio_buffer = self.current_buffer[self.current_sample:self.current_sample +self.buffer_size]
+            self.current_sample += self.buffer_size
             #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
-            if self.ptr >= self.frame_size:
-                self.ptr = 0
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
                 self.current_buffer = self.next_buffer.copy()
                 if not self.generate_thread.is_alive():
                     self.generate_thread = threading.Thread(target=self.fill_next_buffer)
                     self.generate_thread.start()
-            self.do_analysis(audio_buffer)
             self.internal_callback()
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain
@@ -255,8 +272,8 @@ class AudioCapture(AudioDevice):
         else:
             #Window the current audio buffer and get fft 
             self.audio_buffer = indata[:, 0]
-            self.do_analysis(self.audio_buffer)
             self.internal_callback()
+            self.do_analysis(self.audio_buffer)
             self.on_new_frame(self.audio_buffer)
 
     def capture_audio(self):
@@ -272,25 +289,24 @@ class AudioCapture(AudioDevice):
                 time.sleep(0.1)
 
 #Class for playing back audio files
-class FilePlayer(AudioDevice):
+class SamplePlayer(AudioDevice):
 
     def __init__(self, y=[0], **kwargs):
         super().__init__(**kwargs)
         self.y = y
-        self.ptr = 0
+        self.current_sample = 0
     
     def audio_callback(self):
         if self.pause_event.is_set():
             return np.zeros(self.buffer_size) # Fill buffer with silence if paused
         else:
-            audio_buffer = self.y[self.ptr:self.ptr +self.buffer_size]
-            self.ptr += self.buffer_size
-            if self.ptr > len(self.y):
-                wrap_ptr = self.ptr - len(self.y)
+            audio_buffer = self.y[self.current_sample:self.current_sample +self.buffer_size]
+            self.current_sample += self.buffer_size
+            if self.current_sample > len(self.y):
+                wrap_ptr = self.current_sample - len(self.y)
                 wrap_signal = self.y[0:wrap_ptr]
                 audio_buffer = np.concatenate((audio_buffer,wrap_signal))
-                self.ptr = wrap_ptr
-            self.do_analysis(audio_buffer)
+                self.current_sample = wrap_ptr
             self.audio_buffer = audio_buffer
             self.internal_callback()
             self.on_new_frame(audio_buffer)
@@ -300,20 +316,12 @@ class FilePlayer(AudioDevice):
 class Audio:
     
     audio_outputs = []
-    fft_vals = np.zeros(2048)
-    amplitude = 0
 
     def __init__(self):
         print("init")
- 
-    def on_analysis_complete(self, fft_vals, amplitude):
-        # print(fft_vals, amplitude)
-        self.fft_vals = fft_vals
-        self.amplitude = amplitude
 
     def start_magnet_stream(self, model_path, dataset_path, buffer_size=2048, sr = 44100, output_device=None):
         device = MAGNetPlayer(model_path, dataset_path,
-                            on_analysis_complete = self.on_analysis_complete, 
                             buffer_size=buffer_size, 
                             sr=sr,output_device = output_device)
         self.audio_outputs.append(device)
@@ -321,8 +329,7 @@ class Audio:
 
     def start_rave_stream(self, model_path="",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
         device = RAVEPlayer(model_path=model_path, 
-                                            on_analysis_complete = self.on_analysis_complete, 
-                                            buffer_size=buffer_size, 
+                                             buffer_size=buffer_size, 
                                             sr=sr, fft_size=fft_size, 
                                             latent_dim=latent_dim,
                                             output_device = output_device)
@@ -343,22 +350,39 @@ class Audio:
 
     def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True):
         print(sd.query_devices(device))
-        self.audio_outputs.append(AudioCapture(on_analysis_complete = self.on_analysis_complete, analyse=analyse,
+        self.audio_outputs.append(AudioCapture(analyse=analyse,
                                           buffer_size=buffer_size, sr=sr, fft_size=fft_size, input_device=device))
         return len(self.audio_outputs)-1
 
-    def start_file_stream(self, file_path, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse = True):
+    #Use a shorter buffer size for this to be more responsive (no reason to wait as audio is pregenerated)
+    def start_file_stream(self, file_path, fft_size=512, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
         #load file
-        self.y, self.sr = librosa.load(file_path, sr=sr)
-        self.ptr = 0
+        y, sr = librosa.load(file_path, sr=sr)
+        return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
+    
+    #Start stream of given audio samples (e.g. we can use this to playback things we make in class)
+    def start_sample_stream(self, y, fft_size=1024, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
+        self.y = y
+        self.sr = sr
         #Beat info
         self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
         self.beat_ptr = 0
-        
-        device = FilePlayer(y = self.y, on_analysis_complete = self.on_analysis_complete, analyse=analyse,
-                                        fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
+        device = SamplePlayer(y = self.y, analyse=analyse,
+                            fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
         self.audio_outputs.append(device)
         return len(self.audio_outputs)-1
+    
+    #We actually return a previous value to account for audio latency
+    def fft(self, output = 0):
+        if output < len(self.audio_outputs):
+            o = self.audio_outputs[output]
+            return o.fft_vals[(o.abuf_ptr+1)%o.audio_latency]
+    
+    #We actually return a previous value to account for audio latency
+    def amplitude(self, output = 0):
+        if output < len(self.audio_outputs):
+            o = self.audio_outputs[output]
+            return o.amplitude[(o.abuf_ptr+1)%o.audio_latency]
 
     def play(self):
         for o in self.audio_outputs:
@@ -369,10 +393,13 @@ class Audio:
             o.stop()
 
     #Has there been a beat since this was last called?
-    def is_beat(self):
+    def is_beat(self, output=0):
+        cs = self.audio_outputs[output].current_sample
         next_beat = self.beats[self.beat_ptr%len(self.beats)]
+        # print(next_beat, self.beat_ptr, cs)
         is_beat = False
-        if next_beat < self.ptr:
+        #are we past the most recent beat?
+        if next_beat < cs:
             is_beat = True
             self.beat_ptr += 1
         return is_beat
@@ -392,6 +419,8 @@ class Dorothy:
     layers = []
     music = Audio()
     recording = False
+    recording_buffer = []
+    prev_frame = 0
 
     def __init__(self, width = 640, height = 480):
         self.width = width
@@ -544,16 +573,32 @@ class Dorothy:
         cv2.waitKey(1)
         sys.exit(0)
     
-    def start_record(self, fps=40):
-        output_video_path = "output.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        self.out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
-        self.recording = True
+    def start_record(self):
+        if not self.recording:
+            print("starting record")
+            self.recording_buffer = []
+            self.recording = True
     
-    def stop_record(self):
-        print("stopping record, writing file")
-        self.out.release()
-        self.recording = False
+    def stop_record(self, output_video_path = "output.mp4", fps = 25):
+        if self.recording:
+            print("stopping record, writing file")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
+            frame_interval = (1.0 / fps) * 1000
+            next_frame_time = 0.0
+
+            for i in range(1, len(self.recording_buffer)):
+                current_frame = self.recording_buffer[i]["frame"]
+                current_time = self.recording_buffer[i]["timestamp"]
+                
+                while next_frame_time <= current_time:
+                    print(next_frame_time, current_time)
+                    out.write(current_frame) 
+                    next_frame_time += frame_interval
+
+            out.release()
+            self.recording = False
+            self.recording_buffer = []
 
     #Main drawing loop
     def start_loop(self, 
@@ -587,7 +632,7 @@ class Dorothy:
                 #Draw to window
                 cv2.imshow(name, canvas_rgb)
                 if self.recording:
-                    self.out.write(canvas_rgb)
+                    self.recording_buffer.append({"frame":canvas_rgb,"timestamp":self.millis})
 
                 if cv2.waitKey(1) & 0xFF==ord('p'): # print when 'p' is pressed
                     print("PRINT")

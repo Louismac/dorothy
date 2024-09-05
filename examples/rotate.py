@@ -1,4 +1,4 @@
-from cv2 import rectangle
+from cv2 import line, circle
 from src.Dorothy import Dorothy
 from numpy import pi
 
@@ -13,7 +13,7 @@ class MySketch:
         print("setup")
        #Play file from your computer
         file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
+        dot.music.start_file_stream(file_path, buffer_size=2048)
         
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
@@ -26,13 +26,14 @@ class MySketch:
         
         dot.background((22, 208, 165))
         #get a new canvas
+        circle(dot.canvas, (dot.width//2, dot.height//2), dot.height//4, dot.white, 3)
         new_canvas = dot.push_layer()
         #Draw to it
         top_left = (dot.width//4, dot.height//4)
-        bottom_right = (dot.width//4*3, dot.height//4*3)
-        rectangle(new_canvas, top_left, bottom_right, (77, 72, 79), -1)
+        bottom_right = (dot.width//2, dot.height//2)
+        line(new_canvas, top_left, bottom_right, (77, 72, 79), 2)
 
-        theta = dot.music.amplitude * 15 * 2 * pi
+        theta = dot.music.amplitude() * 3 * 2 * pi
    
         origin = (dot.width//2,dot.height//2)
         new_canvas = dot.rotate(new_canvas, theta, origin)

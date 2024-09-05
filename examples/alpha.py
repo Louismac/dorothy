@@ -12,13 +12,13 @@ class MySketch:
 
     def setup(self):
         #Play file from your computer
-        # file_path = "../audio/disco.wav"
-        # dot.music.start_file_stream(file_path, fft_size=512)
+        file_path = "../audio/bass.wav"
+        dot.music.start_file_stream(file_path)
         
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
-        dot.music.start_device_stream(3)
+        # dot.music.start_device_stream(1)
         
         dot.music.play()
         
@@ -30,7 +30,7 @@ class MySketch:
         #Only draw 20 rectangles
         for i in range(20):
             #Get max fft val in window of frequeny bins
-            window = dot.music.fft_vals[i*win_size:(i+1)*win_size]
+            window = dot.music.fft()[i*win_size:(i+1)*win_size]
             val = int(np.max(window))
             width = val*(i*scale)
             top_left = (dot.width//2-width,dot.height//2-width)
