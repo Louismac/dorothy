@@ -5,7 +5,15 @@ Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Proc
 
 <img src="images/output2.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output4.gif" alt="drawing" width="200"/>
 
-## Dorothy.py
+* [Brief Guide](https://github.com/Louismac/dorothy/edit/main/README.md#brief-guide)
+
+* [Examples](https://github.com/Louismac/dorothy/edit/main/README.md#examples)
+
+* [Full API Reference](https://github.com/Louismac/dorothy/blob/main/Reference.md)
+
+* [Generating Music](https://github.com/Louismac/dorothy/edit/main/README.md#music-generation)
+
+##  Brief Guide
 
 Has ``setup()`` and ``draw()`` functions that can be overwritten using a custom class
 
@@ -39,7 +47,7 @@ Install requirements with `pip install -r requirements.txt`
 
 Either hold `q` with the window in focus, or use `ctrl-z` in the terminal to close. You must close the current window before re-running to see changes.
 
-## Drawing
+### Drawing
 
 For drawing, its suggested to use the [openCV drawing functions](https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html), with ``dot.canvas`` as the first argument (this is the image to draw onto). 
 
@@ -56,7 +64,7 @@ Other Processing like functions are
 * ``dot.width``, ``dot.height``
 
 
-## Reacting to Music
+### Reacting to Music
 
 Makes analysis information available for real time visualisation. Works out the threading to work with ``Dorothy.py``
 
@@ -68,7 +76,99 @@ We have
 
 * ``dot.music.is_beat()`` (call in ``draw()``, returns true if there has been a beat since last frame
 
-## Picking Music Source
+
+## Examples
+
+### [Seed](examples/seed.py) 
+
+This is the bare bones starter for any projects 
+
+### [Alpha](examples/alpha.py) 
+
+Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.to_alpha(alpha_val)`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work. 
+
+### [Alpha Background](examples/trails.py) 
+
+Add a second argument to the `an.background()` to draw a transparent background and make trails
+
+### [Grid](examples/grid.py) 
+
+Audio reactive color pattern from a nested for loop in the ``def draw()`` function 
+
+### [Molnar](examples/molnar.py) 
+
+Audio reactive scaled pattern from a nested for loop in the ``def setup()`` function 
+
+### [Mouse Position](examples/mouse.py) 
+
+Use ``dot.mouse_x`` and ``dot.mouse_y`` to control where a circle is drawn, with size moving to amplitude.
+
+### [Webcam Capture](examples/video.py) 
+
+Use openCV to grab and draw the webcam and bounce centre panel to music.
+
+### Linear Transforms
+
+Apply linear transforms and translations to canvases. This works in the opposite way to Processing, in that you 
+
+1. Get a new canvas (``dot.push_layer()``)
+
+2. Draw to it 
+
+3. Apply transformations (``dot.transform()``,``dot.rotate()``,``dot.scale()``). This function also takes a new origin about which to make the transformation if required (a translation).
+
+4. Put back onto main canvas (``dot.pop_layer()``)
+
+[Rotate](examples/rotate.py)
+
+[Rotate In a Grid](examples/rotate_grid.py)
+
+[Scale](examples/scale.py)
+ 
+
+### [Beat Tracking](examples/beats.py) 
+
+Shows how to use ``dot.music.is_beat()`` to display the beat tracking data in real time. Also shows how to use properties of the ``MySketch`` class to have variables that persist outside of the ``def draw()`` and ``def setup()`` functions.
+
+### [FFT](examples/fft.py) 
+
+Visualise live fft data
+
+### [Amplitude](examples/amplitude.py) 
+
+Visualise live amplitude data
+
+### [Images](examples/many_images.py)
+
+Use `get_images()` to load in a dataset of images and `dot.paste()` to copy onto canvas
+
+### [Contours](examples/contours.py)
+
+Get contours and mask out, moving image sections radially in response to fft values. More complex example!
+
+### [RAVE](examples/rave.py)
+
+Examples on generating with / interacting with RAVE models
+
+### [MAGNet](examples/magnet.py)
+
+Examples on generating with / interacting with MAGNet models
+
+### [YOLO Body Tracking](examples/yolo.py)
+
+Example drawing pose from web cam
+
+### [Interactive GAN](examples/gan.py)
+
+Use the mouse to move through the latent space of an MNIST GAN
+
+### [Interactive RAVE / YOLO](examples/yolo_rave.py)
+
+Control interpolation points of RAVE with pose tracked hand position 
+
+## Music Generation
+
+### Picking Music Source
 
 You can either play a soundfile 
 
@@ -183,94 +283,7 @@ This generates in realtime given a trained model the original source audio file 
 dot.music.start_magnet_stream("models/magnet_wiley.pth", "../audio/Wiley.wav")
 ```
 
-## Examples
 
-### [Seed](examples/seed.py) 
-
-This is the bare bones starter for any projects 
-
-### [Alpha](examples/alpha.py) 
-
-Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.to_alpha(alpha_val)`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work. 
-
-### [Alpha Background](examples/trails.py) 
-
-Add a second argument to the `an.background()` to draw a transparent background and make trails
-
-### [Grid](examples/grid.py) 
-
-Audio reactive color pattern from a nested for loop in the ``def draw()`` function 
-
-### [Molnar](examples/molnar.py) 
-
-Audio reactive scaled pattern from a nested for loop in the ``def setup()`` function 
-
-### [Mouse Position](examples/mouse.py) 
-
-Use ``dot.mouse_x`` and ``dot.mouse_y`` to control where a circle is drawn, with size moving to amplitude.
-
-### [Webcam Capture](examples/video.py) 
-
-Use openCV to grab and draw the webcam and bounce centre panel to music.
-
-### Linear Transforms
-
-Apply linear transforms and translations to canvases. This works in the opposite way to Processing, in that you 
-
-1. Get a new canvas (``dot.push_layer()``)
-
-2. Draw to it 
-
-3. Apply transformations (``dot.transform()``,``dot.rotate()``,``dot.scale()``). This function also takes a new origin about which to make the transformation if required (a translation).
-
-4. Put back onto main canvas (``dot.pop_layer()``)
-
-[Rotate](examples/rotate.py)
-
-[Rotate In a Grid](examples/rotate_grid.py)
-
-[Scale](examples/scale.py)
- 
-
-### [Beat Tracking](examples/beats.py) 
-
-Shows how to use ``dot.music.is_beat()`` to display the beat tracking data in real time. Also shows how to use properties of the ``MySketch`` class to have variables that persist outside of the ``def draw()`` and ``def setup()`` functions.
-
-### [FFT](examples/fft.py) 
-
-Visualise live fft data
-
-### [Amplitude](examples/amplitude.py) 
-
-Visualise live amplitude data
-
-### [Images](examples/many_images.py)
-
-Use `get_images()` to load in a dataset of images and `dot.paste()` to copy onto canvas
-
-### [Contours](examples/contours.py)
-
-Get contours and mask out, moving image sections radially in response to fft values. More complex example!
-
-### [RAVE](examples/rave.py)
-
-Examples on generating with / interacting with RAVE models
-
-### [MAGNet](examples/magnet.py)
-
-Examples on generating with / interacting with MAGNet models
-
-### [YOLO Body Tracking](examples/yolo.py)
-
-Example drawing pose from web cam
-
-### [Interactive GAN](examples/gan.py)
-
-Use the mouse to move through the latent space of an MNIST GAN
-
-### [Interactive RAVE / YOLO](examples/yolo_rave.py)
-
-Control interpolation points of RAVE with pose tracked hand position 
 
 
 
