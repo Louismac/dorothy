@@ -13,6 +13,5 @@ class MySketch:
         
     def draw(self):
         line(dot.canvas, (0,0),(dot.frame%dot.width, dot.height), dot.red, 1)
-        return
 
 MySketch()          

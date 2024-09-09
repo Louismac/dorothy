@@ -32,14 +32,11 @@ This is the main class of the Library
   - e.g. `dot.red` returns (255,0,0) and `dot.lawngreen` returns (124,252,0)   
 
 ### Methods:
-- `push_layer()`
+- `get_layer()`
   - Returns a new layer (`np.array') to draw to.
     
-- `pop_layer(c)`
-  - Push layer `c` onto the layer stack to be drawn
-    
-- `to_alpha(alpha=1)`
-  - Get a new layer for transparency drawing. `alpha' is a float from 0 to 1, with 0 being fully transparent, 1 fully opaque
+- `draw_layer(c, alpha=1)`
+  - Push layer `c` onto the layer stack to be drawn. `alpha' is a float from 0 to 1, with 0 being fully transparent, 1 fully opaque
     
 - `linear_transformation(self, src, a, origin=(0,0)`
   - Perform a linear transformation to layer `src` given matrix `a` about a given `origin`. Returns transformed layer.
@@ -58,6 +55,9 @@ This is the main class of the Library
     
 - `update_canvas()`
   - Render the `layers` to the `canvas`
+
+- `draw_waveform(layer, audio_output=0, with_playhead=False)`
+  - Draw the waveform currently loaded into `audio_output` onto `layer` and return.
 
 - `start_record()`
   - function to start recording (collecting frames)
@@ -141,12 +141,14 @@ This is the parent class for all audio devices / players. Not actually instantia
 - `resume(self)`
 - `stop(self)`
 
-## Class `FilePlayer` (inherits from `AudioDevice`)
+## Class `SamplePlayer` (inherits from `AudioDevice`)
 
 ### Properties:
 
 - `y`
   - `np.array` of the loaded audio file
+- `current_sample`
+  - `int` of current sample being played
 
 ### Methods:
 

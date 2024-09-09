@@ -25,7 +25,7 @@ class MySketch:
         
         dot.background((77, 72, 79))
         #get a new canvas
-        new_canvas = dot.push_layer()
+        new_canvas = dot.get_layer()
         #Draw to it
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
@@ -36,7 +36,7 @@ class MySketch:
         origin = (dot.width//2,dot.height//2)
         new_canvas = dot.scale(new_canvas, factor, factor, origin)
         #push it back onto layer stack
-        dot.pop_layer(new_canvas)
+        dot.draw_layer(new_canvas)
         
 
 MySketch()          

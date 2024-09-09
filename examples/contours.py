@@ -99,7 +99,7 @@ class MySketch:
         filtered_bbox = self.bbox[-cut_off:]
         
         #Get new canvas (for transparency)
-        new_canvas = dot.to_alpha(alpha)
+        new_canvas = dot.get_layer()
         fft_vals = dot.music.fft(0)
         
         #Should we change direction?
@@ -131,5 +131,7 @@ class MySketch:
             new_x = int((x + self.top_x) + ((r)*np.sin(theta)))
             
             dot.paste(new_canvas, cut_out, (new_x, new_y))
+
+        dot.draw_layer(new_canvas, alpha)
 
 MySketch()          

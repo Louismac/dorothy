@@ -10,7 +10,7 @@ class MySketch:
         
     def setup(self):
         #Play file from your computer
-        file_path = "../audio/disco.wav"
+        file_path = "../audio/drums.wav"
         dot.music.start_file_stream(file_path)
         
         #Pick or just stream from your computer

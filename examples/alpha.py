@@ -12,7 +12,7 @@ class MySketch:
 
     def setup(self):
         #Play file from your computer
-        file_path = "../audio/bass.wav"
+        file_path = "../audio/drums.wav"
         dot.music.start_file_stream(file_path)
         
         #Pick or just stream from your computer
@@ -23,22 +23,24 @@ class MySketch:
         dot.music.play()
         
     def draw(self):
-        dot.background((1,1,1))
+        dot.background(dot.black)
         win_size = 10
-        scale = 6
+        scale = 5
         alpha = 0.3
         #Only draw 20 rectangles
         for i in range(20):
             #Get max fft val in window of frequeny bins
             window = dot.music.fft()[i*win_size:(i+1)*win_size]
             val = int(np.max(window))
-            width = val*(i*scale)
+            width = val*((i+1)*scale)
             top_left = (dot.width//2-width,dot.height//2-width)
             bottom_right = (dot.width//2+width,dot.height//2+width)
-            #draw to an alpha layer
-            new_layer = dot.to_alpha(alpha)
+            # print(val, i, scale, width, top_left, bottom_right)
+            new_layer = dot.get_layer()
             rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
+            dot.draw_layer(new_layer, alpha)
         #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
+        #dot.canvas is at the bottom of the stack otherwise
         dot.update_canvas()
         top_left = (dot.width//2-10,dot.height//2-10)
         bottom_right = (dot.width//2+10,dot.height//2+10)

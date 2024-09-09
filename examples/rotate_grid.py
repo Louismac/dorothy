@@ -38,7 +38,7 @@ class MySketch:
                 y = j * (size+border) + y_offset
 
                 #get a new canvas
-                new_canvas = dot.push_layer()
+                new_canvas = dot.get_layer()
                 #Draw to it
                 top_left = (x,y)
                 bottom_right = (x+size, y+size)
@@ -49,7 +49,7 @@ class MySketch:
                 origin = (x+size/2, y+size/2)
                 new_canvas = dot.rotate(new_canvas, theta, origin)
                 #push it back onto layer stack
-                dot.pop_layer(new_canvas)
+                dot.draw_layer(new_canvas)
 
 MySketch()          
 

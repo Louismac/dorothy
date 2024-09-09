@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from cv2 import rectangle
+from cv2 import rectangle, line
 import signal
 import sys
 import sounddevice as sd
@@ -105,7 +105,6 @@ class AudioDevice:
                     if audio_data.ndim < self.channels:
                         audio_data = np.tile(audio_data[:, None], (1, self.channels))
                     else:
-
                         audio_data = audio_data[np.newaxis, :]
                     # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
                     stream.write(audio_data)
@@ -440,19 +439,12 @@ class Dorothy:
                 setattr(self, colour_name, rgb_values)
 
     #Get a new layer for drawing
-    def push_layer(self):
-        return np.zeros((self.height,self.width,3), np.uint8)
+    def get_layer(self):
+        return np.ones((self.height,self.width,3), np.uint8)
     
     #Push layer back onto stack
-    def pop_layer(self, c):
-        self.layers.append([c,1])
-        self.update_canvas()
-
-    #Get a new layer for transparency drawing
-    def to_alpha(self, alpha=1):
-        new_canvas = np.zeros((self.height,self.width,3), np.uint8)
-        self.layers.append([new_canvas,alpha])
-        return self.layers[-1][0]
+    def draw_layer(self, c, alpha=1):
+        self.layers.append([c, alpha])
     
     #Perform a linear transformation given matrix a
     def linear_transformation(self, src, a, origin =(0,0)):
@@ -503,14 +495,22 @@ class Dorothy:
             self.mouse_down = False
 
     #Draw background
-    def background(self, col, alpha=None):
-        canvas = self.canvas
-        #if black make slightly lighter
-        if col == (0,0,0):
-            col = (1,1,1)
-        if not alpha is None:
-            canvas = self.to_alpha(alpha)
-        rectangle(canvas, (0,0), (self.width,self.height), col, -1)
+    def background(self, col):
+        rectangle(self.canvas, (0,0), (self.width,self.height), col, -1)
+
+    def draw_waveform(self, layer, audio_output = 0, col=(0,0,0), with_playhead = False):
+        if audio_output < len(self.music.audio_outputs):
+            output = self.music.audio_outputs[audio_output]
+            if isinstance(output, SamplePlayer):
+                playhead = int((output.current_sample / len(output.y)) *self.width)
+                step = len(output.y) // self.width
+                for i, val in enumerate(output.y[::step]):
+                    h = int(val * self.height)
+                    y = self.height//2 - h//2
+                    line(layer, (i, y), (i, y + h), col, 1)
+                    if i == playhead and with_playhead:
+                        line(layer, (i , 0), (i, self.height), self.white, 5)
+        return layer
 
     #Paste image
     def paste(self, layer, to_paste, coords = (0,0)):
@@ -530,16 +530,17 @@ class Dorothy:
         for i in range(len(self.layers)-1):
             c1 = self.layers[i]
             c2 = self.layers[i+1]
-            
-            _,mask = cv2.threshold(cv2.cvtColor(c2[0], cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            upper_layer_objects_mask = cv2.bitwise_not(cv2.inRange(cv2.cvtColor(c2[0], cv2.COLOR_BGR2GRAY), 1, 1))
             #Dont blend into parts of lower layer where there isnt stuff in the upper layer
-            masked_image = cv2.bitwise_and(c1[0], c1[0], mask=mask)
+            lower_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_objects_mask)
             #Blend appropriate bits
-            c2[0] = (c2[0]*c2[1]) + (masked_image*(1-c2[1]))
-            inverted_mask = cv2.bitwise_not(mask)
-            inverted_masked = cv2.bitwise_and(c1[0], c1[0], mask=inverted_mask)
-            #Add in blended stuff (not over unblended stuff)
-            c2[0] = np.array(c2[0] + inverted_masked, dtype = np.uint8)
+            c2[0] = (c2[0]*c2[1]) + (lower_hidden_by_upper*(1-c2[1]))
+            upper_layer_no_objects_mask = cv2.bitwise_not(upper_layer_objects_mask)
+            lower_not_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_no_objects_mask)
+            # #Add in blended stuff (not over unblended stuff)
+            #Swap the 1s for 0s so we dont overflow
+            c2[0][c2[0]==1] = 0
+            c2[0] = np.array(c2[0] + lower_not_hidden_by_upper, dtype = np.uint8)
         self.canvas = self.layers[-1][0]
         self.layers = []
 

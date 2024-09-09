@@ -27,7 +27,7 @@ class MySketch:
         dot.background((22, 208, 165))
         #get a new canvas
         circle(dot.canvas, (dot.width//2, dot.height//2), dot.height//4, dot.white, 3)
-        new_canvas = dot.push_layer()
+        new_canvas = dot.get_layer()
         #Draw to it
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//2, dot.height//2)
@@ -38,7 +38,7 @@ class MySketch:
         origin = (dot.width//2,dot.height//2)
         new_canvas = dot.rotate(new_canvas, theta, origin)
         #push it back onto layer stack
-        dot.pop_layer(new_canvas)
+        dot.draw_layer(new_canvas)
         
 
 MySketch()          

@@ -29,7 +29,8 @@ class MySketch:
             top_left = (dot.width//2-width,dot.height//2-width)
             bottom_right = (dot.width//2+width,dot.height//2+width)
             #draw to an alpha layer
-            new_layer = dot.to_alpha(alpha)
+            new_layer = dot.get_layer()
             rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
+            dot.draw_layer(new_layer, alpha)
 
 MySketch()          

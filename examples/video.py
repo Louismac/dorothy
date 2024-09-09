@@ -29,7 +29,7 @@ class MySketch:
             camera_feed = cv2.resize(camera_feed,(dot.width, dot.height))
             
             #cut out centre
-            new_layer = dot.push_layer()
+            new_layer = dot.get_layer()
             top_left = (dot.width//4, dot.height//4)
             bottom_right = (dot.width//4*3, dot.height//4*3)
             dot.paste(new_layer, camera_feed[top_left[0]:bottom_right[1],top_left[1]:bottom_right[1]], top_left)
@@ -40,7 +40,7 @@ class MySketch:
             new_layer = dot.scale(new_layer, factor, factor, origin)
             
             dot.canvas = camera_feed
-            dot.pop_layer(new_layer)
+            dot.draw_layer(new_layer)
         
 
 MySketch()          

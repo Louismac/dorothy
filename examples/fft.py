@@ -25,7 +25,7 @@ class MySketch:
         
     def draw(self):
         
-        dot.background((0))
+        dot.background(dot.black)
 
         for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
            
