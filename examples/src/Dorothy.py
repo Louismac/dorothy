@@ -318,8 +318,21 @@ class Audio:
 
     def __init__(self):
         print("init")
+        print(sd.query_devices())
 
     def start_magnet_stream(self, model_path, dataset_path, buffer_size=2048, sr = 44100, output_device=None):
+        """
+        Start stream generating from a pretrained RAVE model
+        
+        Args:
+            model_path (str): The path to the pretrained model
+            dataset_path (str): The path to seed audio file used to train model
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate to capture at
+            output_device (int): Where to play this back to. print(sd.query_devices()) to see available
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
         device = MAGNetPlayer(model_path, dataset_path,
                             buffer_size=buffer_size, 
                             sr=sr,output_device = output_device)
@@ -327,6 +340,19 @@ class Audio:
         return len(self.audio_outputs)-1
 
     def start_rave_stream(self, model_path="",fft_size=1024, buffer_size=2048, sr = 44100, latent_dim=16, output_device=None):
+        """
+        Start stream generating from a pretrained RAVE model
+        
+        Args:
+            model_path (str): The path to the pretrained model
+            fft_size (int): Size of fft
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate to capture at
+            latent_dim (int): The numer of latent dimensions. Must match pretrained model.
+            output_device (int): Where to play this back to. print(sd.query_devices()) to see available
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
         device = RAVEPlayer(model_path=model_path, 
                                              buffer_size=buffer_size, 
                                             sr=sr, fft_size=fft_size, 
@@ -336,6 +362,7 @@ class Audio:
         return len(self.audio_outputs)-1
     
     def update_rave_from_stream(self, input=0):
+        
         input_device = self.audio_outputs[input]
         def internal_callback():
             with torch.no_grad():
@@ -347,20 +374,57 @@ class Audio:
         input_device.analyse = False
         input_device.internal_callback = internal_callback
 
-    def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, output_device=None, analyse=True):
-        print(sd.query_devices(device))
+    def start_device_stream(self, device, fft_size=1024, buffer_size=2048, sr = 44100, analyse=True):
+        """
+        Start stream capturing audio from an input
+        
+        Args:
+            file_path (str): The path to the audio
+            device (int): Where to capture audio from (e.g. a mic input). print(sd.query_devices()) to see available
+            fft_size (int): Size of fft
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate to capture at
+            analyse (bool): Should this stream be analysed for amplitude, fft etc...
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
         self.audio_outputs.append(AudioCapture(analyse=analyse,
                                           buffer_size=buffer_size, sr=sr, fft_size=fft_size, input_device=device))
         return len(self.audio_outputs)-1
 
-    #Use a shorter buffer size for this to be more responsive (no reason to wait as audio is pregenerated)
     def start_file_stream(self, file_path, fft_size=512, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
-        #load file
+        """
+        Start stream of a given audio file 
+        
+        Args:
+            file_path (str): The path to the audio
+            fft_size (int): Size of fft
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate of the provided audio
+            output_device (int): Where to play this back to. print(sd.query_devices()) to see available
+            analyse (bool): Should this stream be analysed for amplitude, fft etc...
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
+        #load file        
         y, sr = librosa.load(file_path, sr=sr)
         return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
     
     #Start stream of given audio samples (e.g. we can use this to playback things we make in class)
     def start_sample_stream(self, y, fft_size=1024, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
+        """
+        Start stream of given audio samples (e.g. we can use this to playback things we make in class, or have loaded from files)
+        
+        Args:
+            y (np.array): The audio!
+            fft_size (int): Size of fft
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate of the provided audio
+            output_device (int): Where to play this back to. print(sd.query_devices()) to see available
+            analyse (bool): Should this stream be analysed for amplitude, fft etc...
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
         self.y = y
         self.sr = sr
         #Beat info
@@ -373,12 +437,28 @@ class Audio:
     
     #We actually return a previous value to account for audio latency
     def fft(self, output = 0):
+        """
+        Return current fft (for visualising)
+        
+        Args:
+            output (int): The audio output to check
+        Returns:
+            np.array: Average fft values
+        """
         if output < len(self.audio_outputs):
             o = self.audio_outputs[output]
             return o.fft_vals[(o.abuf_ptr+1)%o.audio_latency]
     
     #We actually return a previous value to account for audio latency
     def amplitude(self, output = 0):
+        """
+        Return current amplitude (for visualising)
+        
+        Args:
+            output (int): The audio output to check
+        Returns:
+            float: Average amplitude
+        """
         if output < len(self.audio_outputs):
             o = self.audio_outputs[output]
             return o.amplitude[(o.abuf_ptr+1)%o.audio_latency]
@@ -393,6 +473,14 @@ class Audio:
 
     #Has there been a beat since this was last called?
     def is_beat(self, output=0):
+        """
+        Has there been a beat since this was last called?
+        
+        Args:
+            output (int): The audio output to check
+        Returns:
+            bool: Has there been a beat since this was last called?
+        """
         cs = self.audio_outputs[output].current_sample
         next_beat = self.beats[self.beat_ptr%len(self.beats)]
         # print(next_beat, self.beat_ptr, cs)
@@ -404,8 +492,12 @@ class Audio:
         return is_beat
 
       
-#Main drawing class
+#
 class Dorothy:
+
+    """
+    Main drawing class
+    """
     
     width = 640
     height = 480
@@ -422,6 +514,15 @@ class Dorothy:
     prev_frame = 0
 
     def __init__(self, width = 640, height = 480):
+
+        """
+        Initialize the class with a value.
+        
+        Args:
+            width (int): The width of the canvas. Defaults to 640
+            height (int): The height of the canvas. Defaults to 480
+        """
+
         self.width = width
         self.height = height
         self.canvas = np.ones((height,width,3), np.uint8)*255
@@ -438,12 +539,25 @@ class Dorothy:
                 rgb_values = [row['R'], row['G'], row['B']]
                 setattr(self, colour_name, rgb_values)
 
-    #Get a new layer for drawing
+   
     def get_layer(self):
+        """
+        Returns a new layer for drawing
+        
+        Returns:
+            np.array: of ones h x w x channels (3)
+        """
         return np.ones((self.height,self.width,3), np.uint8)
     
     #Push layer back onto stack
     def draw_layer(self, c, alpha=1):
+        """
+        Adds layer to render stack
+        
+        Args:
+            c (np.array): The layer to add
+            alpha (float): Transparency value between 0 and 1. Defaults to 1.
+        """
         self.layers.append([c, alpha])
     
     #Perform a linear transformation given matrix a
@@ -473,14 +587,36 @@ class Dorothy:
     def transform(self, canvas, m, origin = (0,0)):
         return self.linear_transformation(canvas, m, origin)
     
-    #Scale canvas given x and y factors and an origin
     def scale(self, canvas, sx=1, sy=1, origin =(0,0)):
+        """
+        Scale canvas given x and y factors and an origin   
+
+        Args:
+            canvas (np.array): The layer to scale
+            sx (float): The scale factor in the x axis. Defaults to 1
+            sy (float): The scale factor in the y axis. Defaults to 1
+            origin (tuple): The origin about which to make the transform
+
+        Returns:
+            np.array: The transformed version of the layer
+        """
         m = np.array([[sx,0.0],
                           [0.0,sy]])
         return self.transform(canvas, m, origin)
     
-    #Rotate given theta and an origin
     def rotate(self, canvas, theta, origin = (0,0)):
+        """
+        Rotate canvas given theta and an origin 
+
+        Args:
+            canvas (np.array): The layer to scale
+            theta (float): The rotation in radians
+            origin (tuple): The origin about which to make the transform
+
+        Returns:
+            np.array: The transformed version of the layer
+        """
+
         m = np.array([[np.cos(theta), -np.sin(theta)],
                     [np.sin(theta), np.cos(theta)]])
         return self.transform(canvas, m, origin)
@@ -495,10 +631,27 @@ class Dorothy:
             self.mouse_down = False
 
     #Draw background
-    def background(self, col):
+    def background(self, col=(0,0,0)):
+        """
+        Fill canvas with given RGB colour
+
+        Args:
+            col (tuple): The RGB colour (unit8) to fill. Defaults to black.
+        """
         rectangle(self.canvas, (0,0), (self.width,self.height), col, -1)
 
     def draw_waveform(self, layer, audio_output = 0, col=(0,0,0), with_playhead = False):
+        """
+        Draw current waveform loaded into given audio output to layer
+
+        Args:
+            layer (np.array): The layer to draw to
+            audio_output (int): The index of the audio device to show
+            col (tuple): RGB Colour to draw the waveform. Defaults to black.
+            with_playhead (bool): Show current position in audio. Defaults to false.
+        Returns:
+            layer (np.array): The layer that has been updated 
+        """
         if audio_output < len(self.music.audio_outputs):
             output = self.music.audio_outputs[audio_output]
             if isinstance(output, SamplePlayer):
@@ -514,6 +667,16 @@ class Dorothy:
 
     #Paste image
     def paste(self, layer, to_paste, coords = (0,0)):
+        """
+        Paste given set of pixels onto a layer
+
+        Args:
+            layer (np.array): The layer to draw to
+            to_paste (np.array): The thing to paste
+            coords (tuple): int coordinates of where to paste
+        Returns:
+            layer (np.array): The layer that has been updated 
+        """
         x = coords[0]
         y = coords[1]
         w = to_paste.shape[1]
@@ -526,6 +689,9 @@ class Dorothy:
 
     #Some complicated stuff to try and do alpha blending
     def update_canvas(self):
+        """
+        Render the layer stack onto the canvas
+        """
         self.layers.insert(0, [self.canvas,1])
         for i in range(len(self.layers)-1):
             c1 = self.layers[i]
@@ -575,12 +741,21 @@ class Dorothy:
         sys.exit(0)
     
     def start_record(self):
+        """
+        Start collecting frames
+        """
         if not self.recording:
             print("starting record")
             self.recording_buffer = []
             self.recording = True
     
     def stop_record(self, output_video_path = "output.mp4", fps = 25):
+        """
+        Stop collecting frames and render capture
+        Args:
+            output_video_path (str): where to save file
+            fps (int): The frame rate to render the video. Defaults to 25
+        """
         if self.recording:
             print("stopping record, writing file")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -606,6 +781,12 @@ class Dorothy:
                    setup = lambda *args: None, 
                    draw = lambda *args: None
                    ):
+        """
+        Begin the drawing loop
+        Args:
+            setup (function): A function to call once at the beginning
+            draw (function): A function to call on a loop
+        """
         done = False
         setup()
         # Signal handler function
