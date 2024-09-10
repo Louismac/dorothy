@@ -111,13 +111,13 @@ Use openCV to grab and draw the webcam and bounce centre panel to music.
 
 Apply linear transforms and translations to canvases. This works in the opposite way to Processing, in that you 
 
-1. Get a new canvas (``dot.push_layer()``)
+1. Get a new canvas (``dot.get_layer()``)
 
 2. Draw to it 
 
 3. Apply transformations (``dot.transform()``,``dot.rotate()``,``dot.scale()``). This function also takes a new origin about which to make the transformation if required (a translation).
 
-4. Put back onto main canvas (``dot.pop_layer()``)
+4. Put back onto main canvas (``dot.draw_layer()``)
 
 [Rotate](examples/rotate.py)
 
