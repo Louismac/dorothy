@@ -314,10 +314,9 @@ class SamplePlayer(AudioDevice):
 #Main class for music analysis and generation
 class Audio:
     
-    audio_outputs = []
+    audio_outputs = []  
 
     def __init__(self):
-        print("init")
         print(sd.query_devices())
 
     def start_magnet_stream(self, model_path, dataset_path, buffer_size=2048, sr = 44100, output_device=None):
@@ -362,7 +361,12 @@ class Audio:
         return len(self.audio_outputs)-1
     
     def update_rave_from_stream(self, input=0):
+        """
+        Start using a given stream (e.g. a file player or mic input) as input to a RAVE stream
         
+        Args:
+            input (int): The index in dot.music.audio_outputs to use
+        """
         input_device = self.audio_outputs[input]
         def internal_callback():
             with torch.no_grad():
@@ -491,8 +495,6 @@ class Audio:
             self.beat_ptr += 1
         return is_beat
 
-      
-#
 class Dorothy:
 
     """
@@ -585,6 +587,17 @@ class Dorothy:
 
     
     def transform(self, canvas, m, origin = (0,0)):
+        """
+        Transform a canvas given the linear matrix (2,2) and an origin   
+
+        Args:
+            canvas (np.array): The layer to scale
+            m (np.array): A 2x2 matrix for the linear transform
+            origin (tuple): The origin about which to make the transform
+
+        Returns:
+            np.array: The transformed version of the layer
+        """
         return self.linear_transformation(canvas, m, origin)
     
     def scale(self, canvas, sx=1, sy=1, origin =(0,0)):
@@ -630,7 +643,6 @@ class Dorothy:
         elif event == 4:
             self.mouse_down = False
 
-    #Draw background
     def background(self, col=(0,0,0)):
         """
         Fill canvas with given RGB colour
@@ -665,7 +677,6 @@ class Dorothy:
                         line(layer, (i , 0), (i, self.height), self.white, 5)
         return layer
 
-    #Paste image
     def paste(self, layer, to_paste, coords = (0,0)):
         """
         Paste given set of pixels onto a layer
@@ -687,7 +698,6 @@ class Dorothy:
             layer[y:y+h,x:x+w] = to_paste
         return layer
 
-    #Some complicated stuff to try and do alpha blending
     def update_canvas(self):
         """
         Render the layer stack onto the canvas
