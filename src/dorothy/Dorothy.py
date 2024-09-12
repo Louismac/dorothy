@@ -105,32 +105,31 @@ class Dorothy:
                                         [0, 0, 1]])
         
         transformation_matrix = translate_back @ transformation_matrix @ translate_to_origin
-
-        transformed_image = cv2.warpAffine(src, transformation_matrix[:2, :], (cols, rows))
-
+        #Border value is really important here, we replace with (1,1,1) which is the nothing pixel
+        transformed_image = cv2.warpAffine(src, transformation_matrix[:2, :], (cols, rows), borderValue=(1,1,1))
         return transformed_image
 
     
-    def transform(self, canvas, m, origin = (0,0)):
+    def transform(self, layer, m, origin = (0,0)):
         """
-        Transform a canvas given the linear matrix (2,2) and an origin   
+        Transform a layer given the linear matrix (2,2) and an origin   
 
         Args:
-            canvas (np.array): The layer to scale
+            layer (np.array): The layer to scale
             m (np.array): A 2x2 matrix for the linear transform
             origin (tuple): The origin about which to make the transform
 
         Returns:
             np.array: The transformed version of the layer
         """
-        return self.linear_transformation(canvas, m, origin)
+        return self.linear_transformation(layer, m, origin)
     
-    def scale(self, canvas, sx=1, sy=1, origin =(0,0)):
+    def scale(self, layer, sx=1, sy=1, origin =(0,0)):
         """
-        Scale canvas given x and y factors and an origin   
+        Scale layer given x and y factors and an origin   
 
         Args:
-            canvas (np.array): The layer to scale
+            layer (np.array): The layer to scale
             sx (float): The scale factor in the x axis. Defaults to 1
             sy (float): The scale factor in the y axis. Defaults to 1
             origin (tuple): The origin about which to make the transform
@@ -140,14 +139,14 @@ class Dorothy:
         """
         m = np.array([[sx,0.0],
                           [0.0,sy]])
-        return self.transform(canvas, m, origin)
+        return self.transform(layer, m, origin)
     
-    def rotate(self, canvas, theta, origin = (0,0)):
+    def rotate(self, layer, theta, origin = (0,0)):
         """
-        Rotate canvas given theta and an origin 
+        Rotate layer given theta and an origin 
 
         Args:
-            canvas (np.array): The layer to scale
+            layer (np.array): The layer to scale
             theta (float): The rotation in radians
             origin (tuple): The origin about which to make the transform
 
@@ -157,7 +156,7 @@ class Dorothy:
 
         m = np.array([[np.cos(theta), -np.sin(theta)],
                     [np.sin(theta), np.cos(theta)]])
-        return self.transform(canvas, m, origin)
+        return self.transform(layer, m, origin)
     
     #Callback for mouse moved
     def mouse_moved(self, event, x, y, flags, param):
@@ -170,7 +169,7 @@ class Dorothy:
 
     def background(self, col=(0,0,0)):
         """
-        Fill canvas with given RGB colour
+        Fill layer with given RGB colour
 
         Args:
             col (tuple): The RGB colour (unit8) to fill. Defaults to black.
@@ -232,15 +231,16 @@ class Dorothy:
             c1 = self.layers[i]
             c2 = self.layers[i+1]
             upper_layer_objects_mask = cv2.bitwise_not(cv2.inRange(cv2.cvtColor(c2[0], cv2.COLOR_BGR2GRAY), 1, 1))
+            #Swap the 1s for 0s so we dont overflow
+            c2[0][c2[0]==1] = 0
+            upper_objects = cv2.bitwise_and(c2[0], c2[0], mask=upper_layer_objects_mask)
             #Dont blend into parts of lower layer where there isnt stuff in the upper layer
             lower_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_objects_mask)
             #Blend appropriate bits
-            c2[0] = (c2[0]*c2[1]) + (lower_hidden_by_upper*(1-c2[1]))
+            c2[0] = (upper_objects*c2[1]) + (lower_hidden_by_upper*(1-c2[1]))
             upper_layer_no_objects_mask = cv2.bitwise_not(upper_layer_objects_mask)
             lower_not_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_no_objects_mask)
             #Add in blended stuff (not over unblended stuff)
-            #Swap the 1s for 0s so we dont overflow
-            c2[0][c2[0]==1] = 0
             c2[0] = np.array(c2[0] + lower_not_hidden_by_upper, dtype = np.uint8)
         self.canvas = self.layers[-1][0]
         self.layers = []
@@ -723,7 +723,7 @@ class Audio:
                 input_audio = torch.Tensor(input_device.audio_buffer).reshape(1,1,-1)
                 for a in self.audio_outputs:
                     if isinstance(a, RAVEPlayer):
-                        self.update_rave_latent(a.model.encode(input_audio))
+                        a.current_latent = a.model.encode(input_audio)
         input_device.gain = 0
         input_device.analyse = False
         input_device.internal_callback = internal_callback

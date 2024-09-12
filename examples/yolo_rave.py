@@ -69,14 +69,16 @@ class MySketch:
         # - "percussion.ts", rave_latent_dim = 8
         # - "VCTK.ts", rave_latent_dim = 8
         self.rave_latent_dim = 8
-        dot.music.start_rave_stream(os.path.join(rave_model_dir, "vintage.ts"), latent_dim=self.rave_latent_dim)
+        # dot.music.start_rave_stream(os.path.join(rave_model_dir, "vintage.ts"), latent_dim=self.rave_latent_dim)
+        self.rave_id = dot.music.start_rave_stream("/Users/lmccallum/Documents/checkpoints/RAVE/rave_jungle.ts", latent_dim=self.rave_latent_dim)
+
         
         # Class for controlled sampling RAVE latent space
         self.latent_generator = RAVE_latent_generator(self.rave_latent_dim, 512)
         starting_latent = self.latent_generator.sample_latent(np.random.random())
         
         # Start of with the latent in the middle of our interpolation
-        dot.music.update_rave_latent(starting_latent)
+        dot.music.audio_outputs[self.rave_id].current_latent = starting_latent
         dot.music.play()
 
     
@@ -105,7 +107,6 @@ class MySketch:
                 for result_keypoint in results_keypoint:
                     print(result_keypoint.shape)
                     if len(result_keypoint) == 17:
-                        left_wrist = result_keypoint[9,:]
                         right_wrist = result_keypoint[10,:]
                         # Check that we have detected a right wrist
                         if np.all(right_wrist):
@@ -113,7 +114,7 @@ class MySketch:
                             right_wrist_y = right_wrist[1]
                             # Sample our latent interpolation based on position of wrist
                             new_latent = self.latent_generator.sample_latent(right_wrist_y)
-                            dot.music.update_rave_latent(new_latent)
+                            dot.music.audio_outputs[self.rave_id].current_latent = new_latent
    
             dot.canvas = camera_feed
 

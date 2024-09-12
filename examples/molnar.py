@@ -8,7 +8,7 @@ class MySketch:
     
     show_beat = False
     beat_ptr = 0
-    pattern_layer = dot.push_layer()
+    pattern_layer = dot.get_layer()
 
     def __init__(self):
         dot.start_loop(self.setup, self.draw)  
@@ -23,9 +23,7 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
-        
         dot.music.play()
-
         self.base_pattern()
         
     def draw(self):
@@ -41,12 +39,12 @@ class MySketch:
             if self.beat_ptr > np.pi:
                 self.show_beat = False
 
-        new_canvas = dot.push_layer()
+        new_canvas = dot.get_layer()
         new_canvas = self.pattern_layer.copy()
         factor = (np.sin(self.beat_ptr)+1)*extra_scale
         origin = (dot.width//2, dot.height//2)
         new_canvas = dot.scale(new_canvas, factor, factor, origin)
-        dot.pop_layer(new_canvas)
+        dot.draw_layer(new_canvas)
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):

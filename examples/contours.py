@@ -20,8 +20,7 @@ class MySketch:
 
     def setup(self):
         
-        fp = "images/theo-van-rysselberghe_4.jpg"
-        fp = "/Users/louisbusby/Downloads/DSC00756_A.jpg"
+        fp = "../images/aligned_faces/face_4.jpg"
 
         self.image = cv2.imread(fp)
         self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
@@ -73,7 +72,7 @@ class MySketch:
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         print(sd.query_devices())
-        dot.music.get_stream(5)
+        dot.music.start_file_stream("../audio/hiphop.wav")
         dot.music.play()
 
         dot.background((0,0,0))
