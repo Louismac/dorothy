@@ -5,13 +5,13 @@ Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Proc
 
 <img src="images/output2.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output4.gif" alt="drawing" width="200"/>
 
-* [Brief Guide](https://github.com/Louismac/dorothy/edit/main/README.md#brief-guide)
+* [Brief Guide](https://github.com/Louismac/dorothy/blob/main/README.md#brief-guide)
 
-* [Examples](https://github.com/Louismac/dorothy/edit/main/README.md#examples)
+* [Examples](https://github.com/Louismac/dorothy/blob/main/README.md#examples)
 
 * [Full API Reference](https://github.com/Louismac/dorothy/blob/main/Reference.md)
 
-* [Generating Music](https://github.com/Louismac/dorothy/edit/main/README.md#music-generation)
+* [Generating Music](https://github.com/Louismac/dorothy/blob/main/README.md#music-generation)
 
 ##  Brief Guide
 
