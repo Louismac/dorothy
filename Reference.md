@@ -95,11 +95,17 @@ Controls the music analysis and generation. Is accessed through the `dot.music` 
 - `update_rave_from_stream(input=0)`
   - Select the input stream to drive RAVE with if doing timbre transfer.  A list of ids can be  found by executing `print(sd.query_devices())`.
     
-- `play()` 
-  - Starts all `audio_outputs`.
+- `play(output=0)` 
+  - Starts `audio_output` given. Defaults to 0.
     
-- `stop()`
-  - Stops all `audio_outputs`
+- `stop(output=0)`
+  - Stops `audio_output` given. Defaults to 0.
+
+- `pause(output=0)`
+  - Pauses `audio_output` given. Defaults to 0.
+
+- `resume(output=0)`
+  - Resumes `audio_output` given. Defaults to 0.
 
 - `fft(audio_outputs=0)`
   - `np.array` of most recent fft values from given `audio_output`. Size is determined by `fft_size`.

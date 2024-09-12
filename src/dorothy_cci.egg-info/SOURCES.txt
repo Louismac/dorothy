@@ -1,6 +1,7 @@
 LICENSE
 README.md
 pyproject.toml
+dorothy/Audio.py
 dorothy/Dorothy.py
 dorothy/__init__.py
 dorothy/css_colours.py
