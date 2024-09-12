@@ -1,6 +1,6 @@
 import numpy as np
 from cv2 import circle
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 
 dot = Dorothy()
 

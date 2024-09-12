@@ -9,10 +9,10 @@ from math import floor
 from ultralytics import YOLO
 
 # Import util functions from the files in the 'src' directory
-from src.Dorothy import Dorothy
-from utils.yolo_draw_utils import draw_skeleton
-from utils.latent_util import create_latent_interp, clamp
-from utils.rave_download import download_pretrained_rave
+from dorothy import Dorothy
+from dorothy.utils.yolo_draw_utils import draw_skeleton
+from dorothy.utils.latent_util import create_latent_interp, clamp
+from dorothy.utils.rave_download import download_pretrained_rave
 
 # Load YOLO model
 model = YOLO('model/yolov8n-pose.pt') 

@@ -1,7 +1,6 @@
 from cv2 import line
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 import sounddevice as sd
-from pythonosc import udp_client
 
 dot = Dorothy()
 

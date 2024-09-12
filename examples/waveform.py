@@ -1,4 +1,4 @@
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 
 dot = Dorothy()
 

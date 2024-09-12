@@ -3,8 +3,8 @@ import torch
 
 from ultralytics import YOLO
 
-from src.Dorothy import Dorothy
-from utils.yolo_draw_utils import draw_skeleton
+from dorothy import Dorothy
+from dorothy.utils.yolo_draw_utils import draw_skeleton
 
 model = YOLO('models/yolov8n-pose.pt') 
 dot = Dorothy()

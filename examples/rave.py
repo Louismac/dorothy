@@ -1,9 +1,8 @@
 import numpy as np
 from cv2 import rectangle
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 import sounddevice as sd
 import torch 
-import math
 
 dot = Dorothy()
 

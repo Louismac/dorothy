@@ -1,4 +1,4 @@
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 from skimage import measure #(pip install scikit-image)
 import numpy as np
 import cv2

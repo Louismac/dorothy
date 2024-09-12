@@ -3,9 +3,9 @@ import torch
 import numpy as np
 import torchvision.transforms as transforms
 
-from src.Dorothy import Dorothy
-from utils.util import clamp, create_latent_interp
-from utils.gan_model import Generator
+from dorothy import Dorothy
+from dorothy.utils.util import clamp, create_latent_interp
+from dorothy.utils.gan_model import Generator
 
 # GAN generator hyperparams
 image_size = 32  

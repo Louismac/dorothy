@@ -1,5 +1,5 @@
 from cv2 import circle, rectangle
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 
 dot = Dorothy()
 

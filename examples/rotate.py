@@ -1,5 +1,5 @@
 from cv2 import line, circle
-from src.Dorothy import Dorothy
+from dorothy import Dorothy
 from numpy import pi
 
 dot = Dorothy()
