@@ -19,9 +19,7 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         # dot.music.start_device_stream(1)
-        
-        dot.music.play()
-        
+                
     def draw(self):
         dot.background(dot.black)
         win_size = 10
@@ -39,12 +37,6 @@ class MySketch:
             new_layer = dot.get_layer()
             rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
             dot.draw_layer(new_layer, alpha)
-        #Call this when you want to render the alpha layers to the canvas (e.g. to draw something else on top of them)
-        #dot.canvas is at the bottom of the stack otherwise
-        dot.update_canvas()
-        top_left = (dot.width//2-10,dot.height//2-10)
-        bottom_right = (dot.width//2+10,dot.height//2+10)
-        rectangle(dot.canvas, top_left, bottom_right, (255,255,255), -1)
 
 MySketch()          
 

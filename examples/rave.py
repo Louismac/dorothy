@@ -77,8 +77,6 @@ class MySketch:
         #     self.ptr += n
         # dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
 
-        dot.music.play()
-
     def draw(self):
         dot.background((255,255,255))
         win_size = 10

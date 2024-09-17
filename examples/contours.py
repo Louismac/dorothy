@@ -73,7 +73,6 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         print(sd.query_devices())
         dot.music.start_file_stream("../audio/hiphop.wav")
-        dot.music.play()
 
         dot.background((0,0,0))
         #Draw image behind?

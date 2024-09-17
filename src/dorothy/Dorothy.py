@@ -9,6 +9,9 @@ import traceback
 import glob
 from .css_colours import css_colours
 from .Audio import *
+from time import sleep
+import wave
+import subprocess
 
 class Dorothy:
 
@@ -22,13 +25,15 @@ class Dorothy:
     mouse_x = 1
     mouse_y = 1
     mouse_down = False
-    start_time_millis = int(round(time.time() * 1000))
+    start_time_millis = 0
     millis = 0
     layers = []
     on_key_pressed = lambda *args: None
     recording = False
-    recording_buffer = []
+    video_recording_buffer = []
+    start_record_time = 0
     test = 0
+    fps = 10000
 
     def __init__(self, width = 640, height = 480):
 
@@ -163,7 +168,7 @@ class Dorothy:
         """
         rectangle(self.canvas, (0,0), (self.width,self.height), col, -1)
 
-    def draw_waveform(self, layer, audio_output = 0, col=(0,0,0), with_playhead = False):
+    def draw_waveform(self, layer, audio_output = 0, col=None, with_playhead = False):
         """
         Draw current waveform loaded into given audio output to layer
 
@@ -178,12 +183,15 @@ class Dorothy:
         if audio_output < len(self.music.audio_outputs):
             output = self.music.audio_outputs[audio_output]
             if isinstance(output, SamplePlayer):
-                playhead = int((output.current_sample / len(output.y)) *self.width)
-                step = len(output.y) // self.width
-                for i, val in enumerate(output.y[::step]):
+                latency = output.buffer_size * output.audio_latency
+                playhead = int(((output.current_sample-latency) / len(output.y)) *self.width)
+                samples_per_pixel = len(output.y) / self.width
+                for i in range(self.width):
+                    val = output.y[int(samples_per_pixel*i)]
                     h = int(val * self.height)
                     y = self.height//2 - h//2
-                    line(layer, (i, y), (i, y + h), col, 1)
+                    if not col == None:
+                        line(layer, (i, y), (i, y + h), col, 2)
                     if i == playhead and with_playhead:
                         line(layer, (i , 0), (i, self.height), self.white, 5)
         return layer
@@ -262,41 +270,85 @@ class Dorothy:
         cv2.waitKey(1)
         sys.exit(0)
     
-    def start_record(self):
+    def start_record(self, audio_output=0):
         """
         Start collecting frames
         """
         if not self.recording:
-            print("starting record")
-            self.recording_buffer = []
+            print("starting record", self.millis)
+            self.video_recording_buffer = []
+            self.start_record_time = self.millis
+            if audio_output < len(self.music.audio_outputs):
+                output = self.music.audio_outputs[audio_output]
+                output.recording_buffer = []
+                output.recording = True
             self.recording = True
     
-    def stop_record(self, output_video_path = "output.mp4", fps = 25):
+    def stop_record(self, output_video_path = "output.mp4", fps = 25, audio_output = 0, audio_latency = 6):
         """
         Stop collecting frames and render capture
         Args:
             output_video_path (str): where to save file
             fps (int): The frame rate to render the video. Defaults to 25
+            audio_output (int): which audio device to use
+            audio_latency (int): number of frames to pad to resync audio with video
         """
         if self.recording:
             print("stopping record, writing file")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
             frame_interval = (1.0 / fps) * 1000
-            next_frame_time = 0.0
+            next_frame_time = self.start_record_time
 
-            for i in range(1, len(self.recording_buffer)):
-                current_frame = self.recording_buffer[i]["frame"]
-                current_time = self.recording_buffer[i]["timestamp"]
+            for i in range(1, len(self.video_recording_buffer)):
+                current_frame = self.video_recording_buffer[i]["frame"]
+                current_time = self.video_recording_buffer[i]["timestamp"]
                 
                 while next_frame_time <= current_time:
-                    print(next_frame_time, current_time)
                     out.write(current_frame) 
                     next_frame_time += frame_interval
 
             out.release()
             self.recording = False
-            self.recording_buffer = []
+            self.video_recording_buffer = []
+
+            if audio_output < len(self.music.audio_outputs):
+                output = self.music.audio_outputs[audio_output]
+                def save_audio_to_wav(audio_frames, sample_rate, file_name):
+                    audio_frames = np.array(audio_frames)
+                    with wave.open(file_name, 'wb') as wav_file:
+                        wav_file.setnchannels(1)
+                        wav_file.setsampwidth(2)  # 16-bit audio
+                        wav_file.setframerate(sample_rate)
+                        wav_file.writeframes((audio_frames * 32767).astype(np.int16).tobytes())
+                def combine_audio_video(wav_file, mp4_file, output_file):
+                    command = [
+                        'ffmpeg', '-y', '-i', mp4_file, '-i', wav_file,
+                        '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', output_file
+                    ]
+                    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    if result.returncode == 0:
+                        print(f"Successfully combined audio and video into {output_file}")
+                        os.remove(wav_file)
+                        os.remove(mp4_file)
+                        os.rename(output_file, mp4_file)
+                        print(f"Renamed {output_file} to {mp4_file}")
+                    else:
+                        print(f"Error combining audio and video: {result.stderr}")
+
+                sample_rate = output.sr  
+                audio_file = 'output_audio.wav'
+                combined_file = 'combined_video.mp4'
+                #mono
+                audio_data = np.array(output.recording_buffer)
+                audio_data = audio_data[:,:,0]
+                #padd some zeros to get back in sync with visuals (audio is early apparently)
+                audio_data = np.pad(audio_data, ((audio_latency,0), (0, 0)), mode='constant', constant_values=0)
+                save_audio_to_wav(audio_data, sample_rate, audio_file)
+                combine_audio_video(audio_file, output_video_path, combined_file)
+
+                output.audio_recording_buffer = []
+                output.recording = False
 
     #Main drawing loop
     def start_loop(self, 
@@ -309,8 +361,7 @@ class Dorothy:
             setup (function): A function to call once at the beginning
             draw (function): A function to call on a loop
         """
-        done = False
-        setup()
+        
         # Signal handler function
         def signal_handler(sig, frame):
             print('You pressed Ctrl+C! Closing the window.')
@@ -323,11 +374,16 @@ class Dorothy:
             pass
 
         name = "hold q to quit or ctrl z in terminal"
+        
+        frame_target_length = (1/self.fps)*1000
         cv2.namedWindow(name)
         cv2.setMouseCallback(name,self.mouse_moved)
         try :
+            done = False
+            setup()
+            self.start_time_millis = int(round(time.time() * 1000))
             while not done:
-
+                frame_started_at = int(round(time.time() * 1000))
                 draw()                
                 self.update_canvas()
                 #Draw to window
@@ -335,7 +391,7 @@ class Dorothy:
                 cv2.imshow(name, canvas_rgb)
                 
                 if self.recording:
-                    self.recording_buffer.append({"frame":canvas_rgb,"timestamp":self.millis})
+                    self.video_recording_buffer.append({"frame":canvas_rgb,"timestamp":self.millis})
                 
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('p'): # print when 'p' is pressed
@@ -350,6 +406,10 @@ class Dorothy:
             
                 self.millis = int(round(time.time() * 1000)) - self.start_time_millis
                 self.frame += 1
+
+                frame_length = int(round(time.time() * 1000)) - frame_started_at
+                if frame_length < frame_target_length:
+                    sleep((frame_target_length - frame_length)/1000)
 
         except Exception as e:
             done = True

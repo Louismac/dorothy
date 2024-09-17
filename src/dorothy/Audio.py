@@ -238,6 +238,8 @@ class AudioDevice:
         print(os.name)
         self.on_new_frame = on_new_frame
         self.internal_callback = lambda:0
+        self.recording_buffer = []
+        self.recording = False
 
         if self.fft_size > self.buffer_size:
             print("warning, fft window is bigger than buffer, numpy will zero pad, which may lead to unexpected results")
@@ -282,11 +284,9 @@ class AudioDevice:
         return np.zeros(self.buffer_size) # Fill buffer with silence
         
     def capture_audio(self):
-        
         #Set to default if no device provided
         if self.output_device is None:
             self.output_device = sd.default.device[1]
-            print(sd.query_devices())
             print("output_device set to default", sd.default.device[1])
 
         if self.output_device is not None:
@@ -304,6 +304,8 @@ class AudioDevice:
                     else:
                         audio_data = audio_data[np.newaxis, :]
                     # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
+                    if self.recording:
+                        self.recording_buffer.append(audio_data)
                     stream.write(audio_data)
                     self.do_analysis(audio_data[:,0])
                 else:

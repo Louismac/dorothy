@@ -11,7 +11,6 @@ class MySketch:
         print("setup")
         file_path = "../audio/drums.wav"
         dot.music.start_file_stream(file_path)
-        dot.music.play()
         
     def draw(self):
         dot.background((255,255,255))

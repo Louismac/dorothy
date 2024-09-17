@@ -13,7 +13,6 @@ class MySketch:
         #Pass in the original dataset to use as seeds to generation 
         dot.music.start_magnet_stream(model_path="models/magnet_wiley.pth",
                                       dataset_path="../audio/Wiley.wav")
-        dot.music.play()
         
     def draw(self):
         dot.background((1,1,1))

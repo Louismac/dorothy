@@ -20,8 +20,6 @@ class MySketch:
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
         
-        dot.music.play()
-
     def draw(self):
         
         dot.background((22, 208, 165))

@@ -18,9 +18,7 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
-        
-        dot.music.play()
-        
+                
     def draw(self):        
         for bin_num, bin_val in enumerate(dot.music.fft()[:100:8]):
             circle(dot.canvas, (bin_num*60, int(bin_val*50)), 50, (255,0,255),-1)

@@ -22,8 +22,6 @@ class MySketch:
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
         
-        dot.music.play()
-
     def draw(self):
         if dot.music.is_beat():
             self.current_image = np.random.randint(len(self.dataset))
