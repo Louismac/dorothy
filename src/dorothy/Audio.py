@@ -123,7 +123,7 @@ class Audio:
             int: the index of the device in the dot.music.audio_outputs list
         """
         #load file        
-        y, sr = librosa.load(file_path, sr=sr)
+        y, sr = librosa.load(file_path, sr=sr, mono=False)
         return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
     
     #Start stream of given audio samples (e.g. we can use this to playback things we make in class)
@@ -141,10 +141,11 @@ class Audio:
         Returns:
             int: the index of the device in the dot.music.audio_outputs list
         """
-        self.y = y
+        self.y = np.array(y,dtype=np.float32)
         self.sr = sr
         #Beat info
-        self.tempo, self.beats = librosa.beat.beat_track(y=self.y, sr=self.sr, units='samples')
+        to_track = self.y if self.y.ndim == 1 else self.y[0,:]
+        self.tempo, self.beats = librosa.beat.beat_track(y=to_track, sr=self.sr, units='samples')
         self.beat_ptr = 0
         device = SamplePlayer(y = self.y, analyse=analyse,
                             fft_size = fft_size, buffer_size = buffer_size, sr = self.sr, output_device=output_device)
@@ -298,16 +299,21 @@ class AudioDevice:
             while self.running:
                 if not self.pause_event.is_set():
                     audio_data = self.audio_callback()
-                    #duplicate to fill channels (mostly generating mono)
-                    if audio_data.ndim < self.channels:
-                        audio_data = np.tile(audio_data[:, None], (1, self.channels))
-                    else:
+                    if audio_data.ndim == 1:
                         audio_data = audio_data[np.newaxis, :]
-                    # print(audio_data.shape, audio_data.ndim, self.channels, stream.channels)
+                    #duplicate to fill channels (mostly generating mono)
+                    dif = self.channels - audio_data.shape[0]
+                    if dif > 0:
+                        #Tile out one channel
+                        audio_data = np.tile(audio_data[0,:], (self.channels, 1))
+                    elif dif < 0:
+                        audio_data = audio_data[:self.channels, :]
+                    to_write = np.ascontiguousarray(audio_data.T)
                     if self.recording:
-                        self.recording_buffer.append(audio_data)
-                    stream.write(audio_data)
-                    self.do_analysis(audio_data[:,0])
+                        self.recording_buffer.append(to_write)
+                    #Flip axis to write to stream
+                    stream.write(to_write)
+                    self.do_analysis(audio_data[0,:])
                 else:
                     time.sleep(0.1)  
         
@@ -497,18 +503,22 @@ class SamplePlayer(AudioDevice):
     def __init__(self, y=[0], **kwargs):
         super().__init__(**kwargs)
         self.y = y
+        #Make sure at least 2 dimn
+        if self.y.ndim == 1:
+            self.y = self.y[np.newaxis, :]
         self.current_sample = 0
     
     def audio_callback(self):
         if self.pause_event.is_set():
             return np.zeros(self.buffer_size) # Fill buffer with silence if paused
         else:
-            audio_buffer = self.y[self.current_sample:self.current_sample +self.buffer_size]
+            audio_buffer = self.y[:,self.current_sample:self.current_sample + self.buffer_size]
+            # print("audio_buffer", audio_buffer.shape, self.current_sample, self.buffer_size)
             self.current_sample += self.buffer_size
-            if self.current_sample > len(self.y):
-                wrap_ptr = self.current_sample - len(self.y)
-                wrap_signal = self.y[0:wrap_ptr]
-                audio_buffer = np.concatenate((audio_buffer,wrap_signal))
+            if self.current_sample > len(self.y[0]):
+                wrap_ptr = self.current_sample - len(self.y[0])
+                wrap_signal = self.y[:,:wrap_ptr]
+                audio_buffer = np.concatenate((audio_buffer,wrap_signal), axis=1)
                 self.current_sample = wrap_ptr
             self.audio_buffer = audio_buffer
             self.internal_callback()

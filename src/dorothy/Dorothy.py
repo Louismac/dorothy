@@ -184,10 +184,11 @@ class Dorothy:
             output = self.music.audio_outputs[audio_output]
             if isinstance(output, SamplePlayer):
                 latency = output.buffer_size * output.audio_latency
-                playhead = int(((output.current_sample-latency) / len(output.y)) *self.width)
-                samples_per_pixel = len(output.y) / self.width
+                mixed = output.y.mean(axis=0)
+                playhead = int(((output.current_sample-latency) / len(mixed)) *self.width)
+                samples_per_pixel = len(mixed) / self.width
                 for i in range(self.width):
-                    val = output.y[int(samples_per_pixel*i)]
+                    val = mixed[int(samples_per_pixel*i)]
                     h = int(val * self.height)
                     y = self.height//2 - h//2
                     if not col == None:

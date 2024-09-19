@@ -9,7 +9,7 @@ class MySketch:
         
     def setup(self):
         print("setup")
-        file_path = "../audio/drums.wav"
+        file_path = "../audio/bass.wav"
         dot.music.start_file_stream(file_path)
         
     def draw(self):
