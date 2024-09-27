@@ -13,6 +13,11 @@ Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Proc
 
 * [Generating Music](https://github.com/Louismac/dorothy/blob/main/README.md#music-generation)
 
+
+##  Installation
+
+```pip3 install dorothy-cci```
+
 ##  Brief Guide
 
 Has ``setup()`` and ``draw()`` functions that can be overwritten using a custom class
