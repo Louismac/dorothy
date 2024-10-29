@@ -111,7 +111,7 @@ class Dorothy:
         self.stroke_weight = int(stroke_weight)
 
     def circle(self, centre = (0,0), radius = 100, layer = None, annotate = False):
-        if layer == None:
+        if layer is None:
             layer = self.canvas
         centre = (int(centre[0]),int(centre[1]))
         radius = int(radius)
@@ -143,7 +143,7 @@ class Dorothy:
                 thickness = 1 )
 
     def line(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate=False):
-        if layer == None:
+        if layer is None:
             layer = self.canvas
 
         pt1 = (int(pt1[0]),int(pt1[1]))
@@ -170,7 +170,7 @@ class Dorothy:
                 thickness = 1 )
     
     def rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False):
-        if layer == None:
+        if layer is None:
             layer = self.canvas
         pt1 = (int(pt1[0]),int(pt1[1]))
         pt2 = (int(pt2[0]),int(pt2[1]))

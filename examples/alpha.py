@@ -1,5 +1,4 @@
 import numpy as np
-from cv2 import rectangle
 from dorothy import Dorothy
 import sounddevice as sd
 
@@ -35,7 +34,8 @@ class MySketch:
             bottom_right = (dot.width//2+width,dot.height//2+width)
             # print(val, i, scale, width, top_left, bottom_right)
             new_layer = dot.get_layer()
-            rectangle(new_layer, top_left, bottom_right, (255*val,164*val,226*val), -1)
+            dot.fill((255*val,164*val,226*val))
+            dot.rectangle(top_left, bottom_right, layer = new_layer)
             dot.draw_layer(new_layer, alpha)
 
 MySketch()          
