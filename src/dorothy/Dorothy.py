@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-from cv2 import rectangle, line
 import signal
 import sys
 import numpy as np
@@ -50,15 +49,23 @@ class Dorothy:
         self.width = width
         self.height = height
         self.canvas = np.ones((height,width,3), np.uint8)*255
-        self.load_colours()
         self.music = Audio()
-    
-    def load_colours(self):
-        for colour_name, rgb in css_colours.items():
-            colour_name = colour_name.replace(" ", "_")
-            setattr(self, colour_name, rgb)
+        self.end_recording_at = np.inf
+        self.stroke_colour = None
+        self.fill_colour = None
+        self.stroke_weight = 1
+        self.text_colour = (255,255,255)
+        print("load colours")
+        self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
+        print("done load colours")
 
-   
+    def __getattr__(self, name):
+        # Dynamically retrieve colour attributes
+        try:
+            return self._colours[name]
+        except KeyError:
+            raise AttributeError(f"{name} not found in colour attributes")
+
     def get_layer(self):
         """
         Returns a new layer for drawing
@@ -79,6 +86,118 @@ class Dorothy:
         """
         self.layers.append([c, alpha])
     
+    #wrappers for opencv drawing function
+
+    def stroke(self, stroke = (0,0,0)):
+        stroke = (int(stroke[0]),int(stroke[1]),int(stroke[2]))
+        self.stroke_colour = stroke
+        if self.fill_colour == None:
+            self.text_colour = stroke
+
+    def no_stroke(self):
+        self.stroke_colour = None
+        self.text_colour = self.white
+    
+    def fill(self, fill = (0,0,0)):
+        fill = (int(fill[0]),int(fill[1]),int(fill[2]))
+        self.fill_colour = fill
+        self.text_colour = self.white
+
+    def no_fill(self):
+        self.fill_colour = None
+        self.text_colour = self.white
+    
+    def set_stroke_weight(self, stroke_weight=1):
+        self.stroke_weight = int(stroke_weight)
+
+    def circle(self, centre = (0,0), radius = 100, layer = None, annotate = False):
+        if layer == None:
+            layer = self.canvas
+        centre = (int(centre[0]),int(centre[1]))
+        radius = int(radius)
+
+        if not self.fill_colour == None:
+            cv2.circle(layer, centre, radius, self.fill_colour, -1)
+
+        if not self.stroke_colour == None:
+            cv2.circle(layer, centre, radius, self.stroke_colour, self.stroke_weight)
+
+        if annotate:
+            cv2.circle(layer, centre, 1, self.text_colour, -1)
+            cv2.putText(
+                img = layer,
+                text = f"{centre[0]},{centre[1]}",
+                org = centre,
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+            cv2.line(layer, centre, (centre[0], centre[1]-radius), self.text_colour,1)
+            cv2.putText(
+                img = layer,
+                text = f"{radius}",
+                org = (centre[0], centre[1]-radius),
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+
+    def line(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate=False):
+        if layer == None:
+            layer = self.canvas
+
+        pt1 = (int(pt1[0]),int(pt1[1]))
+        pt2 = (int(pt2[0]),int(pt2[1]))
+        if not self.stroke_colour == None:
+            cv2.line(layer, pt1, pt2, self.stroke_colour, self.stroke_weight)
+
+        if annotate:
+            cv2.putText(
+                img = layer,
+                text = f"{pt1[0]},{pt1[1]}",
+                org = pt1,
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+            cv2.putText(
+                img = layer,
+                text = f"{pt2[0]},{pt2[1]}",
+                org = pt2,
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+    
+    def rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False):
+        if layer == None:
+            layer = self.canvas
+        pt1 = (int(pt1[0]),int(pt1[1]))
+        pt2 = (int(pt2[0]),int(pt2[1]))
+        if not self.fill_colour == None:
+            cv2.rectangle(layer, pt1, pt2, self.fill_colour, -1)
+
+        if not self.stroke_colour == None:
+            cv2.rectangle(layer, pt1, pt2, self.stroke_colour, self.stroke_weight)
+
+        if annotate:
+            cv2.putText(
+                img = layer,
+                text = f"{pt1[0]},{pt1[1]}",
+                org = pt1,
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+            cv2.putText(
+                img = layer,
+                text = f"{pt2[0]},{pt2[1]}",
+                org = pt2,
+                fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                fontScale = 0.3,
+                color = self.text_colour,
+                thickness = 1 )
+        
     #Perform a linear transformation given matrix a
     def linear_transformation(self, src, a, origin =(0,0)):
         
@@ -166,7 +285,16 @@ class Dorothy:
         Args:
             col (tuple): The RGB colour (unit8) to fill. Defaults to black.
         """
-        rectangle(self.canvas, (0,0), (self.width,self.height), col, -1)
+        cv2.rectangle(self.canvas, (0,0), (self.width,self.height), col, -1)
+
+    def draw_playhead(self, layer, audio_output=0):
+        if audio_output < len(self.music.audio_outputs):
+            output = self.music.audio_outputs[audio_output]
+            if isinstance(output, SamplePlayer):
+                latency = output.buffer_size * output.audio_latency
+                mixed = output.y.mean(axis=0)
+                playhead = int(((output.current_sample-latency) / len(mixed)) *self.width)
+                cv2.line(layer, (playhead , 0), (playhead, self.height), self.white, 5)
 
     def draw_waveform(self, layer, audio_output = 0, col=None, with_playhead = False):
         """
@@ -183,18 +311,17 @@ class Dorothy:
         if audio_output < len(self.music.audio_outputs):
             output = self.music.audio_outputs[audio_output]
             if isinstance(output, SamplePlayer):
-                latency = output.buffer_size * output.audio_latency
                 mixed = output.y.mean(axis=0)
-                playhead = int(((output.current_sample-latency) / len(mixed)) *self.width)
                 samples_per_pixel = len(mixed) / self.width
                 for i in range(self.width):
                     val = mixed[int(samples_per_pixel*i)]
                     h = int(val * self.height)
                     y = self.height//2 - h//2
                     if not col == None:
-                        line(layer, (i, y), (i, y + h), col, 2)
-                    if i == playhead and with_playhead:
-                        line(layer, (i , 0), (i, self.height), self.white, 5)
+                        cv2.line(layer, (i, y), (i, y + h), col, 2)
+                if with_playhead:
+                    self.draw_playhead(layer, audio_output)
+                    
         return layer
 
     def paste(self, layer, to_paste, coords = (0,0)):
@@ -208,12 +335,15 @@ class Dorothy:
         Returns:
             layer (np.array): The layer that has been updated 
         """
+        to_paste = np.array(to_paste)
         x = coords[0]
         y = coords[1]
         w = to_paste.shape[1]
         h = to_paste.shape[0]
         cw = layer.shape[1]
         ch = layer.shape[0]
+        if to_paste.ndim == 2:
+            to_paste = to_paste[:,:,np.newaxis]
         if x + w <= cw and y + h <= ch and x >= 0 and y >= 0:
             layer[y:y+h,x:x+w] = to_paste
         return layer
@@ -271,12 +401,12 @@ class Dorothy:
         cv2.waitKey(1)
         sys.exit(0)
     
-    def start_record(self, audio_output=0):
+    def start_record(self, audio_output=0, end=None):
         """
         Start collecting frames
         """
         if not self.recording:
-            print("starting record", self.millis)
+            print("starting record", self.millis, end)
             self.video_recording_buffer = []
             self.start_record_time = self.millis
             if audio_output < len(self.music.audio_outputs):
@@ -284,6 +414,9 @@ class Dorothy:
                 output.recording_buffer = []
                 output.recording = True
             self.recording = True
+            if not end == None:
+                self.end_recording_at = self.millis + end
+            
     
     def stop_record(self, output_video_path = "output.mp4", fps = 25, audio_output = 0, audio_latency = 6):
         """
@@ -315,6 +448,7 @@ class Dorothy:
 
             if audio_output < len(self.music.audio_outputs):
                 output = self.music.audio_outputs[audio_output]
+                
                 def save_audio_to_wav(audio_frames, sample_rate, file_name):
                     audio_frames = np.array(audio_frames)
                     with wave.open(file_name, 'wb') as wav_file:
@@ -322,6 +456,7 @@ class Dorothy:
                         wav_file.setsampwidth(2)  # 16-bit audio
                         wav_file.setframerate(sample_rate)
                         wav_file.writeframes((audio_frames * 32767).astype(np.int16).tobytes())
+
                 def combine_audio_video(wav_file, mp4_file, output_file):
                     command = [
                         'ffmpeg', '-y', '-i', mp4_file, '-i', wav_file,
@@ -336,20 +471,23 @@ class Dorothy:
                         print(f"Renamed {output_file} to {mp4_file}")
                     else:
                         print(f"Error combining audio and video: {result.stderr}")
-
-                sample_rate = output.sr  
-                audio_file = 'output_audio.wav'
-                combined_file = 'combined_video.mp4'
+                
                 #mono
                 audio_data = np.array(output.recording_buffer)
-                audio_data = audio_data[:,:,0]
-                #padd some zeros to get back in sync with visuals (audio is early apparently)
-                audio_data = np.pad(audio_data, ((audio_latency,0), (0, 0)), mode='constant', constant_values=0)
-                save_audio_to_wav(audio_data, sample_rate, audio_file)
-                combine_audio_video(audio_file, output_video_path, combined_file)
-
-                output.audio_recording_buffer = []
-                output.recording = False
+                print(audio_data.shape)
+                if len(audio_data) > 0:
+                    combined_file = 'combined_video.mp4'
+                    sample_rate = output.sr  
+                    audio_file = 'output_audio.wav'
+                    audio_data = audio_data[:,:,0]
+                    #padd some zeros to get back in sync with visuals (audio is early apparently)
+                    audio_data = np.pad(audio_data, ((audio_latency,0), (0, 0)), mode='constant', constant_values=0)
+                    save_audio_to_wav(audio_data, sample_rate, audio_file)
+                    combine_audio_video(audio_file, output_video_path, combined_file)
+                    output.audio_recording_buffer = []
+                    output.recording = False
+                else:
+                    print("no audio to write to file")
 
     #Main drawing loop
     def start_loop(self, 
@@ -411,6 +549,15 @@ class Dorothy:
                 frame_length = int(round(time.time() * 1000)) - frame_started_at
                 if frame_length < frame_target_length:
                     sleep((frame_target_length - frame_length)/1000)
+                
+                if self.recording and self.end_recording_at < self.millis:
+                    try:
+                        self.stop_record()
+                    except Exception as e:
+                        print("error recording video")
+                        print(e)
+                        traceback.print_exc()
+                    self.end_recording_at = np.inf
 
         except Exception as e:
             done = True
