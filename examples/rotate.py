@@ -28,24 +28,15 @@ class MySketch:
         # #Initially draw line in middle
         # top_left = (dot.width//2, 0)
         # bottom_right = centre
-        # #move to origin
-        # dot.translate(centre)
         # #rotate
         # dot.rotate(theta)
-        # #move back
-        # dot.translate(centre*-1)
         # dot.line(top_left, bottom_right)
 
         #Initially draw line in middle
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
-        #move to origin
-        dot.translate(centre)
-        #scale
-        dot.rotate(theta)
-        #move back
-        dot.translate(centre*-1)
+        dot.rotate(theta, centre)
         dot.rectangle(top_left, bottom_right, annotate=True)
         
 

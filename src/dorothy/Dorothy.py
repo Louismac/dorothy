@@ -241,11 +241,15 @@ class Dorothy:
         coords = coords[:2]
         return coords
 
-    def rotate(self, theta):
+    def rotate(self, theta, origin=None):
+        if not origin is None:
+            self.translate(origin)
         m = np.array([[np.cos(theta), -np.sin(theta),0],
                           [np.sin(theta), np.cos(theta),0],
                           [0,0,1]])
         self.apply_transform(m)
+        if not origin is None:
+            self.translate(origin*-1)
     
     def translate(self, origin):
         m = np.array([[1, 0, origin[0]],
@@ -253,11 +257,15 @@ class Dorothy:
                     [0, 0, 1]])
         self.apply_transform(m)
     
-    def scale(self, sx=1,sy=1):
+    def scale(self, sx=1, sy=1, origin=None):
+        if not origin is None:
+            self.translate(origin)
         m = np.array([[sx, 0, 0],
                     [0, sy, 0],
                     [0, 0, 1]])
         self.apply_transform(m)
+        if not origin is None:
+            self.translate(origin*-1)
 
     def apply_transform(self, m):
         if not self.current_transform is None:

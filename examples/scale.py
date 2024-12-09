@@ -23,7 +23,6 @@ class MySketch:
         
         dot.background((77, 72, 79))
         
-
         factor = dot.music.amplitude() * 15 
 
         dot.stroke(dot.red)
@@ -31,19 +30,12 @@ class MySketch:
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
-        #move to origin
-        dot.translate(centre)
         #scale
-        dot.scale(factor, factor)
-        #move back
-        dot.translate(centre*-1)
-        
+        dot.scale(factor, factor, centre)
         dot.line(top_left, bottom_right)
 
-        #Easier with a circle
-        dot.translate(centre)
-        dot.scale(factor, factor)
-        dot.circle((0,0),100)
+        dot.scale(factor, factor, centre)
+        dot.circle(centre, 100)
         
 MySketch()          
 
