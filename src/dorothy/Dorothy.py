@@ -88,30 +88,62 @@ class Dorothy:
         self.layers.append([c, alpha])
     
     #wrappers for opencv drawing function
-
     def stroke(self, stroke = (0,0,0)):
+        """
+        Set stroke colour
+        
+        Args:
+            stroke (np.array): RGB colour
+        """
         stroke = (int(stroke[0]),int(stroke[1]),int(stroke[2]))
         self.stroke_colour = stroke
         if self.fill_colour == None:
             self.text_colour = stroke
 
     def no_stroke(self):
+        """
+        Turn off stroke (borders)
+        """
         self.stroke_colour = None
         self.text_colour = self.white
     
     def fill(self, fill = (0,0,0)):
+        """
+        Set fill colour
+        
+        Args:
+            fill (np.array): RGB colour
+        """
         fill = (int(fill[0]),int(fill[1]),int(fill[2]))
         self.fill_colour = fill
         self.text_colour = self.white
 
     def no_fill(self):
+        """
+        Turn off fill 
+        """
         self.fill_colour = None
         self.text_colour = self.white
     
     def set_stroke_weight(self, stroke_weight=1):
+        """
+        Set stroke weight
+        
+        Args:
+            stroke_weight (int): stroke weight
+        """
         self.stroke_weight = int(stroke_weight)
 
     def circle(self, centre = (0,0), radius = 100, layer = None, annotate = False):
+        """
+        Draw circle
+        
+        Args:
+            centre (np.array): Coordinates of centre
+            radius (int): radius of circle
+            layer (np.array): Where to draw, defaults to dot.canvas
+            annotate (bool): If true, dimensions are annotated on sketch (for debug)
+        """
         if layer is None:
             layer = self.canvas
             
@@ -167,6 +199,15 @@ class Dorothy:
                 thickness = 1 )
 
     def line(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate=False):
+        """
+        Draw line
+        
+        Args:
+            pt1 (np.array): Coordinates of start
+            pt2 (int): Coordinates of end
+            layer (np.array): Where to draw, defaults to dot.canvas
+            annotate (bool): If true, dimensions are annotated on sketch (for debug)
+        """
         if layer is None:
             layer = self.canvas
 
@@ -199,6 +240,15 @@ class Dorothy:
                 thickness = 1 )
     
     def rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False):
+        """
+        Draw rectangle
+        
+        Args:
+            pt1 (np.array): Coordinates of top left
+            pt2 (int): Coordinates of bottom right
+            layer (np.array): Where to draw, defaults to dot.canvas
+            annotate (bool): If true, dimensions are annotated on sketch (for debug)
+        """
         if layer is None:
             layer = self.canvas
         
@@ -242,6 +292,13 @@ class Dorothy:
         return coords
 
     def rotate(self, theta, origin=None):
+        """
+        Rotate all shapes drawn after
+        
+        Args:
+            theta (int): rotation in radians
+            origin (np.array): point about which to rotate, defaults to (0,0)
+        """
         if not origin is None:
             self.translate(origin)
         m = np.array([[np.cos(theta), -np.sin(theta),0],
@@ -252,12 +309,26 @@ class Dorothy:
             self.translate(origin*-1)
     
     def translate(self, origin):
+        """
+        Translate all shapes drawn after
+        
+        Args:
+            origin (np.array): point to move origin to
+        """
         m = np.array([[1, 0, origin[0]],
                     [0, 1, origin[1]],
                     [0, 0, 1]])
         self.apply_transform(m)
     
     def scale(self, sx=1, sy=1, origin=None):
+        """
+        Scale all shapes drawn after
+        
+        Args:
+            sx (float): scale in x direction 
+            sy (float): scale in y direction 
+            origin (np.array): point about which to scale, defaults to (0,0)
+        """
         if not origin is None:
             self.translate(origin)
         m = np.array([[sx, 0, 0],
@@ -274,6 +345,9 @@ class Dorothy:
             self.current_transform = m
 
     def reset_transforms(self):
+        """
+        Reset transformations (use to isolate transforms within draw loop)
+        """
         self.current_transform = None
 
     #Perform a linear transformation given matrix a
