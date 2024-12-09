@@ -1,5 +1,5 @@
-from cv2 import rectangle
 from dorothy import Dorothy
+import numpy as np
 
 dot = Dorothy()
 
@@ -22,21 +22,29 @@ class MySketch:
     def draw(self):
         
         dot.background((77, 72, 79))
-        #get a new canvas
-        new_canvas = dot.get_layer()
-        #Draw to it
-        top_left = (dot.width//4, dot.height//4)
-        bottom_right = (dot.width//4*3, dot.height//4*3)
-        rectangle(new_canvas, top_left, bottom_right,(22, 208, 165), -1)
-
-        factor = dot.music.amplitude() * 15 
-   
-        origin = (dot.width//2,dot.height//2)
-        new_canvas = dot.scale(new_canvas, factor, factor, origin)
-        #push it back onto layer stack
-        dot.draw_layer(new_canvas)
         
 
+        factor = dot.music.amplitude() * 15 
+
+        dot.stroke(dot.red)
+        #Initially draw line in middle
+        top_left = (dot.width//4, dot.height//4)
+        bottom_right = (dot.width//4*3, dot.height//4*3)
+        centre = np.array([dot.width//2, dot.height//2])
+        #move to origin
+        dot.translate(centre)
+        #scale
+        dot.scale(factor, factor)
+        #move back
+        dot.translate(centre*-1)
+        
+        dot.line(top_left, bottom_right)
+
+        #Easier with a circle
+        dot.translate(centre)
+        dot.scale(factor, factor)
+        dot.circle((0,0),100)
+        
 MySketch()          
 
 

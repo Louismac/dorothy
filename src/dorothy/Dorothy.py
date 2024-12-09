@@ -33,6 +33,7 @@ class Dorothy:
     start_record_time = 0
     test = 0
     fps = 10000
+    current_transform = None
 
     def __init__(self, width = 640, height = 480):
 
@@ -113,14 +114,37 @@ class Dorothy:
     def circle(self, centre = (0,0), radius = 100, layer = None, annotate = False):
         if layer is None:
             layer = self.canvas
+            
+        is_ellipse = False
+        if not self.current_transform is None:
+            centre = self.shift_coords(centre)
+            eigenvalues, _ = np.linalg.eig(self.current_transform[:2,:2])
+            if np.isclose(eigenvalues[0], eigenvalues[1]):
+                radius *= eigenvalues[0]
+                radius = int(radius)
+            else:
+                radius_vector_x = np.array([radius, centre[0]])
+                radius_vector_y = np.array([centre[1], radius])
+                radius_vector_x = self.shift_coords(radius_vector_x)
+                radius_vector_y = self.shift_coords(radius_vector_y)
+                radius_x = np.linalg.norm(radius_vector_x - centre)
+                radius_y = np.linalg.norm(radius_vector_y - centre)
+                radius = [int(radius_x), int(radius_y)]
+                is_ellipse = True
+
         centre = (int(centre[0]),int(centre[1]))
-        radius = int(radius)
 
-        if not self.fill_colour == None:
-            cv2.circle(layer, centre, radius, self.fill_colour, -1)
+        if not self.fill_colour is None:
+            if is_ellipse:
+                cv2.ellipse(layer, centre, radius, 0,0,360,color=self.fill_colour, thickness=-1)
+            else:
+                cv2.circle(layer, centre, radius, self.fill_colour, -1)
 
-        if not self.stroke_colour == None:
-            cv2.circle(layer, centre, radius, self.stroke_colour, self.stroke_weight)
+        if not self.stroke_colour is None:
+            if is_ellipse:
+                cv2.ellipse(layer, centre, radius, 0,0,360,color=self.stroke_colour, thickness=self.stroke_weight)
+            else:
+                cv2.circle(layer, centre, radius, self.stroke_colour, self.stroke_weight)
 
         if annotate:
             cv2.circle(layer, centre, 1, self.text_colour, -1)
@@ -146,9 +170,14 @@ class Dorothy:
         if layer is None:
             layer = self.canvas
 
+        if not self.current_transform is None:
+            pt1 = self.shift_coords(pt1)
+            pt2 = self.shift_coords(pt2)
+
         pt1 = (int(pt1[0]),int(pt1[1]))
         pt2 = (int(pt2[0]),int(pt2[1]))
-        if not self.stroke_colour == None:
+        
+        if not self.stroke_colour is None:
             cv2.line(layer, pt1, pt2, self.stroke_colour, self.stroke_weight)
 
         if annotate:
@@ -172,32 +201,73 @@ class Dorothy:
     def rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False):
         if layer is None:
             layer = self.canvas
-        pt1 = (int(pt1[0]),int(pt1[1]))
-        pt2 = (int(pt2[0]),int(pt2[1]))
-        if not self.fill_colour == None:
-            cv2.rectangle(layer, pt1, pt2, self.fill_colour, -1)
+        
+        w = pt2[0] - pt1[0]
+        h = pt2[1] - pt1[1]
 
-        if not self.stroke_colour == None:
-            cv2.rectangle(layer, pt1, pt2, self.stroke_colour, self.stroke_weight)
+        pts = np.array([pt1,[pt1[0]+w,pt1[1]],pt2,[pt1[0],pt1[1]+h]], np.int32)
+         
+        if not self.current_transform is None:
+            pts = np.array([self.shift_coords(p) for p in pts], np.int32)
+
+        if not self.fill_colour is None:
+            cv2.fillPoly(layer, [pts], self.fill_colour)
+
+        if not self.stroke_colour is None:
+            cv2.polylines(layer, [pts], True, self.stroke_colour, self.stroke_weight)
 
         if annotate:
             cv2.putText(
                 img = layer,
-                text = f"{pt1[0]},{pt1[1]}",
-                org = pt1,
+                text = f"{pts[0][0]},{pts[0][1]}",
+                org = pts[0],
                 fontFace = cv2.FONT_HERSHEY_DUPLEX,
                 fontScale = 0.3,
                 color = self.text_colour,
                 thickness = 1 )
             cv2.putText(
                 img = layer,
-                text = f"{pt2[0]},{pt2[1]}",
-                org = pt2,
+                text = f"{pts[2][0]},{pts[2][1]}",
+                org = pts[2],
                 fontFace = cv2.FONT_HERSHEY_DUPLEX,
                 fontScale = 0.3,
                 color = self.text_colour,
                 thickness = 1 )
-        
+
+    def shift_coords(self, coords):
+        coords = np.array(coords)
+        coords = np.append(coords, 1)
+        coords = np.dot(self.current_transform, coords)
+        coords = coords[:2]
+        return coords
+
+    def rotate(self, theta):
+        m = np.array([[np.cos(theta), -np.sin(theta),0],
+                          [np.sin(theta), np.cos(theta),0],
+                          [0,0,1]])
+        self.apply_transform(m)
+    
+    def translate(self, origin):
+        m = np.array([[1, 0, origin[0]],
+                    [0, 1, origin[1]],
+                    [0, 0, 1]])
+        self.apply_transform(m)
+    
+    def scale(self, sx=1,sy=1):
+        m = np.array([[sx, 0, 0],
+                    [0, sy, 0],
+                    [0, 0, 1]])
+        self.apply_transform(m)
+
+    def apply_transform(self, m):
+        if not self.current_transform is None:
+            self.current_transform = self.current_transform @ m 
+        else:
+            self.current_transform = m
+
+    def reset_transforms(self):
+        self.current_transform = None
+
     #Perform a linear transformation given matrix a
     def linear_transformation(self, src, a, origin =(0,0)):
         
@@ -221,7 +291,7 @@ class Dorothy:
         return transformed_image
 
     
-    def transform(self, layer, m, origin = (0,0)):
+    def transform_layer(self, layer, m, origin = (0,0)):
         """
         Transform a layer given the linear matrix (2,2) and an origin   
 
@@ -235,7 +305,7 @@ class Dorothy:
         """
         return self.linear_transformation(layer, m, origin)
     
-    def scale(self, layer, sx=1, sy=1, origin =(0,0)):
+    def scale_layer(self, layer, sx=1, sy=1, origin =(0,0)):
         """
         Scale layer given x and y factors and an origin   
 
@@ -250,9 +320,9 @@ class Dorothy:
         """
         m = np.array([[sx,0.0],
                           [0.0,sy]])
-        return self.transform(layer, m, origin)
+        return self.transform_layer(layer, m, origin)
     
-    def rotate(self, layer, theta, origin = (0,0)):
+    def rotate_layer(self, layer, theta, origin = (0,0)):
         """
         Rotate layer given theta and an origin 
 
@@ -267,12 +337,13 @@ class Dorothy:
 
         m = np.array([[np.cos(theta), -np.sin(theta)],
                     [np.sin(theta), np.cos(theta)]])
-        return self.transform(layer, m, origin)
+        return self.transform_layer(layer, m, origin)
     
     #Callback for mouse moved
     def mouse_moved(self, event, x, y, flags, param):
         self.mouse_x = x
         self.mouse_y = y
+        # print(event)
         if event == 1:
             self.mouse_down = True
         elif event == 4:
@@ -357,8 +428,6 @@ class Dorothy:
             c1 = self.layers[i]
             c2 = self.layers[i+1]
             upper_layer_objects_mask = cv2.bitwise_not(cv2.inRange(cv2.cvtColor(c2[0], cv2.COLOR_BGR2GRAY), 1, 1))
-            #Swap the 1s for 0s so we dont overflow
-            c2[0][c2[0]==1] = 0
             upper_objects = cv2.bitwise_and(c2[0], c2[0], mask=upper_layer_objects_mask)
             #Dont blend into parts of lower layer where there isnt stuff in the upper layer
             lower_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_objects_mask)
@@ -368,7 +437,8 @@ class Dorothy:
             lower_not_hidden_by_upper = cv2.bitwise_and(c1[0], c1[0], mask=upper_layer_no_objects_mask)
             #Add in blended stuff (not over unblended stuff)
             c2[0] = np.array(c2[0] + lower_not_hidden_by_upper, dtype = np.uint8)
-        self.canvas = self.layers[-1][0]
+            c2[0][c2[0]>255] = 255
+        self.canvas = self.layers[-1][0].copy()
         self.layers = []
 
     def get_images(self, root_dir = "data/animal_thumbnails/land_mammals/cat", thumbnail_size = (50,50)):
@@ -545,6 +615,8 @@ class Dorothy:
             
                 self.millis = int(round(time.time() * 1000)) - self.start_time_millis
                 self.frame += 1
+
+                self.current_transform = None
 
                 frame_length = int(round(time.time() * 1000)) - frame_started_at
                 if frame_length < frame_target_length:

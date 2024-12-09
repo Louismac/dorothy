@@ -1,4 +1,3 @@
-from cv2 import line
 from dorothy import Dorothy
 import sounddevice as sd
 
@@ -30,7 +29,9 @@ class MySketch:
             pt2 = (0, dot.height-int(bin_val*1000))
             color = (0,(1-bin_val)*255,0)
             thickness = 1+int(10*bin_val)
-            line(dot.canvas, pt1, pt2, color, thickness)
+            dot.fill(color)
+            dot.set_stroke_weight(thickness)
+            dot.line(pt1, pt2)
 
 MySketch()
 

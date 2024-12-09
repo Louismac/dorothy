@@ -12,15 +12,15 @@ class MySketch:
     bbox = []
     mode = 0
     written = False
-    level = 0.2
-    topk = 150
+    level = 0.4
+    topk = 100
 
     def __init__(self):
         dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
         
-        fp = "../images/aligned_faces/face_4.jpg"
+        fp = "../images/aligned_faces/face_68.jpg"
 
         self.image = cv2.imread(fp)
         self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
@@ -37,6 +37,7 @@ class MySketch:
 
         self.gray_example = cv2.cvtColor(self.image, cv2.COLOR_RGB2GRAY)
         _, self.thresh= cv2.threshold(self.gray_example, 120, 255, cv2.THRESH_BINARY)
+        self.thresh +=1
         
         #Get contours 
         self.contours = measure.find_contours(self.thresh, self.level)
@@ -69,6 +70,8 @@ class MySketch:
         self.top_x = (dot.width-self.im_w)//2
         self.theta_offset = np.pi
 
+        
+
         #Pick or just stream from your computer
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         print(sd.query_devices())
@@ -76,10 +79,18 @@ class MySketch:
 
         dot.background((0,0,0))
         #Draw image behind?
-        dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
+        #dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
+        self.color = [0,0,0]  
+        #interpolate between these colours
+        self.a = dot.cyan
+        self.b = dot.magenta
+        self.face_layer = dot.get_layer()
 
     def draw(self):
-        #dot.background((0,0,0))
+        t = (np.sin(np.pi*(dot.frame/1000))+1)/2
+        for i in range(3):
+            self.color[i] = int(self.a[i] + (self.b[i] - self.a[i]) * t)
+        # dot.background(self.color)
         #Draw image behind?
         #dot.paste(dot.canvas, self.image, (self.top_x, self.top_y))
         
@@ -96,13 +107,11 @@ class MySketch:
         to_use = self.contours[-cut_off:]
         filtered_bbox = self.bbox[-cut_off:]
         
-        #Get new canvas (for transparency)
-        new_canvas = dot.get_layer()
         fft_vals = dot.music.fft(0)
         
         #Should we change direction?
         if np.random.random()<dir_change:
-            self.theta_offset = np.random.choice([0,np.pi/4,np.pi/2,np.pi*0.75, np.pi, np.pi*1.25, np.pi*1.5, np.pi*1.75])
+            self.theta_offset = np.random.choice([np.pi * i for i in np.linspace(0,2,16)])
         
         #Iterate through
         for index, contour in enumerate(to_use):
@@ -110,9 +119,10 @@ class MySketch:
             mask = np.zeros(self.image.shape[:2], dtype=np.uint8)
             cv2.drawContours(mask, [contour], -1, (255), thickness=cv2.FILLED)
             cut_out = cv2.bitwise_and(self.image, self.image, mask=mask)
-            
             x,y,w,h = filtered_bbox[index]
             cut_out = cut_out[y:y+h,x:x+w]
+            cut_out += 1
+            cut_out = np.array(cut_out, np.uint8)
 
             #Get angle
             theta = (np.pi*2) * (index/len(to_use))            
@@ -128,8 +138,8 @@ class MySketch:
             new_y = int((y + self.top_y) + ((r)*np.cos(theta)))
             new_x = int((x + self.top_x) + ((r)*np.sin(theta)))
             
-            dot.paste(new_canvas, cut_out, (new_x, new_y))
+            dot.paste(self.face_layer, cut_out, (new_x, new_y))
 
-        dot.draw_layer(new_canvas, alpha)
+        dot.draw_layer(self.face_layer)
 
 MySketch()          

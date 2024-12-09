@@ -33,16 +33,15 @@ class MySketch:
             grid = 7
             win_size = 7
             size = dot.width//grid
+            fft = dot.music.fft()
             for i in range(grid**2):
                 x = i % grid * size
                 y = i // grid * size
-                fft = dot.music.fft()
                 window = np.max(fft[i*win_size:(i+1)*win_size])
                 color = self.palette[i % len(self.palette)]
                 color = color*window
-                rectangle(dot.canvas,
-                        (x,y),(x+size,y+size),
-                        color,-1)
+                dot.fill(color)
+                dot.rectangle((x,y),(x+size,y+size))
 
 MySketch()      
 

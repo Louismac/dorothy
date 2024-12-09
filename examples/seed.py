@@ -14,12 +14,6 @@ class MySketch:
         dot.fill(dot.black)
         dot.stroke(dot.red)
         dot.set_stroke_weight(5)
-        dot.circle((200,200), 100, annotate=True)
-        dot.no_stroke()
-        dot.fill(dot.green)
-        dot.circle((20,200), 100, annotate=True)
-        dot.no_fill()
-        dot.stroke(dot.blue)
-        dot.circle((20,400), 100, annotate=True)
+        dot.circle((200,200), 100, annotate = True)
 
 MySketch()          

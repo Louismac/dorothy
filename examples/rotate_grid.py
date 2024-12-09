@@ -19,6 +19,8 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
+
+        dot.stroke(dot.grey)
         
     def draw(self):
         
@@ -34,20 +36,24 @@ class MySketch:
                 #Where to draw the shape?
                 x = i * (size+border) + x_offset
                 y = j * (size+border) + y_offset
-
-                #get a new canvas
-                new_canvas = dot.get_layer()
                 #Draw to it
                 top_left = (x,y)
-                bottom_right = (x+size, y+size)
-                rectangle(new_canvas, top_left, bottom_right, (77, 72, 79), -1)
-
+                bottom_right = np.array([x+size, y+size])
+                
                 theta = dot.music.amplitude() * 15 * 2 * np.pi
-        
-                origin = (x+size/2, y+size/2)
-                new_canvas = dot.rotate(new_canvas, theta, origin)
-                #push it back onto layer stack
-                dot.draw_layer(new_canvas)
+                origin = np.array([x+size/2, y+size/2])
+                #move to origin
+                dot.translate(origin)
+                #rotate
+                dot.rotate(theta)
+                #move back
+                dot.translate(origin*-1)
+                if i % 2 == 0:
+                    dot.line(top_left, origin, annotate=True)
+                else:
+                    dot.rectangle(top_left, bottom_right)
+                dot.reset_transforms()
+                
 
 MySketch()          
 

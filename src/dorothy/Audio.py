@@ -126,6 +126,28 @@ class Audio:
         y, sr = librosa.load(file_path, sr=sr, mono=False)
         return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
     
+    def start_dsp_stream(self, audio_callback, frame_size=2048, fft_size=512, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
+        """
+        Start stream of a given audio file 
+        
+        Args:
+            audio_callback (str): callback generating the audio
+            fft_size (int): Size of fft
+            buffer_size (int): Size of buffer when playing back / analysing audio. 
+            sr (int): Sample rate of the provided audio
+            output_device (int): Where to play this back to. print(sd.query_devices()) to see available
+            analyse (bool): Should this stream be analysed for amplitude, fft etc...
+        Returns:
+            int: the index of the device in the dot.music.audio_outputs list
+        """
+        self.sr = sr
+        self.audio_outputs.append(CustomPlayer(audio_callback,frame_size=frame_size,
+                                              analyse=analyse, fft_size = fft_size, buffer_size = buffer_size, 
+                                              sr = sr, output_device=output_device))
+        index = len(self.audio_outputs)-1
+        self.play(index)
+        return index
+    
     #Start stream of given audio samples (e.g. we can use this to playback things we make in class)
     def start_sample_stream(self, y, fft_size=1024, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
         """
@@ -274,7 +296,7 @@ class AudioDevice:
                 windowed_frame = frame * window
                 fft_results[i] = np.fft.fft(windowed_frame)
 
-            self.fft_vals[self.audio_buffer_write_ptr] = np.mean(np.abs(fft_results),axis=0)
+            self.fft_vals[self.audio_buffer_write_ptr] = np.mean(np.abs(fft_results),axis=0)[:(self.fft_size//2)+1]
 
             self.audio_buffer_write_ptr = (self.audio_buffer_write_ptr + 1) % self.audio_latency
 
@@ -412,7 +434,40 @@ class MAGNetPlayer(AudioDevice):
             self.internal_callback()
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain
-    
+
+
+class CustomPlayer(AudioDevice):
+    def __init__(self, get_frame, frame_size = 512, **kwargs):
+        super().__init__(**kwargs)        
+        self.frame_size = frame_size
+        self.get_frame = get_frame
+        self.current_sample = 0
+        self.current_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        self.generate_thread.start()
+        
+    def fill_next_buffer(self):
+        if self.get_frame is not None:
+            self.next_buffer = self.get_frame(self.frame_size).astype(np.float32)
+
+    def audio_callback(self):
+        if self.pause_event.is_set():
+            print("paused")
+            return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
+        else:
+            audio_buffer = self.current_buffer[self.current_sample:self.current_sample + self.buffer_size]
+            self.current_sample += self.buffer_size
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
+            self.internal_callback()
+            self.on_new_frame(audio_buffer)
+            return audio_buffer * self.gain
+
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
     def __init__(self, model_path, latent_dim=128, **kwargs):

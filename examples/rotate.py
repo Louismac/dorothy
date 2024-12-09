@@ -1,6 +1,5 @@
-from cv2 import line, circle
 from dorothy import Dorothy
-from numpy import pi
+import numpy as np
 
 dot = Dorothy()
 
@@ -19,24 +18,35 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         #dot.music.start_device_stream(3)
+        dot.stroke(dot.grey)
         
     def draw(self):
         
         dot.background((22, 208, 165))
-        #get a new canvas
-        circle(dot.canvas, (dot.width//2, dot.height//2), dot.height//4, dot.white, 3)
-        new_canvas = dot.get_layer()
-        #Draw to it
-        top_left = (dot.width//4, dot.height//4)
-        bottom_right = (dot.width//2, dot.height//2)
-        line(new_canvas, top_left, bottom_right, (77, 72, 79), 2)
+        theta = dot.music.amplitude() * 3 * 2 * np.pi
+        centre = np.array([dot.width//2, dot.height//2])
+        # #Initially draw line in middle
+        # top_left = (dot.width//2, 0)
+        # bottom_right = centre
+        # #move to origin
+        # dot.translate(centre)
+        # #rotate
+        # dot.rotate(theta)
+        # #move back
+        # dot.translate(centre*-1)
+        # dot.line(top_left, bottom_right)
 
-        theta = dot.music.amplitude() * 3 * 2 * pi
-   
-        origin = (dot.width//2,dot.height//2)
-        new_canvas = dot.rotate(new_canvas, theta, origin)
-        #push it back onto layer stack
-        dot.draw_layer(new_canvas)
+        #Initially draw line in middle
+        top_left = (dot.width//4, dot.height//4)
+        bottom_right = (dot.width//4*3, dot.height//4*3)
+        centre = np.array([dot.width//2, dot.height//2])
+        #move to origin
+        dot.translate(centre)
+        #scale
+        dot.rotate(theta)
+        #move back
+        dot.translate(centre*-1)
+        dot.rectangle(top_left, bottom_right, annotate=True)
         
 
 MySketch()          

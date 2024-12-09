@@ -42,11 +42,12 @@ class MySketch:
         new_canvas = self.pattern_layer.copy()
         factor = (np.sin(self.beat_ptr)+1)*extra_scale
         origin = (dot.width//2, dot.height//2)
-        new_canvas = dot.scale(new_canvas, factor, factor, origin)
+        new_canvas = dot.scale_layer(new_canvas, factor, factor, origin)
         dot.draw_layer(new_canvas)
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
+        dot.stroke((255, 37, 21))
         size = 30
         dot.background((208, 184, 158))
         for i in range(dot.width//size):
@@ -58,7 +59,7 @@ class MySketch:
                 if np.random.random()<0.5:
                     y2 = (j+1)*size
 
-                line(self.pattern_layer, (i*size,y1), ((i+1)*size,y2), (255, 37, 21), 1) 
+                dot.line((i*size,y1), ((i+1)*size,y2), layer = self.pattern_layer) 
         
 MySketch()         
 

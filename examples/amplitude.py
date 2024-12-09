@@ -1,4 +1,3 @@
-from cv2 import rectangle
 from dorothy import Dorothy
 
 dot = Dorothy(640,480)
@@ -17,10 +16,11 @@ class MySketch:
         #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
         # print(sd.query_devices())
         # dot.music.start_device_stream(2)
+        dot.fill(dot.red)
         
     def draw(self):
         dot.background(dot.white)
-        rectangle(dot.canvas, (0,0),(dot.width,int(dot.music.amplitude()*dot.height*10)),dot.red,-1)
+        dot.rectangle((0,0),(dot.width,int(dot.music.amplitude()*dot.height*10)))
 
 MySketch()   
     

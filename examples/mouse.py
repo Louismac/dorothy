@@ -21,14 +21,14 @@ class MySketch:
         #dot.music.start_device_stream(3)
     
     def draw(self):
-        dot.background((0))
+        dot.background(dot.black)
         
-        color = (255,255,255)
+        color = dot.white
         if dot.mouse_down:
-            color = (255,0,255)
-        
-        size = dot.music.amplitude()*1000
+            color = dot.green
 
-        circle(dot.canvas,(int(dot.mouse_x), int(dot.mouse_y)),int(size) ,color,-1)
+        dot.fill(color)
+        size = dot.music.amplitude()*1000
+        dot.circle((dot.mouse_x,dot.mouse_y), size)
 
 MySketch()          
