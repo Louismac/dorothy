@@ -90,7 +90,7 @@ This is the bare bones starter for any projects
 
 ### [Alpha](examples/alpha.py) 
 
-Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.to_alpha(alpha_val)`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work. 
+Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.get_layer()`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work when you do ``dot.draw_layer(layer, alpha_val)`. 
 
 ### [Alpha Background](examples/trails.py) 
 
