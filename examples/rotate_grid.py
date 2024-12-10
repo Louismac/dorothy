@@ -42,12 +42,10 @@ class MySketch:
                 
                 theta = dot.music.amplitude() * 15 * 2 * np.pi
                 origin = np.array([x+size/2, y+size/2])
-                #move to origin
-                dot.translate(origin)
+                
                 #rotate
-                dot.rotate(theta)
-                #move back
-                dot.translate(origin*-1)
+                dot.rotate(theta, origin)
+                
                 if i % 2 == 0:
                     dot.line(top_left, origin)
                 else:
