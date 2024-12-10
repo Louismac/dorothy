@@ -33,8 +33,6 @@ class MySketch:
         #scale
         dot.scale(factor, factor, centre)
         dot.line(top_left, bottom_right)
-
-        dot.scale(factor, factor, centre)
         dot.circle(centre, 100)
         
 MySketch()          
