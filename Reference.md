@@ -36,45 +36,48 @@ This is the main class of the Library
   - Returns a new layer (`np.array') to draw to.
     
 - `draw_layer(c, alpha=1)`
-  - Push layer `c` onto the layer stack to be drawn. `alpha' is a float from 0 to 1, with 0 being fully transparent, 1 fully opaque
+  - Push layer `c` onto the layer stack to be drawn. `alpha` is a float from 0 to 1, with 0 being fully transparent, 1 fully opaque
 
-  - `rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False)`
+- `rectangle(pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False)`
   - Draw a rectangle given a top left and bottom right. If no layer given, defaults to `dot.canvas`. Annotations for debugging show coordinates on shape.
 
-- `line(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False)`
+- `poly(pts, layer = None, annotate = False)`
+  - Draw a shape given an array of points. If no layer given, defaults to `dot.canvas`. Annotations for debugging show coordinates on shape.
+
+- `line(pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False)`
   - Draw a line given a start and end. If no layer given, defaults to `dot.canvas`. Annotations for debugging show coordinates on shape.
 
-- `circle(self, centre = (0,0), radius = 100, layer = None, annotate = False)`
+- `circle(centre = (0,0), radius = 100, layer = None, annotate = False)`
   - Draw a circle given a centre and radius. If no layer given, defaults to `dot.canvas`. Annotations for debugging show coordinates on shape.
 
-- `stroke(self, stroke = (0,0,0))`
+- `stroke(stroke = (0,0,0))`
   - Set stroke (border) colour as RGB. Applies to all shapes after until `no_stroke()`.
 
-- `fill(self, fill = (0,0,0))`
+- `fill(fill = (0,0,0))`
   - Set colour as RGB. Applies to all shapes after until `no_fill()`.
 
-- `no_stroke(self)`
+- `no_stroke()`
   - Turn off stroke (border).
 
-- `no_fill(self)`
+- `no_fill()`
   - Turn off fill.
 
-- `set_stroke_weight(self, stroke_weight=1)`
+- `set_stroke_weight(stroke_weight=1)`
   - Set stroke weight.
 
-- `rotate(self, theta, origin=None)`
+- `rotate(theta, origin=None)`
   - Rotate all shapes drawn after given theta radians. Provide optional point about which to rotate, defaults to (0,0).
 
-- `scale(self, sx=1, sy=1, origin=None)`
+- `scale(sx=1, sy=1, origin=None)`
   - Scale all shapes drawn after given scale in x and y direction. Provide optional point about which to scale, defaults to (0,0).
 
-- `translate(self,origin=None)`
+- `translate(origin=None)`
   - Move origin for all shapes drawn after.
 
-- `reset_transforms(self)`
+- `reset_transforms()`
   - Reset transformations (use to isolate transforms within draw loop).
     
-- `linear_transformation(self, src, a, origin=(0,0)`
+- `linear_transformation(src, a, origin=(0,0)`
   - Perform a linear transformation to layer `src` given matrix `a` about a given `origin`. Returns transformed layer.
     
 - `scale_layer(canvas, sx=1, sy=1, origin=(0,0)`

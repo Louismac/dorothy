@@ -1,5 +1,5 @@
 # Dorothy
-A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing 
+A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing. Now at v.0.0.5!
 
 Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Processing / p5.js`` -like API, make some easy sketching with shapes and images reacting to FFT, Beats and Amplitude in Python! Also, as its Python and the canvas is just a `numpy` pixel array, you can do any of the cool Python stuff you would normally do, or use other powerful libraries like `NumPy`, `PyTorch` or `Tensorflow`.
 
@@ -54,7 +54,7 @@ Either hold `q` with the window in focus, or use `ctrl-z` in the terminal to clo
 
 ### Drawing
 
-For drawing, its suggested to use the [openCV drawing functions](https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html), with ``dot.canvas`` as the first argument (this is the image to draw onto). 
+For drawing, we have wrappers around the [openCV drawing functions](https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html) for `circle`, `line`, `rectangle` and `poly`.
 
 ``dot.canvas`` is just a 3 channel 4D numpy array that you can edit you like in the sketch or draw functions
 
@@ -112,23 +112,43 @@ Use ``dot.mouse_x`` and ``dot.mouse_y`` to control where a circle is drawn, with
 
 Use openCV to grab and draw the webcam and bounce centre panel to music.
 
-### Linear Transforms
+### Linear Transforms for Shapes
 
-Apply linear transforms and translations to canvases. This works in the opposite way to Processing, in that you 
+You can apply linear transforms and translations to for the built in shapes. This is more efficient that doing it the whole layer (see below). 
+
+This works similarly to processing in that 
+
+1. Apply transform with optional origin (``dot.translate()``,``dot.rotate()``,``dot.scale()``).
+
+2. Draw shapes (`dot.circle()`,`dot.rectangle()`,`dot.line()`,`dot.poly()`). All transformations set previously will be applied.
+
+3. Optionally `reset_transforms()` within the draw loop to isolate changes. 
+
+4. Transforms are reset at the end of the draw loop.
+
+[Rotate](examples/rotate.py)
+
+[Rotate In Grid](examples/rotate_grid.py)
+
+[Scale](examples/scale.py)
+
+### Linear Transforms for Layers
+
+You can apply linear transforms and translations to whole layers. This is useful if your drawing contains non-primitive shapes or images, or if for efficiency you draw something complex to a layer once then just redraw and transform that layer. 
+
+It works in the opposite way to Processing, in that you 
 
 1. Get a new canvas (``dot.get_layer()``)
 
 2. Draw to it 
 
-3. Apply transformations (``dot.transform()``,``dot.rotate()``,``dot.scale()``). This function also takes a new origin about which to make the transformation if required (a translation).
+3. Apply transformations (``dot.transform_layer()``,``dot.rotate_layer()``,``dot.scale_layer()``). This function also takes a new origin about which to make the transformation if required (a translation).
 
 4. Put back onto main canvas (``dot.draw_layer()``)
 
-[Rotate](examples/rotate.py)
+[Rotate Layer](examples/rotate_layer.py)
 
-[Rotate In a Grid](examples/rotate_grid.py)
-
-[Scale](examples/scale.py)
+[Scale Layer](examples/scale_layer.py)
  
 
 ### [Beat Tracking](examples/beats.py) 

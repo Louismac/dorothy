@@ -49,7 +49,7 @@ class MySketch:
                 #move back
                 dot.translate(origin*-1)
                 if i % 2 == 0:
-                    dot.line(top_left, origin, annotate=True)
+                    dot.line(top_left, origin)
                 else:
                     dot.rectangle(top_left, bottom_right)
                 dot.reset_transforms()

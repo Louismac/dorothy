@@ -238,6 +238,40 @@ class Dorothy:
                 fontScale = 0.3,
                 color = self.text_colour,
                 thickness = 1 )
+            
+    def poly(self, pts = [(0,100),(0,200),(100,150)], layer = None, annotate = False):
+        """
+        Draw poly shape given array of points
+        
+        Args:
+            pts (np.array): Coordinates of points to draw
+            layer (np.array): Where to draw, defaults to dot.canvas
+            annotate (bool): If true, dimensions are annotated on sketch (for debug)
+        """
+        if layer is None:
+            layer = self.canvas
+
+        pts = np.array(pts, np.int32)
+         
+        if not self.current_transform is None:
+            pts = np.array([self.shift_coords(p) for p in pts], np.int32)
+
+        if not self.fill_colour is None:
+            cv2.fillPoly(layer, [pts], self.fill_colour)
+
+        if not self.stroke_colour is None:
+            cv2.polylines(layer, [pts], True, self.stroke_colour, self.stroke_weight)
+
+        if annotate:
+            for pt in pts:
+                cv2.putText(
+                    img = layer,
+                    text = f"{pt[0]},{pt[1]}",
+                    org = pt,
+                    fontFace = cv2.FONT_HERSHEY_DUPLEX,
+                    fontScale = 0.3,
+                    color = self.text_colour,
+                    thickness = 1 )
     
     def rectangle(self, pt1 = (0,0), pt2 = (100,100), layer = None, annotate = False):
         """
@@ -257,32 +291,7 @@ class Dorothy:
 
         pts = np.array([pt1,[pt1[0]+w,pt1[1]],pt2,[pt1[0],pt1[1]+h]], np.int32)
          
-        if not self.current_transform is None:
-            pts = np.array([self.shift_coords(p) for p in pts], np.int32)
-
-        if not self.fill_colour is None:
-            cv2.fillPoly(layer, [pts], self.fill_colour)
-
-        if not self.stroke_colour is None:
-            cv2.polylines(layer, [pts], True, self.stroke_colour, self.stroke_weight)
-
-        if annotate:
-            cv2.putText(
-                img = layer,
-                text = f"{pts[0][0]},{pts[0][1]}",
-                org = pts[0],
-                fontFace = cv2.FONT_HERSHEY_DUPLEX,
-                fontScale = 0.3,
-                color = self.text_colour,
-                thickness = 1 )
-            cv2.putText(
-                img = layer,
-                text = f"{pts[2][0]},{pts[2][1]}",
-                org = pts[2],
-                fontFace = cv2.FONT_HERSHEY_DUPLEX,
-                fontScale = 0.3,
-                color = self.text_colour,
-                thickness = 1 )
+        self.poly(pts, layer, annotate)
 
     def shift_coords(self, coords):
         coords = np.array(coords)
