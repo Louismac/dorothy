@@ -94,7 +94,7 @@ Shows how to draw shapes with transparency. openCV doesnt do this natively so yo
 
 ### [Alpha Background](examples/trails.py) 
 
-Add a second argument to the `an.background()` to draw a transparent background and make trails
+Use an alpha layer and a translucent rectangle (instead of a opaque background) and make trails
 
 ### [Grid](examples/grid.py) 
 
