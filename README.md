@@ -192,7 +192,7 @@ Load `.png` files with transparency
 
 With media pipe.
 
-### [Face Tracking](examples/face-filter-pixels.py)
+### [Face Tracking](examples/face_pixels.py)
 
 Track and pixelate face using Haar Cascades.
 
