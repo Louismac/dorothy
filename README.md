@@ -82,9 +82,9 @@ Other Processing like functions are
 
 You can update ``Dorothy`` sketches on the fly and see results without re-running code using the [example](examples/livecode/). Here we split the code into 
 
-1. [livecode.py](examples/livecode/livecode.py) that is launched a left alone. 
+1. [livecode.py](examples/livecode/livecode.py). You run this script and it does the set up and it waits for updates from ->
 
-2. [sketch.py](examples/livecode/sketch.py) that has you `MySketch` class in. You can make changes to this and when you save the file, the changes will be reflected in the `Dorothy` window.
+2. [sketch.py](examples/livecode/sketch.py) that has your `MySketch` class in. You can make changes to this and when you save the file, the changes will be reflected in the `Dorothy` window.
 
 ### Reacting to Music
 
