@@ -68,6 +68,13 @@ Other Processing like functions are
 
 * ``dot.width``, ``dot.height``
 
+### Live Coding / Realtime updates
+
+You can update ``Dorothy`` sketches on the fly and see results without re-running code using the [example](examples/livecode/). Here we split the code into 
+
+1. [livecode.py](examples/livecode/livecode.py) that is launched a left alone. 
+
+2. [sketch.py](examples/livecode/sketch.py) that has you `MySketch` class in. You can make changes to this and when you save the file, the changes will be reflected in the `Dorothy` window.
 
 ### Reacting to Music
 
