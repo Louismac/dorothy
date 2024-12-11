@@ -107,7 +107,7 @@ This is the bare bones starter for any projects
 
 ### [Alpha](examples/alpha.py) 
 
-Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.get_layer()`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work when you do ``dot.draw_layer(layer, alpha_val)`. 
+Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.get_layer()`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work when you do `dot.draw_layer(layer, alpha_val)`. 
 
 ### [Alpha Background](examples/trails.py) 
 
@@ -183,6 +183,18 @@ Visualise live amplitude data
 ### [Images](examples/many_images.py)
 
 Use `get_images()` to load in a dataset of images and `dot.paste()` to copy onto canvas
+
+### [Alpha Images](examples/load_image_alpha.py)
+
+Load `.png` files with transparency
+
+### [Hand Tracking](examples/hands.py)
+
+With media pipe.
+
+### [Face Tracking](examples/face-filter-pixels.py)
+
+Track and pixelate face using Haar Cascades.
 
 ### [Contours](examples/contours.py)
 

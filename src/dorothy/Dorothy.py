@@ -283,9 +283,6 @@ class Dorothy:
             layer (np.array): Where to draw, defaults to dot.canvas
             annotate (bool): If true, dimensions are annotated on sketch (for debug)
         """
-        if layer is None:
-            layer = self.canvas
-        
         w = pt2[0] - pt1[0]
         h = pt2[1] - pt1[1]
 
