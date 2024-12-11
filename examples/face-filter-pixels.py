@@ -39,9 +39,8 @@ class MySketch:
                         colour = (int(downsampled[j][i][0]),int(downsampled[j][i][1]),int(downsampled[j][i][2]))
                         x = face_x+(i*skip)
                         y = face_y+(j*skip)
-                        circle(dot.canvas,
-                               center=(x,y),radius=radius,
-                               color=colour,thickness=-1)
+                        dot.fill(colour)
+                        dot.circle((x,y),radius)
                     
 MySketch()          
 
