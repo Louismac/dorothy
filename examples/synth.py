@@ -18,12 +18,12 @@ class MySketch:
             frequency = dot.mouse_x
             amplitude = dot.mouse_y/dot.height
             #Get increments
-            delta = 2 * np.pi * frequency / sr 
-            x = delta * np.arange(size)
+            phase_increment = 2 * np.pi * frequency / sr 
+            x = phase_increment * np.arange(size)
             #Make some sound
             audio = amplitude * np.sin(self.phase + x)
             #update phase
-            self.phase += delta * size 
+            self.phase += phase_increment * size 
             return audio
         
         dot.music.start_dsp_stream(get_frame, sr = sr)

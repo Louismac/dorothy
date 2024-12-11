@@ -6,10 +6,11 @@ class MySketch:
     def setup(self, dot):
         self.counter = 1
 
+    def run_once(self, dot):
+        dot.background(dot.purple)
+
     def draw(self, dot):
-        dot.background(0)
-        self.counter += 1
-        dot.fill(dot.green)
+        dot.fill((dot.mouse_x,0,0))
         dot.stroke(dot.blue)
         dot.set_stroke_weight(self.counter%100)
-        dot.circle((dot.width//2,dot.height//2), 200)
+        dot.circle((dot.width//2,dot.height//2), dot.frame%dot.width)

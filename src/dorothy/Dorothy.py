@@ -11,6 +11,9 @@ from .Audio import *
 from time import sleep
 import wave
 import subprocess
+import importlib
+import traceback
+import inspect
 
 class Dorothy:
 
@@ -726,3 +729,49 @@ class Dorothy:
             self.exit()            
         
         self.exit()
+
+    
+
+    def start_livecode_loop(self, sketch):
+
+        my_sketch = sketch.MySketch()
+        was_error = False
+
+        def setup_wrapper():
+            global was_error
+            try:
+                importlib.reload(sketch)
+                new_class = sketch.MySketch
+                my_sketch.__class__ = new_class
+                my_sketch.setup(self)
+                was_error = False
+            except Exception:
+                if not was_error:
+                    print("error in setup, code not updated")
+                    print(traceback.format_exc())
+                    was_error = True
+
+        def draw_wrapper():
+            global was_error
+            try:
+                importlib.reload(sketch)
+                new_class = sketch.MySketch
+                my_sketch.__class__ = new_class
+                if hasattr(my_sketch, 'run_once'):
+                    func_key = inspect.getsource(my_sketch.run_once)
+                    if not hasattr(my_sketch, 'old_once_func'):
+                        my_sketch.old_once_func = func_key
+                    if my_sketch.old_once_func != func_key:
+                        my_sketch.once_ran = False
+                        my_sketch.old_once_func = func_key
+                    if not getattr(my_sketch, 'once_ran', False):
+                        my_sketch.run_once(self)
+                        my_sketch.once_ran = True
+                my_sketch.draw(self)
+                was_error = False
+            except Exception:
+                if not was_error:
+                    print(traceback.format_exc())
+                    print("error in draw loop, code not updated")
+                    was_error = True
+        self.start_loop(setup_wrapper, draw_wrapper)
