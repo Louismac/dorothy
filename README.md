@@ -22,7 +22,7 @@ Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Proc
 
 Has ``setup()`` and ``draw()`` functions that can be overwritten using a custom class
 
-```
+```python
 from dorothy import Dorothy
 
 dot = Dorothy()
@@ -58,7 +58,7 @@ For drawing, we have wrappers around the [openCV drawing functions](https://docs
 
 We use the well established `fill` and `stroke` approach for colouring and borders. You can also annotate the coordinates of your shape in place for debugging!
 
-```
+```python
 def draw(self):
     dot.fill(dot.black)
     dot.stroke(dot.red)
@@ -249,15 +249,38 @@ dot.music.pause()
 dot.music.resume()
 ```
 
+### Custom DSP Loop
+
+[Simple Synth](examples/synth.py)
+
+If you want to make your own samples (e.g. from a synth, or from your own music geneation model), you just need to make a `dot.music.start_dsp_stream()` and pass it an audio callback where you return the samples as requested.
+
+```python
+def get_frame(size):
+    #Get parameters from mouse
+    frequency = dot.mouse_x
+    amplitude = dot.mouse_y/dot.height
+    #Get increments
+    delta = 2 * np.pi * frequency / sr 
+    x = delta * np.arange(size)
+    #Make some sound
+    audio = amplitude * np.sin(self.phase + x)
+    #update phase
+    self.phase += delta * size 
+    return audio
+
+dot.music.start_dsp_stream(get_frame, sr = sr)
+```
+
 ### Generating Audio with [RAVE](https://github.com/acids-ircam/RAVE)
 
 There is also a player to generate, visualise and interact with pretrained RAVE models. 
 
 [Examples here](examples/rave.py)
 
-``
+```python
 rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
-``
+```
 
 Will load in a `.ts` model. Remember to `play()` to start!
 
@@ -265,7 +288,7 @@ It will initially just start at a random place in latent space but there are two
 
 1. Manually set the z vector using  where z is a torch tensor and has the shape (1, latent_dims, 1)
 
-```
+```python
 z = torch.randn((1,16,1))
 dot.music.update_rave_latent(z)
 ```
@@ -274,7 +297,7 @@ dot.music.update_rave_latent(z)
 
    * Pipe audio from a stream you have already started (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you should manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine.
 
-```
+```python
 # Give an output device (e.g. your speakers) so you can hear the output
 rave_id = dot.music.start_rave_stream("vintage.ts", output_device=4, latent_dim=latent_dim)
 # Set stream to be blackhole / microphone device
@@ -285,7 +308,7 @@ dot.music.play()
   
    * Or a file player stream
 
-```
+```python
 rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
 device_id = dot.music.start_file_stream("../audio/gospel.wav")
 # Set as input to rave (this mutes the source stream, use .gain property to hear both)
@@ -300,7 +323,7 @@ You can also add a constant bias to the z vector to allow for some controllable 
 If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the chosen audio device (in this case the RAVE audio player) requests a new buffer and this function returns that buffer (so you can get the size, or do any custom analysis)
 
 ##### New random bias every frame
-```
+```python
 def on_new_frame(buffer=np.zeros(2048)):
     n= len(buffer)
     #Update a new random 
@@ -310,7 +333,7 @@ dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
 ```
 
 ##### Oscillating bias at a given frequency 
-```
+```python
 def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
     t = frame_number / sample_rate
     value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
@@ -333,7 +356,7 @@ MAGNet is a lightweight LSTM spectral model. You can train models [here](https:/
 
 This generates in realtime given a trained model the original source audio file / dataset (to use as an impulse)
 
-```
+```python
 dot.music.start_magnet_stream("models/magnet_wiley.pth", "../audio/Wiley.wav")
 ```
 
