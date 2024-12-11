@@ -253,7 +253,9 @@ dot.music.resume()
 
 [Simple Synth](examples/synth.py)
 
-If you want to make your own samples (e.g. from a synth, or from your own music geneation model), you just need to make a `dot.music.start_dsp_stream()` and pass it an audio callback where you return the samples as requested.
+If you want to make your own music engines (e.g. for a synth, or from your own music generation model that we don't support yet), you just need to make a `dot.music.start_dsp_stream()` and pass it an audio callback where you return the samples as requested.
+
+This audio callback can also be [live coded](examples/livecode_audio/).
 
 ```python
 def get_frame(size):
