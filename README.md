@@ -56,7 +56,17 @@ Either hold `q` with the window in focus, or use `ctrl-z` in the terminal to clo
 
 For drawing, we have wrappers around the [openCV drawing functions](https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html) for `circle`, `line`, `rectangle` and `poly`.
 
-``dot.canvas`` is just a 3 channel 4D numpy array that you can edit you like in the sketch or draw functions
+We use the well established `fill` and `stroke` approach for colouring and borders. You can also annotate the coordinates of your shape in place for debugging!
+
+```
+def draw(self):
+    dot.fill(dot.black)
+    dot.stroke(dot.red)
+    dot.set_stroke_weight(5)
+    dot.circle((200,200), 100, annotate = True)
+```
+
+Everything is drawn to ``dot.canvas``, which is just a 3 channel 4D numpy array that you can edit you like in the sketch or draw functions
 
 Other Processing like functions are 
 
@@ -97,11 +107,11 @@ This is the bare bones starter for any projects
 
 ### [Alpha](examples/alpha.py) 
 
-Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.to_alpha(alpha_val)`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work. 
+Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.get_layer()`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work when you do ``dot.draw_layer(layer, alpha_val)`. 
 
 ### [Alpha Background](examples/trails.py) 
 
-Add a second argument to the `an.background()` to draw a transparent background and make trails
+Use an alpha layer and a translucent rectangle (instead of a opaque background) and make trails
 
 ### [Grid](examples/grid.py) 
 
