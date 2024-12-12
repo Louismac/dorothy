@@ -14,6 +14,8 @@ import subprocess
 import importlib
 import traceback
 import inspect
+import datetime
+
 
 class Dorothy:
 
@@ -59,6 +61,7 @@ class Dorothy:
         self.fill_colour = None
         self.stroke_weight = 1
         self.text_colour = (255,255,255)
+        self.was_error = False
         print("load colours")
         self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
         print("done load colours")
@@ -578,7 +581,6 @@ class Dorothy:
             if not end == None:
                 self.end_recording_at = self.millis + end
             
-    
     def stop_record(self, output_video_path = "output.mp4", fps = 25, audio_output = 0, audio_latency = 6):
         """
         Stop collecting frames and render capture
@@ -588,6 +590,7 @@ class Dorothy:
             audio_output (int): which audio device to use
             audio_latency (int): number of frames to pad to resync audio with video
         """
+        output_video_path = str(time.thread_time()) + ".mp4"
         if self.recording:
             print("stopping record, writing file")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -735,24 +738,22 @@ class Dorothy:
     def start_livecode_loop(self, sketch):
 
         my_sketch = sketch.MySketch()
-        was_error = False
+        self.was_error = False
 
         def setup_wrapper():
-            global was_error
             try:
                 importlib.reload(sketch)
                 new_class = sketch.MySketch
                 my_sketch.__class__ = new_class
                 my_sketch.setup(self)
-                was_error = False
+                self.was_error = False
             except Exception:
-                if not was_error:
+                if not self.was_error:
                     print("error in setup, code not updated")
                     print(traceback.format_exc())
-                    was_error = True
+                    self.was_error = True
 
         def draw_wrapper():
-            global was_error
             try:
                 importlib.reload(sketch)
                 new_class = sketch.MySketch
@@ -768,10 +769,10 @@ class Dorothy:
                         my_sketch.run_once(self)
                         my_sketch.once_ran = True
                 my_sketch.draw(self)
-                was_error = False
+                self.was_error = False
             except Exception:
-                if not was_error:
+                if not self.was_error:
                     print(traceback.format_exc())
                     print("error in draw loop, code not updated")
-                    was_error = True
+                    self.was_error = True
         self.start_loop(setup_wrapper, draw_wrapper)
