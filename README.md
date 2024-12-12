@@ -125,9 +125,13 @@ Audio reactive scaled pattern from a nested for loop in the ``def setup()`` func
 
 Use ``dot.mouse_x`` and ``dot.mouse_y`` to control where a circle is drawn, with size moving to amplitude.
 
-### [Webcam Capture](examples/video.py) 
+### [Webcam Capture](examples/webcam.py) 
 
 Use openCV to grab and draw the webcam and bounce centre panel to music.
+
+### [Video Playback](examples/video.py) 
+
+Use openCV to loop a video and bounce centre panel to music.
 
 ### Linear Transforms for Shapes
 
