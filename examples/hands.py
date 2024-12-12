@@ -22,22 +22,29 @@ class MySketch:
             min_tracking_confidence=0.5)
 
     def draw(self):
+
         success, camera_feed = self.camera.read()
         if success:
+            
             camera_feed = cv2.resize(camera_feed,(dot.width, dot.height))
             camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
             results = self.hands.process(camera_feed)
 
-            # Draw the hand annotations on the image.
-            camera_feed.flags.writeable = True
+            colours = [dot.red, dot.green, dot.blue, dot.yellow, dot.purple]
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
-                    self.mp_drawing.draw_landmarks(
-                        camera_feed,
-                        hand_landmarks,
-                        self.mp_hands.HAND_CONNECTIONS,
-                        self.mp_drawing_styles.get_default_hand_landmarks_style(),
-                        self.mp_drawing_styles.get_default_hand_connections_style())
+                    lm = hand_landmarks.landmark
+                    #Five fingers
+                    for i in range(5):
+                        dot.set_stroke_weight(3)
+                        dot.stroke(colours[i])
+                        index = 1 + (i*4)
+                        #Four points on each finger
+                        for j in range(3):
+                            pts = ((lm[index+j].x*dot.width,lm[index+j].y*dot.height),
+                                  (lm[index+j+1].x*dot.width,lm[index+j+1].y*dot.height))
+                            dot.line(pts[0],pts[1],camera_feed)
+
             camera_feed = cv2.flip(camera_feed, 1)
             dot.canvas = camera_feed
         
