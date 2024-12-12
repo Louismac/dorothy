@@ -6,7 +6,7 @@ dot = Dorothy()
 class MySketch:
 
     def __init__(self):
-        self.camera = cv2.VideoCapture(0)
+        self.player = cv2.VideoCapture("../images/louis.mov")
         dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
@@ -20,7 +20,7 @@ class MySketch:
         #dot.music.start_device_stream(3)
             
     def draw(self):
-        success, camera_feed = self.camera.read()
+        success, camera_feed = self.player.read()
         if success:
             #resize and color camera
             camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
@@ -39,8 +39,11 @@ class MySketch:
             
             dot.canvas = camera_feed
             dot.draw_layer(new_layer)
-        
-
+        else:
+            #LOOOOOOP
+            print('no video')
+            self.player.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            
 MySketch()          
 
 
