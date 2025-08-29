@@ -126,7 +126,7 @@ class Audio:
         y, sr = librosa.load(file_path, sr=sr, mono=False)
         return self.start_sample_stream(y, fft_size, buffer_size, sr, output_device, analyse)
     
-    def start_dsp_stream(self, audio_callback, frame_size=2048, fft_size=512, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
+    def start_dsp_stream(self, audio_callback, fft_size=512, buffer_size=1024, sr = 44100, output_device=None, analyse = True):
         """
         Start stream of a given audio file 
         
@@ -141,7 +141,7 @@ class Audio:
             int: the index of the device in the dot.music.audio_outputs list
         """
         self.sr = sr
-        self.audio_outputs.append(CustomPlayer(audio_callback,frame_size=frame_size,
+        self.audio_outputs.append(CustomPlayer(audio_callback,frame_size=buffer_size,
                                               analyse=analyse, fft_size = fft_size, buffer_size = buffer_size, 
                                               sr = sr, output_device=output_device))
         index = len(self.audio_outputs)-1
