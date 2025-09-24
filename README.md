@@ -60,7 +60,7 @@ MySketch()
 ## 🎯 What Can You Build?
 
 <details>
-<summary><strong>🎵 Audio Visualizers</strong> - Spectrum analyzers, waveform displays, beat-reactive patterns</summary>
+<summary><strong>🎵 Audio Visualisers</strong> - Spectrum analysers, waveform displays, beat-reactive patterns</summary>
 
 ```python
 def draw(self):
@@ -91,12 +91,12 @@ def draw(self):
 <summary><strong>🤖 AI-Powered Visuals</strong> - RAVE model integration, neural audio synthesis, ML-driven art</summary>
 
 ```python
-# Generate audio with AI and visualize it
+# Generate audio with AI and visualise it
 rave_id = dot.music.start_rave_stream("vintage.ts")
 dot.music.play()
 
 def draw(self):
-    # Visualize AI-generated audio spectrum
+    # Visualise AI-generated audio spectrum
     for i, val in enumerate(dot.music.fft_vals):
         # Your visualization code here
 ```
@@ -106,10 +106,12 @@ def draw(self):
 
 ## 📚 Learning Path
 
+### [All Examples](examples/)
+
 ### 🌟 **Level 1: Your First Steps**
 1. [🎵 Pulse Rectangle](examples/amplitude.py) - Circle that grows with music
 2. [🌈 Color Beats](examples/beats.py) - Colors that change on beats
-3. [📊 Simple Spectrum](examples/fft.py) - Your first FFT visualizer
+3. [📊 Simple Spectrum](examples/fft.py) - Your first FFT visualiser
 
 ### 🔥 **Level 2: Getting Creative**
 4. [🎭 Mouse Magic](examples/mouse.py) - Interactive drawing with audio
@@ -182,7 +184,7 @@ dot.music.start_magnet_stream("model.pth", "source.wav")
 - **Start Simple**: Begin with basic shapes and gradually add complexity
 - **Use Live Coding**: Enable hot-reloading for faster iteration ([see example](examples/livecode/))
 - **Layer Effects**: Use `dot.get_layer()` for transparency and complex compositions
-- **Optimize for Performance**: Dorothy handles 60fps, but complex drawings may need optimization
+- **Optimise for Performance**: Complex drawings may need optimisation
 - **Debug Visually**: Use `annotate=True` on shapes to see coordinates
 
 ---
@@ -264,7 +266,7 @@ Inspired by [Processing](https://processing.org/) and [p5.js](https://p5js.org/)
 
 **Ready to make some visual music?** 🎵✨
 
-[Get Started](#-quick-start) • [Examples](examples/) • [Documentation](docs/) • [Community](https://github.com/Louismac/dorothy/discussions)
+[Get Started](#-quick-start) • [Examples](examples/) • [Documentation](Reference.md) • [Community](https://github.com/Louismac/dorothy/discussions)
 
 *Made with ❤️ for creative coders, digital artists, and music lovers*
 
