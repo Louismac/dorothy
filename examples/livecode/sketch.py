@@ -7,10 +7,15 @@ class MySketch:
         self.counter = 1
 
     def run_once(self, dot):
-        dot.background(dot.purple)
+        dot.background(dot.black)
+        dot.no_fill()
+        dot.stroke(dot.white)
 
     def draw(self, dot):
-        dot.fill((dot.mouse_x,0,0))
-        dot.stroke(dot.blue)
-        dot.set_stroke_weight(self.counter%100)
-        dot.circle((dot.width//2,dot.height//2), dot.frame%dot.width)
+        dot.background(dot.black)
+        dot.rectangle((100,100),(dot.mouse_x,dot.mouse_y),annotate=True)
+
+        # dot.fill(dot.red)
+        # dot.stroke(dot.blue)
+        # dot.set_stroke_weight(self.counter%100)
+        # dot.circle((dot.frame%dot.width,dot.height//2), 100)

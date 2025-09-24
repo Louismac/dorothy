@@ -1,5 +1,5 @@
-from sampler import Sampler
 from dorothy import Dorothy
+from dorothy.Audio import Sampler, Clock
 dot = Dorothy()
 
 class MySketch:
@@ -14,19 +14,29 @@ class MySketch:
         ]
         self.sampler = Sampler(dot)
         self.sampler.load(paths)
-        self.sampler.sequence = [
-            [1,1,1,1,1,0,0,0,1,0,0,0,1,0,0,0],
-            [1,0,0,1,0,0,1,0]
-            ]
-        self.sampler.set_bpm(80)
+        
+        self.clock = Clock()
+        self.clock.set_bpm(80)
+        
+        self.sequence = [1,1,1,1,1,0,0,0,2,0,0,0,2,0,0,0]
+        self.clock.on_tick = self.on_tick
+        self.clock.play()
+
+    def on_tick(self):
+        n = len(self.sequence)
+        note = self.sequence[self.clock.tick_ctr % n]
+        if note > 0:
+            self.sampler.trigger(note-1)
         
     def draw(self):
-        is_tick = self.sampler.tick(dot.millis)
-        if is_tick:
-            if self.sampler.tick_ctr % 32 == 0:
-                self.sampler.set_bpm(80)
-            if self.sampler.tick_ctr % 32 == 16:
-                self.sampler.set_bpm(160)
+        dot.background(dot.white)
+
+        n = len(self.sequence)
+        seq_ptr = self.clock.tick_ctr % n
+        x = seq_ptr * dot.width/n
+
+        dot.stroke(dot.red)
+        dot.line((x, 0),(x,200))
         
 MySketch()  
 

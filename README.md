@@ -1,377 +1,271 @@
-# Dorothy
-A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing. Now at v.0.0.5!
+# Dorothy 🎵✨
 
-Leaning on the work of ``openCV``, ``sounddevice`` and ``librosa`` with a ``Processing / p5.js`` -like API, make some easy sketching with shapes and images reacting to FFT, Beats and Amplitude in Python! Also, as its Python and the canvas is just a `numpy` pixel array, you can do any of the cool Python stuff you would normally do, or use other powerful libraries like `NumPy`, `PyTorch` or `Tensorflow`.
+**Create audio-reactive visuals in Python with just a few lines of code**
+
+Dorothy is a creative computing library that makes it incredibly easy to build interactive visual art that responds to music, beats, and audio in real-time. Think Processing meets Python, with superpowers for audio visualisation.
 
 <img src="images/output2.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output4.gif" alt="drawing" width="200"/>
 
-* [Brief Guide](https://github.com/Louismac/dorothy/blob/main/README.md#brief-guide)
+Dorothy in action
 
-* [Examples](https://github.com/Louismac/dorothy/blob/main/README.md#examples)
+---
 
-* [Full API Reference](https://github.com/Louismac/dorothy/blob/main/Reference.md)
+## ✨ Why Dorothy?
 
-* [Generating Music](https://github.com/Louismac/dorothy/blob/main/README.md#music-generation)
+- 🎵 **Audio-First**: Built specifically for music visualization with FFT, beat detection, and amplitude analysis
+- 🎨 **Artist-Friendly**: Processing/p5.js-style API that feels natural for creative coders
+- ⚡ **Real-Time**: Smooth visuals with efficient OpenCV rendering
+- 🤖 **AI-Ready**: Seamless integration with RAVE, MAGNet, and other ML audio models
+- 🐍 **Pure Python**: Use NumPy, PyTorch, TensorFlow, or any Python library alongside Dorothy
 
+---
 
-##  Installation
+## 🚀 Quick Start
 
-```pip3 install dorothy-cci```
+### Installation
+```bash
+pip install dorothy-cci
+```
 
-##  Brief Guide
-
-Has ``setup()`` and ``draw()`` functions that can be overwritten using a custom class
-
+### Your First Audio-Reactive Visual
 ```python
 from dorothy import Dorothy
 
 dot = Dorothy()
 
 class MySketch:
-
     def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
+        dot.start_loop(self.setup, self.draw)
+    
     def setup(self):
-        print("setup")
-        dot.background((255,255,255))
+        # Load your favorite song
+        dot.music.start_file_stream("your_song.wav")
+        dot.music.play()
     
     def draw(self):
-        return
+        dot.background((0, 0, 0))  # Black background
+        
+        # Circle that pulses with the music
+        size = 50 + dot.music.amplitude * 200
+        dot.fill((255, 100, 150))  # Pink
+        dot.circle((dot.width//2, dot.height//2), size)
 
-MySketch()   
+MySketch()
 ```
 
-### Running
+**That's it!** You now have a pink circle that pulses to your music. Press `q` to quit.
 
-1. ``pip install dorothy-cci``
+---
 
-2. Try out one of the examples
+## 🎯 What Can You Build?
 
-### Closing the window
-
-Either hold `q` with the window in focus, or use `ctrl-z` in the terminal to close. You must close the current window before re-running to see changes.
-
-### Drawing
-
-For drawing, we have wrappers around the [openCV drawing functions](https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html) for `circle`, `line`, `rectangle` and `poly`.
-
-We use the well established `fill` and `stroke` approach for colouring and borders. You can also annotate the coordinates of your shape in place for debugging!
+<details>
+<summary><strong>🎵 Audio Visualizers</strong> - Spectrum analyzers, waveform displays, beat-reactive patterns</summary>
 
 ```python
 def draw(self):
-    dot.fill(dot.black)
-    dot.stroke(dot.red)
-    dot.set_stroke_weight(5)
-    dot.circle((200,200), 100, annotate = True)
+    dot.background((0, 0, 0))
+    
+    # Draw FFT bars
+    for i, freq in enumerate(dot.music.fft_vals()[:50]):
+        height = freq * 300
+        x = i * (dot.width / 50)
+        dot.fill((100, 200, 255))
+        dot.rectangle((x, dot.height - height), (x + 10, dot.height))
 ```
-
-Everything is drawn to ``dot.canvas``, which is just a 3 channel 4D numpy array that you can edit you like in the sketch or draw functions
-
-Other Processing like functions are 
-
-* `dot.background((colour), alpha)`
-
-* `dot.mouse_x`, `dot.mouse_y`, ``dot.mouse_down``
-
-* ``dot.millis``, ``dot.frames``
-
-* ``dot.width``, ``dot.height``
-
-### Live Coding / Realtime updates
-
-You can update ``Dorothy`` sketches on the fly and see results without re-running code using the [example](examples/livecode/). Here we split the code into 
-
-1. [livecode.py](examples/livecode/livecode.py). You run this script and it does the set up and it waits for updates from ->
-
-2. [sketch.py](examples/livecode/sketch.py) that has your `MySketch` class in. You can make changes to this and when you save the file, the changes will be reflected in the `Dorothy` window.
-
-### Reacting to Music
-
-Makes analysis information available for real time visualisation. Works out the threading to work with ``Dorothy.py``
-
-We have 
-
-* ``dot.music.fft_vals`` (updates with music playback)
-
-* ``dot.music.amplitude`` (updates with music playback)
-
-* ``dot.music.is_beat()`` (call in ``draw()``, returns true if there has been a beat since last frame
-
-
-## Examples
-
-### [Seed](examples/seed.py) 
-
-This is the bare bones starter for any projects 
-
-### [Alpha](examples/alpha.py) 
-
-Shows how to draw shapes with transparency. openCV doesnt do this natively so you call ``dot.get_layer()`` to get a new layer to draw to (instead of ``dot.canvas``). We then take care of the masking and blending to make it work when you do `dot.draw_layer(layer, alpha_val)`. 
-
-### [Alpha Background](examples/trails.py) 
-
-Use an alpha layer and a translucent rectangle (instead of a opaque background) and make trails
-
-### [Grid](examples/grid.py) 
-
-Audio reactive color pattern from a nested for loop in the ``def draw()`` function 
-
-### [Molnar](examples/molnar.py) 
-
-Audio reactive scaled pattern from a nested for loop in the ``def setup()`` function 
-
-### [Mouse Position](examples/mouse.py) 
-
-Use ``dot.mouse_x`` and ``dot.mouse_y`` to control where a circle is drawn, with size moving to amplitude.
-
-### [Webcam Capture](examples/webcam.py) 
-
-Use openCV to grab and draw the webcam and bounce centre panel to music.
-
-### [Video Playback](examples/video.py) 
-
-Use openCV to loop a video and bounce centre panel to music.
-
-### Linear Transforms for Shapes
-
-You can apply linear transforms and translations to for the built in shapes. This is more efficient that doing it the whole layer (see below). 
-
-This works similarly to processing in that 
-
-1. Apply transform with optional origin (``dot.translate()``,``dot.rotate()``,``dot.scale()``).
-
-2. Draw shapes (`dot.circle()`,`dot.rectangle()`,`dot.line()`,`dot.poly()`). All transformations set previously will be applied.
-
-3. Optionally `reset_transforms()` within the draw loop to isolate changes. 
-
-4. Transforms are reset at the end of the draw loop.
-
-[Rotate](examples/rotate.py)
-
-[Rotate In Grid](examples/rotate_grid.py)
-
-[Scale](examples/scale.py)
-
-### Linear Transforms for Layers
-
-You can apply linear transforms and translations to whole layers. This is useful if your drawing contains non-primitive shapes or images, or if for efficiency you draw something complex to a layer once then just redraw and transform that layer. 
-
-It works in the opposite way to Processing, in that you 
-
-1. Get a new canvas (``dot.get_layer()``)
-
-2. Draw to it 
-
-3. Apply transformations (``dot.transform_layer()``,``dot.rotate_layer()``,``dot.scale_layer()``). This function also takes a new origin about which to make the transformation if required (a translation).
-
-4. Put back onto main canvas (``dot.draw_layer()``)
-
-[Rotate Layer](examples/rotate_layer.py)
-
-[Scale Layer](examples/scale_layer.py)
- 
-
-### [Beat Tracking](examples/beats.py) 
-
-Shows how to use ``dot.music.is_beat()`` to display the beat tracking data in real time. Also shows how to use properties of the ``MySketch`` class to have variables that persist outside of the ``def draw()`` and ``def setup()`` functions.
-
-### [FFT](examples/fft.py) 
-
-Visualise live fft data
-
-### [Amplitude](examples/amplitude.py) 
-
-Visualise live amplitude data
-
-### [Images](examples/many_images.py)
-
-Use `get_images()` to load in a dataset of images and `dot.paste()` to copy onto canvas
-
-### [Alpha Images](examples/load_image_alpha.py)
-
-Load `.png` files with transparency
-
-### [Hand Tracking](examples/hands.py)
-
-With media pipe.
-
-### [Face Tracking](examples/face_pixels.py)
-
-Track and pixelate face using Haar Cascades.
-
-### [Contours](examples/contours.py)
-
-Get contours and mask out, moving image sections radially in response to fft values. More complex example!
-
-### [RAVE](examples/rave.py)
-
-Examples on generating with / interacting with RAVE models
-
-### [MAGNet](examples/magnet.py)
-
-Examples on generating with / interacting with MAGNet models
-
-### [YOLO Body Tracking](examples/yolo.py)
-
-Example drawing pose from web cam
-
-### [Interactive GAN](examples/gan.py)
-
-Use the mouse to move through the latent space of an MNIST GAN
-
-### [Interactive RAVE / YOLO](examples/yolo_rave.py)
-
-Control interpolation points of RAVE with pose tracked hand position 
-
-## Music Generation
-
-### Picking Music Source
-
-You can either play a soundfile 
-
+</details>
+
+<details>
+<summary><strong>🎨 Interactive Art</strong> - Mouse-controlled visuals, webcam integration, generative patterns</summary>
+
+```python
+def draw(self):
+    # Mouse-controlled brush with audio-reactive size
+    brush_size = 10 + dot.music.amplitude() * 50
+    dot.fill((255, dot.mouse_x % 255, dot.mouse_y % 255))
+    dot.circle((dot.mouse_x, dot.mouse_y), brush_size)
 ```
-file_path = "../audio/hiphop.wav"
-dot.music.start_file_stream(file_path)
-```
+</details>
 
-Or pick a an output device playing on your computer. On MacOSX I use [Blackhole](https://existential.audio/blackhole/download/) and [Multioutput device](https://support.apple.com/en-gb/guide/audio-midi-setup/ams7c093f372/mac) to pump audio to here, and to listen in speakers as well. Should work on windows but I havent tested anything yet!
+<details>
+<summary><strong>🤖 AI-Powered Visuals</strong> - RAVE model integration, neural audio synthesis, ML-driven art</summary>
 
-You could also use this approach to get in the stream of your laptops microphone, or an external microphone. `print(sd.query_devices())` will give the you list of available devices, and their device ids to pass to the set up function.
-
-```
-print(sd.query_devices())
-dot.music.start_device_stream(2)
-```
-
-Both use 
-
-```
+```python
+# Generate audio with AI and visualize it
+rave_id = dot.music.start_rave_stream("vintage.ts")
 dot.music.play()
-dot.music.stop()
-dot.music.pause()
-dot.music.resume()
+
+def draw(self):
+    # Visualize AI-generated audio spectrum
+    for i, val in enumerate(dot.music.fft_vals):
+        # Your visualization code here
+```
+</details>
+
+---
+
+## 📚 Learning Path
+
+### 🌟 **Level 1: Your First Steps**
+1. [🎵 Pulse Rectangle](examples/amplitude.py) - Circle that grows with music
+2. [🌈 Color Beats](examples/beats.py) - Colors that change on beats
+3. [📊 Simple Spectrum](examples/fft.py) - Your first FFT visualizer
+
+### 🔥 **Level 2: Getting Creative**
+4. [🎭 Mouse Magic](examples/mouse.py) - Interactive drawing with audio
+5. [📹 Webcam Reaktor](examples/webcam.py) - Video effects with music
+6. [✨ Particle System](examples/06_particle_system/) - Audio-driven particle effects
+
+### 🚀 **Level 3: Advanced Wizardry**
+7. [🤖 AI Audio Generation](examples/07_ai_audio/) - RAVE and MAGNet integration
+8. [🎪 Live Coding](examples/08_live_coding/) - Update visuals without restarting
+9. [🎨 Complex Compositions](examples/contours.py) - Multi-layer masterpieces
+
+---
+
+## 🎛️ Core Features
+
+### Audio Analysis
+```python
+dot.music.amplitude()      # Current volume level (0-1)
+dot.music.fft_vals()       # Frequency spectrum array
+dot.music.is_beat()      # True if beat detected this frame
 ```
 
-### Custom DSP Loop
-
-[Simple Synth](examples/synth.py)
-
-If you want to make your own music engines (e.g. for a synth, or from your own music generation model that we don't support yet), you just need to make a `dot.music.start_dsp_stream()` and pass it an audio callback where you return the samples as requested.
-
-This audio callback can also be [live coded](examples/livecode_audio/).
-
+### Drawing Tools
 ```python
-def get_frame(size):
-    #Get parameters from mouse
-    frequency = dot.mouse_x
-    amplitude = dot.mouse_y/dot.height
-    #Get increments
-    delta = 2 * np.pi * frequency / sr 
-    x = delta * np.arange(size)
-    #Make some sound
-    audio = amplitude * np.sin(self.phase + x)
-    #update phase
-    self.phase += delta * size 
-    return audio
+dot.fill((r, g, b))                  # Set fill color
+dot.stroke((r, g, b))                # Set outline color
+dot.circle((x, y), radius)           # Draw circles
+dot.rectangle((x1, y1), (x2, y2))    # Draw rectangles
+dot.line((x1, y1), (x2, y2))         # Draw lines
 
-dot.music.start_dsp_stream(get_frame, sr = sr)
 ```
 
-### Generating Audio with [RAVE](https://github.com/acids-ircam/RAVE)
-
-There is also a player to generate, visualise and interact with pretrained RAVE models. 
-
-[Examples here](examples/rave.py)
-
+### Interaction
 ```python
-rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
+dot.mouse_x, dot.mouse_y             # Mouse position
+dot.mouse_down                       # Mouse pressed?
+dot.width, dot.height                # Canvas dimensions
+dot.millis, dot.frames               # Time and frame count
 ```
 
-Will load in a `.ts` model. Remember to `play()` to start!
+---
 
-It will initially just start at a random place in latent space but there are two key ways to interact 
+## 🎵 Audio Sources
 
-1. Manually set the z vector using  where z is a torch tensor and has the shape (1, latent_dims, 1)
-
+### 🎧 Play Audio Files
 ```python
-z = torch.randn((1,16,1))
-dot.music.update_rave_latent(z)
-```
-
-3. Do timbre transfer from audio
-
-   * Pipe audio from a stream you have already started (e.g. blackhole to pull whatever is coming from your computer, or a microphone). If you want to listen to the output of the RAVE model, you should manually set its output device so that it doesnt interfere with the stream you have hi-jacked from your machine.
-
-```python
-# Give an output device (e.g. your speakers) so you can hear the output
-rave_id = dot.music.start_rave_stream("vintage.ts", output_device=4, latent_dim=latent_dim)
-# Set stream to be blackhole / microphone device
-device_id = dot.music.start_device_stream(2)
-dot.music.update_rave_from_stream(device_id)
+dot.music.start_file_stream("song.wav")
 dot.music.play()
 ```
-  
-   * Or a file player stream
 
+### 🎤 Live Audio Input
 ```python
-rave_id = dot.music.start_rave_stream("vintage.ts", latent_dim=latent_dim)
-device_id = dot.music.start_file_stream("../audio/gospel.wav")
-# Set as input to rave (this mutes the source stream, use .gain property to hear both)
-dot.music.update_rave_from_stream(device_id)
-dot.music.play()
-```
-  
-#### Z Bias 
-
-You can also add a constant bias to the z vector to allow for some controllable / random variation. 
-
-If you want to change this over time, you can use the `on_new_frame` callback. This is called whenever the chosen audio device (in this case the RAVE audio player) requests a new buffer and this function returns that buffer (so you can get the size, or do any custom analysis)
-
-##### New random bias every frame
-```python
-def on_new_frame(buffer=np.zeros(2048)):
-    n= len(buffer)
-    #Update a new random 
-    dot.music.audio_outputs[0].z_bias = torch.randn(1,latent_dim,1)*0.05
-
-dot.music.audio_outputs[rave_id].on_new_frame = on_new_frame
+# Use your microphone or system audio
+dot.music.start_device_stream(device_id)
 ```
 
-##### Oscillating bias at a given frequency 
+### 🤖 AI Audio Generation
 ```python
-def sine_bias(frame_number, frequency=1, amplitude=1.0, phase=0, sample_rate=44100):
-    t = frame_number / sample_rate
-    value = amplitude * math.sin(2 * math.pi * frequency * t + phase)
-    return value
+# Generate with RAVE models
+dot.music.start_rave_stream("model.ts")
 
-self.ptr = 0
-def on_new_frame(buffer=np.zeros(2048)):
-    n= len(buffer)
-    #update with oscilating bias
-    val = sine_bias(self.ptr, 5, 0.4)
-    dot.music.audio_outputs[0].z_bias = torch.tensor([val for n in range(latent_dim)]).reshape((1,latent_dim,1))
-    self.ptr += n
-
-dot.music.audio_outputs[rave_id] = on_new_frame
+# Generate with MAGNet models  
+dot.music.start_magnet_stream("model.pth", "source.wav")
 ```
 
-### Generating Audio with [MAGNet](https://github.com/Louismac/MAGNet)
+---
 
-MAGNet is a lightweight LSTM spectral model. You can train models [here](https://github.com/Louismac/MAGNet) with as little as 30 seconds of audio in minutes. 
+## 💡 Pro Tips
 
-This generates in realtime given a trained model the original source audio file / dataset (to use as an impulse)
+- **Start Simple**: Begin with basic shapes and gradually add complexity
+- **Use Live Coding**: Enable hot-reloading for faster iteration ([see example](examples/livecode/))
+- **Layer Effects**: Use `dot.get_layer()` for transparency and complex compositions
+- **Optimize for Performance**: Dorothy handles 60fps, but complex drawings may need optimization
+- **Debug Visually**: Use `annotate=True` on shapes to see coordinates
 
-```python
-dot.music.start_magnet_stream("models/magnet_wiley.pth", "../audio/Wiley.wav")
-```
+---
 
+## 🛠️ Installation & Setup
 
+### Requirements
+- Python 3.7+
+- Windows, macOS, or Linux
+- Audio device (speakers/headphones recommended)
 
+### For Audio Routing (macOS)
+We recommend [BlackHole](https://existential.audio/blackhole/) for routing system audio to Dorothy.
 
+### Troubleshooting
+<details>
+<summary>Common issues and solutions</summary>
 
+**No audio detected**: Check your audio device with `print(sd.query_devices())`
 
+**Window won't close**: Use `Ctrl+C` in terminal or `q` key with window focused
 
+**Installation issues**: Try `pip3 install dorothy-cci` or create a virtual environment
 
+**Performance issues**: Reduce canvas size or simplify drawing operations
+</details>
 
+---
 
+## 🎨 Gallery
+
+*Coming Soon: Amazing projects built with Dorothy by the community!*
+
+Want to showcase your Dorothy creation? [Open an issue](https://github.com/Louismac/dorothy/issues) with your project!
+
+---
+
+## 🤝 Community & Support
+
+- 📖 **Documentation**: [Full API Reference](Reference.md)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/Louismac/dorothy/discussions)
+- 🐛 **Issues**: [Report Bugs](https://github.com/Louismac/dorothy/issues)
+- 📧 **Contact**: [Your contact info]
+
+---
+
+## 🚀 Contributing
+
+Dorothy is open source and we love contributions! Whether it's:
+- 🐛 Bug fixes
+- ✨ New features  
+- 📖 Documentation improvements
+- 🎨 Example projects
+- 💡 Feature ideas
+
+Check out our [Contributing Guide](CONTRIBUTING.md) to get started.
+
+---
+
+## 📄 License
+
+Dorothy is MIT licensed. Create amazing things! 
+
+---
+
+## 🙏 Acknowledgments
+
+Built with love using:
+- [OpenCV](https://opencv.org/) for fast graphics
+- [sounddevice](https://python-sounddevice.readthedocs.io/) for audio I/O
+- [librosa](https://librosa.org/) for audio analysis
+- [NumPy](https://numpy.org/) for efficient computing
+
+Inspired by [Processing](https://processing.org/) and [p5.js](https://p5js.org/) - making creative coding accessible to everyone.
+
+---
+
+<div align="center">
+
+**Ready to make some visual music?** 🎵✨
+
+[Get Started](#-quick-start) • [Examples](examples/) • [Documentation](docs/) • [Community](https://github.com/Louismac/dorothy/discussions)
+
+*Made with ❤️ for creative coders, digital artists, and music lovers*
+
+</div>

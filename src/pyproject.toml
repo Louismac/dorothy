@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=45,<70.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
 [project]
 name = "dorothy-cci"
-version = "0.0.53"
+version = "0.0.55"
 authors = [
   { name="Louis McCallum", email="louisbusby@yahoo.com" },
 ]

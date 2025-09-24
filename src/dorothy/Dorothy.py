@@ -57,8 +57,8 @@ class Dorothy:
         self.canvas = np.ones((height,width,3), np.uint8)*255
         self.music = Audio()
         self.end_recording_at = np.inf
-        self.stroke_colour = None
-        self.fill_colour = None
+        self.stroke_colour = (0,0,0)
+        self.fill_colour = (255,0,0)
         self.stroke_weight = 1
         self.text_colour = (255,255,255)
         self.was_error = False
@@ -171,6 +171,7 @@ class Dorothy:
                 is_ellipse = True
 
         centre = (int(centre[0]),int(centre[1]))
+        radius = int(radius)
 
         if not self.fill_colour is None:
             if is_ellipse:
@@ -574,6 +575,7 @@ class Dorothy:
             self.video_recording_buffer = []
             self.start_record_time = self.millis
             if audio_output < len(self.music.audio_outputs):
+                print("starting record audio", audio_output)
                 output = self.music.audio_outputs[audio_output]
                 output.recording_buffer = []
                 output.recording = True
@@ -581,7 +583,7 @@ class Dorothy:
             if not end == None:
                 self.end_recording_at = self.millis + end
             
-    def stop_record(self, output_video_path = "output.mp4", fps = 25, audio_output = 0, audio_latency = 6):
+    def stop_record(self, output_video_path = None, fps = 25, audio_output = 0, audio_latency = 6):
         """
         Stop collecting frames and render capture
         Args:
@@ -590,7 +592,8 @@ class Dorothy:
             audio_output (int): which audio device to use
             audio_latency (int): number of frames to pad to resync audio with video
         """
-        output_video_path = str(time.thread_time()) + ".mp4"
+        if output_video_path is None:
+            output_video_path = "record_output_" + datetime.datetime.now().strftime("%Y_%m_%d_%h_%H_%M_%S") + ".mp4"
         if self.recording:
             print("stopping record, writing file")
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -699,7 +702,8 @@ class Dorothy:
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('p'): # print when 'p' is pressed
                     print("PRINT")
-                    cv2.imwrite("screencap" + str(time.thread_time()) + ".png", cv2.cvtColor(self.canvas, cv2.COLOR_BGR2RGB))
+                    file_name = "screen_" + datetime.datetime.now().strftime("%Y_%m_%d_%h_%H_%M_%S") + ".png"
+                    cv2.imwrite(file_name, cv2.cvtColor(self.canvas, cv2.COLOR_BGR2RGB))
                 elif key & 0xFF == ord('q'): # quit when 'q' is pressed
                     done = True
                     self.exit()

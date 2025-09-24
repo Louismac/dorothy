@@ -17,6 +17,7 @@ try:
 except ImportError:
     print("torch not available, machine learning examples won't work, otherwise ignore.")
 #Main class for music analysis and generation
+
 class Audio:
     
     audio_outputs = []  
@@ -253,9 +254,8 @@ class AudioDevice:
         self.fft_size = fft_size
         self.audio_latency = 5
         self.audio_buffer_write_ptr = 0
-        self.fft_vals = [np.zeros((fft_size//2)+1) for i in range(self.audio_latency)]
         self.buffer_size = buffer_size
-        self.amplitude = np.zeros(self.audio_latency)
+        self.set_audio_latency(5)
         self.analyse = analyse
         self.output_device = output_device
         print(os.name)
@@ -281,6 +281,11 @@ class AudioDevice:
         self.pause_event = threading.Event()
         self.play_thread = threading.Thread(target=self.capture_audio)
         self.gain = 1
+
+    def set_audio_latency(self, l):
+        self.audio_latency = l
+        self.fft_vals = [np.zeros((self.fft_size//2)+1) for i in range(self.audio_latency)]
+        self.amplitude = np.zeros(self.audio_latency)
 
     def do_analysis(self, audio_buffer):
         if self.analyse:
@@ -580,4 +585,71 @@ class SamplePlayer(AudioDevice):
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain
 
+class Sampler:
+    def __init__(self, dot):
+        self.samples = [np.zeros(1024)]
+        self.sample_pos = [-1 for _ in self.samples]
+        #Audio Callback function
+        def get_frame(size):
+            audio = np.zeros(size)
+            for i,p in enumerate(self.sample_pos):
+                if p >= 0:
+                    end = p+size
+                    if end >= len(self.samples[i]):
+                        remaining = len(self.samples[i])-p
+                        end = p + remaining
+                        audio[:remaining] += self.samples[i][p:end]
+                        self.sample_pos[i] = -1
+                    else: 
+                        audio += self.samples[i][p:end]
+                        self.sample_pos[i] += size
+            return audio
+        
+        dot.music.start_dsp_stream(get_frame, sr = 22050, buffer_size=64)
 
+    def trigger(self, i):
+        self.sample_pos[i] = 0
+
+    def load(self, paths):
+        self.samples = [librosa.load(p)[0] for p in paths]
+        self.sample_pos = [-1 for _ in self.samples]
+
+class Clock:
+    def __init__(self):
+        #timing
+        self.ticks_per_beat = 4
+        self.set_bpm(80)
+        self.play_thread = threading.Thread(target=self.tick)
+        self.playing = False
+        self.on_tick = lambda *args: None
+ 
+    def play(self):
+        self.tick_ctr = 0
+        self.next_tick = self.tick_length
+        self.start_time_millis = int(round(time.time() * 1000))
+        print(self.start_time_millis,time.time())
+        self.playing = True
+        self.play_thread.start()
+
+    def stop(self):
+        self.playing = False
+        self.play_thread.join()
+
+    def tick(self):
+        prev = int(round(time.time() * 1000)) - self.start_time_millis
+        while self.playing:
+            millis = int(round(time.time() * 1000)) - self.start_time_millis
+            if millis > self.next_tick:
+                self.tick_ctr += 1
+                self.next_tick = millis + self.tick_length
+                self.on_tick()
+            time.sleep(0.001)
+            prev = millis
+
+    def set_bpm(self, bpm = 120):
+        self.bpm = bpm
+        self.tick_length = 60000 / (self.bpm * self.ticks_per_beat)
+
+    def set_tpb(self, ticks_per_beat = 4):
+        self.ticks_per_beat = ticks_per_beat
+        self.tick_length = 60000 / (self.bpm * self.ticks_per_beat)
