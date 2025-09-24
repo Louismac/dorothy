@@ -12,7 +12,7 @@ Dorothy in action
 
 ## ✨ Why Dorothy?
 
-- 🎵 **Audio-First**: Built specifically for music visualization with FFT, beat detection, and amplitude analysis
+- 🎵 **Audio-First**: Built specifically for music visualisation with FFT, beat detection, and amplitude analysis
 - 🎨 **Artist-Friendly**: Processing/p5.js-style API that feels natural for creative coders
 - ⚡ **Real-Time**: Smooth visuals with efficient OpenCV rendering
 - 🤖 **AI-Ready**: Seamless integration with RAVE, MAGNet, and other ML audio models
@@ -116,11 +116,11 @@ def draw(self):
 ### 🔥 **Level 2: Getting Creative**
 4. [🎭 Mouse Magic](examples/mouse.py) - Interactive drawing with audio
 5. [📹 Webcam Reaktor](examples/webcam.py) - Video effects with music
-6. [✨ Particle System](examples/06_particle_system/) - Audio-driven particle effects
+6. [✨ Body Tracking](examples/hands.py) - Hand tracking from tensorflow
 
 ### 🚀 **Level 3: Advanced Wizardry**
-7. [🤖 AI Audio Generation](examples/07_ai_audio/) - RAVE and MAGNet integration
-8. [🎪 Live Coding](examples/08_live_coding/) - Update visuals without restarting
+7. [🤖 AI Audio Generation](examples/rave.py) - RAVE and MAGNet integration
+8. [🎪 Live Coding](examples/livecode/) - Update visuals without restarting
 9. [🎨 Complex Compositions](examples/contours.py) - Multi-layer masterpieces
 
 ---
