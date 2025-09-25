@@ -1,4 +1,3 @@
-from cv2 import circle, rectangle
 from dorothy import Dorothy
 
 dot = Dorothy()
@@ -20,12 +19,14 @@ class MySketch:
         #dot.music.start_device_stream(3)
                 
     def draw(self):        
+        dot.fill(dot.pink)
         for bin_num, bin_val in enumerate(dot.music.fft()[:100:8]):
-            circle(dot.canvas, (bin_num*60, int(bin_val*50)), 50, (255,0,255),-1)
+            dot.circle((bin_num*60, int(bin_val*50)), 50)
 
         #Cover with a new alpha layer (instead of fully clearing with background)   
+        dot.fill(dot.black)
         cover=dot.get_layer()
-        rectangle(cover, (0,0),(dot.width, dot.height),dot.black, -1)
+        dot.rectangle((0,0),(dot.width, dot.height),layer=cover)
         dot.draw_layer(cover,0.1)
         
 

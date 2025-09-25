@@ -9,7 +9,7 @@ class MySketch:
         dot.start_loop(self.setup) 
 
     def setup(self):
-        rgb_image = np.array(Image.open('../../images/space.jpg'))
+        rgb_image = np.array(Image.open('../images/space.jpg'))
         h = rgb_image.shape[0]
         w = rgb_image.shape[1]
         

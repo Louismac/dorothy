@@ -1,5 +1,4 @@
 from dorothy import Dorothy 
-from cv2 import circle, rectangle
 import numpy as np
 
 dot = Dorothy() 
@@ -22,14 +21,16 @@ class MySketch:
 
     def draw(self):
         ptr = 0
+        dot.fill(dot.white)
         for pt in self.snow:
             speed = self.speed[ptr]
-            circle(dot.canvas, pt, speed, dot.white, -1)
+            dot.circle(pt, speed)
             self.snow[ptr][1] = (self.snow[ptr][1] + speed) % dot.height
             ptr = ptr + 1 
         #semi transparent layer to overwrite 
         cover = dot.get_layer()
-        rectangle(cover, (0,0),(dot.width, dot.height),dot.darkblue, -1)
+        dot.fill(dot.darkblue)
+        dot.rectangle((0,0),(dot.width, dot.height),layer=cover)
         #The higher the alpha, the more opaque the cover, so small alpha makes longer trails 
         dot.draw_layer(cover, 0.2)     
 MySketch() 

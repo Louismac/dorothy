@@ -26,7 +26,7 @@ class MySketch:
         #Audio Callback function
         def get_frame(size):
             #Get parameters from mouse
-            frequency = 440
+            frequency = 300
             amplitude = dot.mouse_y/dot.height
             #Get increments
             delta = 2 * np.pi * frequency / self.sr 

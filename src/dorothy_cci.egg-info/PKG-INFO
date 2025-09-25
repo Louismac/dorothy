@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: dorothy-cci
-Version: 0.0.56
+Version: 0.0.57
 Summary: A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing
 Author-email: Louis McCallum <louisbusby@yahoo.com>
 Project-URL: Homepage, https://github.com/Louismac/dorothy/
@@ -21,14 +21,14 @@ Requires-Dist: idna==3.6
 Requires-Dist: imageio==2.34.2
 Requires-Dist: joblib==1.3.2
 Requires-Dist: lazy_loader==0.4
-Requires-Dist: librosa==0.10.2
+Requires-Dist: librosa==0.11.0
 Requires-Dist: llvmlite>0.43.0
 Requires-Dist: moviepy==2.1.1
 Requires-Dist: msgpack>=1.0.7
 Requires-Dist: numba>0.60.0
 Requires-Dist: numpy>=1.25.0
-Requires-Dist: opencv-python==4.8.1.78
-Requires-Dist: packaging==23.2
+Requires-Dist: opencv-python>=4.8.1.78
+Requires-Dist: packaging>=23.2
 Requires-Dist: pandas==2.3.2
 Requires-Dist: platformdirs==4.1.0
 Requires-Dist: pillow==10.4.0
@@ -42,7 +42,7 @@ Requires-Dist: sounddevice==0.4.6
 Requires-Dist: soundfile==0.12.1
 Requires-Dist: soxr==1.0.0
 Requires-Dist: threadpoolctl==3.2.0
-Requires-Dist: typing_extensions==4.8.0
+Requires-Dist: typing_extensions==4.15.0
 Requires-Dist: urllib3==2.1.0
 
 # Dorothy
