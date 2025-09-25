@@ -192,7 +192,7 @@ dot.music.start_magnet_stream("model.pth", "source.wav")
 ## 🛠️ Installation & Setup
 
 ### Requirements
-- Python 3.7+
+- Python 3.10, 3.11, 3.12, 3.13
 - Windows, macOS, or Linux
 - Audio device (speakers/headphones recommended)
 

@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: dorothy-cci
-Version: 0.0.55
+Version: 0.0.56
 Summary: A Creative Computing Python Library for Interactive Audio Generation and Audio Reactive Drawing
 Author-email: Louis McCallum <louisbusby@yahoo.com>
 Project-URL: Homepage, https://github.com/Louismac/dorothy/
@@ -8,12 +8,12 @@ Project-URL: Issues, https://github.com/Louismac/dorothy/issues
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.8
+Requires-Python: <4,>=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: audioread==3.0.1
 Requires-Dist: certifi==2023.11.17
-Requires-Dist: cffi==1.16.0
+Requires-Dist: cffi>1.16.0
 Requires-Dist: charset-normalizer==3.3.2
 Requires-Dist: colour==0.1.5
 Requires-Dist: decorator==5.1.1
@@ -22,25 +22,25 @@ Requires-Dist: imageio==2.34.2
 Requires-Dist: joblib==1.3.2
 Requires-Dist: lazy_loader==0.4
 Requires-Dist: librosa==0.10.2
-Requires-Dist: llvmlite==0.43.0
+Requires-Dist: llvmlite>0.43.0
 Requires-Dist: moviepy==2.1.1
-Requires-Dist: msgpack==1.0.7
-Requires-Dist: numba==0.60.0
-Requires-Dist: numpy==1.26.2
+Requires-Dist: msgpack>=1.0.7
+Requires-Dist: numba>0.60.0
+Requires-Dist: numpy>=1.25.0
 Requires-Dist: opencv-python==4.8.1.78
 Requires-Dist: packaging==23.2
-Requires-Dist: pandas==2.2.2
+Requires-Dist: pandas==2.3.2
 Requires-Dist: platformdirs==4.1.0
 Requires-Dist: pillow==10.4.0
 Requires-Dist: pooch==1.8.0
 Requires-Dist: psutil==5.9.6
 Requires-Dist: pycparser==2.21
 Requires-Dist: requests==2.31.0
-Requires-Dist: scikit-learn==1.3.2
-Requires-Dist: scipy==1.11.4
+Requires-Dist: scikit-learn==1.7.2
+Requires-Dist: scipy>1.15.0
 Requires-Dist: sounddevice==0.4.6
 Requires-Dist: soundfile==0.12.1
-Requires-Dist: soxr==0.3.7
+Requires-Dist: soxr==1.0.0
 Requires-Dist: threadpoolctl==3.2.0
 Requires-Dist: typing_extensions==4.8.0
 Requires-Dist: urllib3==2.1.0
