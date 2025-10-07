@@ -16,7 +16,7 @@ class MySketch:
         #make a sine wave
         freq = 10
         num_pts = 50
-        self.x = np.linspace(1,1000,num_pts)
+        self.x = np.linspace(1,dot.width,num_pts)
         self.y = (np.sin(np.linspace(0,np.pi*freq,num_pts))*200)
         
     def draw(self):
@@ -34,7 +34,8 @@ class MySketch:
 
         # fit line    
         z = np.polyfit(self.x, y, 10)
-        draw_x = np.linspace(0, 1000, 100)
+        resolution = 150
+        draw_x = np.linspace(0, dot.width, resolution)
         draw_y = np.polyval(z, draw_x) 
         draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
         
@@ -42,7 +43,7 @@ class MySketch:
         dot.stroke(dot.green)
         dot.set_stroke_weight(2)
         dot.no_fill()
-        dot.poly([draw_points])
+        dot.poly([draw_points], is_closed=False)
 
 MySketch()   
     
