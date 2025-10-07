@@ -16,7 +16,7 @@ class MySketch:
           
         # #Pick or just stream from your computer
         # #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        dot.music.start_device_stream(2)
+        #dot.music.start_device_stream(5)
         dot.start_record(end=10000)
                 
     def draw(self):

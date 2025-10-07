@@ -40,17 +40,21 @@ class MySketch:
                 top_left = (x,y)
                 bottom_right = np.array([x+size, y+size])
                 
-                theta = dot.music.amplitude() * 15 * 2 * np.pi
+                theta = dot.music.amplitude() * 3 * 2 * np.pi
                 origin = np.array([x+size/2, y+size/2])
                 
                 #rotate
-                dot.rotate(theta, origin)
                 
+                dot.set_stroke_weight(1)
                 if i % 2 == 0:
                     dot.line(top_left, origin)
+                    dot.reset_transforms()
                 else:
-                    dot.rectangle(top_left, bottom_right)
-                dot.reset_transforms()
+                    dot.circle(top_left,10)
+                    dot.reset_transforms()
+                    dot.set_stroke_weight(10)
+                    dot.line((x+size/2,y+size), origin)
+                
                 
 
 MySketch()          

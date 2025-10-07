@@ -33,7 +33,6 @@ class MySketch:
         dot.line(top_left, bottom_right, new_layer)
 
         #scale
-        dot.scale_layer(new_layer, factor, factor, centre)
         new_layer = dot.scale_layer(new_layer, factor, factor, centre)
         dot.draw_layer(new_layer)
         
