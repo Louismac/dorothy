@@ -250,7 +250,7 @@ class Dorothy:
                 color = self.text_colour,
                 thickness = 1 )
             
-    def poly(self, pts = [(0,100),(0,200),(100,150)], layer = None, annotate = False):
+    def poly(self, pts = [(0,100),(0,200),(100,150)], layer = None, annotate = False, is_closed=True):
         """
         Draw poly shape given array of points
         
@@ -271,7 +271,7 @@ class Dorothy:
             cv2.fillPoly(layer, [pts], self.fill_colour)
 
         if not self.stroke_colour is None:
-            cv2.polylines(layer, [pts], True, self.stroke_colour, self.stroke_weight)
+            cv2.polylines(layer, [pts], is_closed, self.stroke_colour, self.stroke_weight)
 
         if annotate:
             for pt in pts:
