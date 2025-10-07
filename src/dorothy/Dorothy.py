@@ -618,11 +618,14 @@ class Dorothy:
                 
                 def save_audio_to_wav(audio_frames, sample_rate, file_name):
                     audio_frames = np.array(audio_frames)
+                    print("Before reshape:", np.array(audio_frames).shape)
+                    audio_frames_flat = audio_frames.reshape(-1, audio_frames.shape[-1])
+                    print("After reshape:", audio_frames_flat.shape)
                     with wave.open(file_name, 'wb') as wav_file:
-                        wav_file.setnchannels(1)
+                        wav_file.setnchannels(audio_frames_flat.shape[1]) # should be stereo
                         wav_file.setsampwidth(2)  # 16-bit audio
                         wav_file.setframerate(sample_rate)
-                        wav_file.writeframes((audio_frames * 32767).astype(np.int16).tobytes())
+                        wav_file.writeframes((audio_frames_flat * 32767).astype(np.int16).tobytes())
 
                 def combine_audio_video(wav_file, mp4_file, output_file):
                     command = [
@@ -646,9 +649,9 @@ class Dorothy:
                     combined_file = 'combined_video.mp4'
                     sample_rate = output.sr  
                     audio_file = 'output_audio.wav'
-                    audio_data = audio_data[:,:,0]
+                    
                     #padd some zeros to get back in sync with visuals (audio is early apparently)
-                    audio_data = np.pad(audio_data, ((audio_latency,0), (0, 0)), mode='constant', constant_values=0)
+                    audio_data = np.pad(audio_data, ((audio_latency,0),(0,0), (0, 0)), mode='constant', constant_values=0)
                     save_audio_to_wav(audio_data, sample_rate, audio_file)
                     combine_audio_video(audio_file, output_video_path, combined_file)
                     output.audio_recording_buffer = []

@@ -544,12 +544,34 @@ class AudioCapture(AudioDevice):
             self.internal_callback()
             self.do_analysis(self.audio_buffer)
             self.on_new_frame(self.audio_buffer)
+            # print(self.audio_buffer.shape, indata.shape)
+            if self.recording:
+                audio_data = indata.copy()
+                #trim or duplicate to get 2 channels
+                channels = 2
+                if audio_data.ndim == 1:
+                    audio_data = audio_data[:,np.newaxis]
+                #duplicate to fill channels (mostly generating mono)
+                dif = channels - audio_data.shape[1]
+                # print(audio_data.ndim,audio_data.shape,dif)
+                if dif > 0:
+                    #Tile out one channel
+                    audio_data = np.tile(audio_data, (1,channels))
+                elif dif < 0:
+                    audio_data = audio_data[:,:channels]
+                # print(audio_data.ndim,audio_data.shape)
+                self.recording_buffer.append(audio_data)
+                
 
     def capture_audio(self):
+
+        self.channels = min(2,sd.query_devices(self.input_device)['max_input_channels'])
+        print("channels:", self.channels)
+        
         print("capture_audio (AudioCapture)", self.running, self.input_device, self.channels)
         
         with sd.InputStream(callback=self.audio_callback, 
-                            channels=1, 
+                            channels=self.channels, 
                             blocksize=self.buffer_size, 
                             samplerate=self.sr,
                             device = self.input_device):
