@@ -15,10 +15,10 @@ class MySketch:
         dot.music.start_file_stream(file_path)
         #make a sine wave
         freq = 10
-        self.x = np.linspace(1,1000,100)
-        self.y = (np.sin(np.linspace(0,np.pi*freq,100))*200)
+        num_pts = 50
+        self.x = np.linspace(1,1000,num_pts)
+        self.y = (np.sin(np.linspace(0,np.pi*freq,num_pts))*200)
         
-
     def draw(self):
 
         dot.background(dot.white)
@@ -30,7 +30,7 @@ class MySketch:
         dot.fill(dot.blue)
         dot.no_stroke()
         for pt in zip(self.x,y):
-            dot.circle(pt,5)
+            dot.circle(pt, 2)
 
         # fit line    
         z = np.polyfit(self.x, y, 10)
