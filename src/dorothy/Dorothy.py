@@ -156,23 +156,27 @@ class Dorothy:
         is_ellipse = False
         if not self.current_transform is None:
             centre = self.shift_coords(centre)
-            eigenvalues, _ = np.linalg.eig(self.current_transform[:2,:2])
-            if np.isclose(eigenvalues[0], eigenvalues[1]):
-                radius *= eigenvalues[0]
+
+            # Extract the transformation matrix
+            M = self.current_transform[:2, :2]
+
+            # Compute singular values (these give the scaling factors, ignoring rotation)
+            singular_values = np.linalg.svd(M, compute_uv=False)
+
+            # Check if the transformation is uniform scaling (circle stays circle)
+            if np.isclose(singular_values[0], singular_values[1]):
+                radius *= singular_values[0]
                 radius = int(radius)
             else:
-                radius_vector_x = np.array([radius, centre[0]])
-                radius_vector_y = np.array([centre[1], radius])
-                radius_vector_x = self.shift_coords(radius_vector_x)
-                radius_vector_y = self.shift_coords(radius_vector_y)
-                radius_x = np.linalg.norm(radius_vector_x - centre)
-                radius_y = np.linalg.norm(radius_vector_y - centre)
+                # Non-uniform scaling: circle becomes ellipse
+                # The singular values give us the axis lengths directly
+                radius_x = radius * singular_values[0]
+                radius_y = radius * singular_values[1]
                 radius = [int(radius_x), int(radius_y)]
                 is_ellipse = True
 
         centre = (int(centre[0]),int(centre[1]))
-        radius = int(radius)
-
+        
         if not self.fill_colour is None:
             if is_ellipse:
                 cv2.ellipse(layer, centre, radius, 0,0,360,color=self.fill_colour, thickness=-1)
