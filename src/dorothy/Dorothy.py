@@ -565,7 +565,7 @@ class Dorothy:
         return image_set_array
 
     def exit(self):
-        self.music.stop()
+        self.music.clean_up()
         cv2.destroyAllWindows() 
         cv2.waitKey(1)
         sys.exit(0)

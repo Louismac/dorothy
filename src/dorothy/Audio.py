@@ -21,6 +21,7 @@ except ImportError:
 class Audio:
     
     audio_outputs = []  
+    clocks = []
 
     def __init__(self):
         print("Loading Audio Engine")
@@ -177,6 +178,12 @@ class Audio:
         self.play(index)
         return index
     
+    def get_clock(self, bpm=120):
+        c = Clock()
+        c.set_bpm(bpm)
+        self.clocks.append(c)
+        return self.clocks[len(self.clocks)-1]
+    
     #We actually return a previous value to account for audio latency
     def fft(self, output = 0):
         """
@@ -214,6 +221,12 @@ class Audio:
         if output < len(self.audio_outputs):
             o = self.audio_outputs[output]
             o.stop()
+
+    def clean_up(self):
+        for o in self.audio_outputs:
+            o.stop()  
+        for c in self.clocks:
+            c.stop()  
     
     def pause(self, output=0):
         if output < len(self.audio_outputs):
@@ -644,6 +657,10 @@ class Clock:
         self.play_thread = threading.Thread(target=self.tick)
         self.playing = False
         self.on_tick = lambda *args: None
+    
+    def __del__(self):
+        print("Clock is being destroyed, cleaning up...")
+        self.stop()
  
     def play(self):
         self.tick_ctr = 0
