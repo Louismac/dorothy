@@ -192,7 +192,7 @@ class Audio:
             return o.fft_vals[(o.audio_buffer_write_ptr+1)%o.audio_latency]
     
     #We actually return a previous value to account for audio latency
-    def amplitude(self, output = 0):
+    def amplitude(self, output = 0, smooth =1):
         """
         Return current amplitude (for visualising)
         
@@ -552,12 +552,12 @@ class AudioCapture(AudioDevice):
                 if audio_data.ndim == 1:
                     audio_data = audio_data[:,np.newaxis]
                 #duplicate to fill channels (mostly generating mono)
-                dif = channels - audio_data.shape[1]
+                diff = channels - audio_data.shape[1]
                 # print(audio_data.ndim,audio_data.shape,dif)
-                if dif > 0:
+                if diff > 0:
                     #Tile out one channel
                     audio_data = np.tile(audio_data, (1,channels))
-                elif dif < 0:
+                elif diff < 0:
                     audio_data = audio_data[:,:channels]
                 # print(audio_data.ndim,audio_data.shape)
                 self.recording_buffer.append(audio_data)

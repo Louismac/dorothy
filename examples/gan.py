@@ -53,6 +53,6 @@ class MySketch:
         # Set background to black
         dot.background((0,0,0))
         # Copy image into canvas
-        dot.paste(dot.canvas, np.asarray(image_upscaled))
+        dot.paste(np.asarray(image_upscaled),(0,0))
 
 MySketch()  

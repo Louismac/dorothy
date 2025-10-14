@@ -6,7 +6,7 @@ dot = Dorothy()
 class MySketch:
 
     def __init__(self):
-        dot.start_loop(self.setup)
+        dot.start_loop(self.setup, self.draw)
 
     def setup(self):
         self.phase = 0.0 
@@ -27,6 +27,9 @@ class MySketch:
             return audio
         
         dot.music.start_dsp_stream(get_frame, sr = sr)
+    
+    def draw(self):
+        pass
 
 MySketch()          
 

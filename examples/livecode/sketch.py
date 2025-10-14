@@ -1,21 +1,42 @@
-#RUN livecode.py FIRST!
-#Changes you make and then save this file will be reflected in the window
+from dorothy import Dorothy
+import sounddevice as sd
+
+dot = Dorothy()
 
 class MySketch:
 
-    def setup(self, dot):
-        self.counter = 1
+    def __init__(self):
+        dot.start_loop(self.setup, self.draw)  
+            
+    def setup(self):
 
-    def run_once(self, dot):
-        dot.background(dot.black)
-        dot.no_fill()
-        dot.stroke(dot.white)
+        #Play file from your computer
+        file_path = "../audio/gospel.wav"
+        dot.music.start_device_stream(1, fft_size=512, buffer_size=512)
+        
+        # #Pick or just strseam from your computer
+        # #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
+        # print(sd.query_devices())
+        # dot.music.start_device_stream(2)
+                
+    def draw(self):
+        
+        dot.background(dot.green)
 
-    def draw(self, dot):
-        dot.background(dot.black)
-        dot.rectangle((100,100),(dot.mouse_x,dot.mouse_y),annotate=True)
+        for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
+           
+            pt1 = (bin_num*5, dot.height)
+            pt2 = (0, dot.height-int(bin_val*1000))
+            color = (0,(1-bin_val)*255,0)
+            thickness = 1+int(10*bin_val)
+            dot.fill(color)
+            dot.set_stroke_weight(thickness)
+            dot.line(pt1, pt2)
 
-        # dot.fill(dot.red)
-        # dot.stroke(dot.blue)
-        # dot.set_stroke_weight(self.counter%100)
-        # dot.circle((dot.frame%dot.width,dot.height//2), 100)
+MySketch()
+
+
+
+
+
+

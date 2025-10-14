@@ -34,8 +34,10 @@ class MySketch:
             bottom_right = (dot.width//2+width,dot.height//2+width)
             # print(val, i, scale, width, top_left, bottom_right)
             new_layer = dot.get_layer()
+            dot.begin_layer(new_layer)
             dot.fill((255*val,164*val,226*val))
-            dot.rectangle(top_left, bottom_right,  layer = new_layer)
+            dot.rectangle(top_left, bottom_right)
+            dot.end_layer()
             dot.draw_layer(new_layer, alpha)
 
 MySketch()          

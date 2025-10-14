@@ -70,7 +70,7 @@ class MySketch:
         # - "VCTK.ts", rave_latent_dim = 8
         self.rave_latent_dim = 8
         # dot.music.start_rave_stream(os.path.join(rave_model_dir, "vintage.ts"), latent_dim=self.rave_latent_dim)
-        self.rave_id = dot.music.start_rave_stream("/Users/lmccallum/Documents/checkpoints/RAVE/rave_jungle.ts", latent_dim=self.rave_latent_dim)
+        self.rave_id = dot.music.start_rave_stream("models/rave_gospel.ts", latent_dim=self.rave_latent_dim)
 
         
         # Class for controlled sampling RAVE latent space

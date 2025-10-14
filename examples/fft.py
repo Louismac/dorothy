@@ -12,12 +12,12 @@ class MySketch:
 
         #Play file from your computer
         file_path = "../audio/gospel.wav"
-        #dot.music.start_file_stream(file_path, fft_size=512, buffer_size=512)
+        dot.music.start_file_stream(file_path, fft_size=512, buffer_size=512)
           
         # #Pick or just stream from your computer
         # #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        dot.music.start_device_stream(2)
-        dot.start_record(end=10000)
+        # dot.music.start_device_stream(2)
+
                 
     def draw(self):
         

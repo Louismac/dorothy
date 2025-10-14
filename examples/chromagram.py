@@ -28,7 +28,8 @@ class MySketch:
         for i,c in enumerate(self.chroma):
             x = (dot.width//12)*i
             y = int(dot.height - (dot.height*c))
-            line(dot.canvas, (x, dot.height), (x, y), dot.red, 10)
+            dot.fill(dot.red)
+            dot.line((x, dot.height), (x, y))
     
                
 MySketch() 
