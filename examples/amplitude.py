@@ -9,15 +9,16 @@ class MySketch:
         
     def setup(self):
         #Play file from your computer
-        file_path = "../audio/gospel.wav"
-        dot.music.start_file_stream(file_path,buffer_size=2048)
-        
+        # file_path = "../audio/gospel.wav"
+        # dot.music.start_file_stream(file_path,buffer_size=2048)
+
         dot.fill(dot.red)
-        dot.start_record(end=5000)
+        dot.background(dot.yellow)
         
     def draw(self):
-        dot.background(dot.white)
-        dot.rectangle((0,0),(dot.width,int(dot.music.amplitude()*dot.height*10)))
+        pass
+        # dot.background(dot.white)
+        # dot.rectangle((0,0),(dot.width,int(dot.music.amplitude()*dot.height*10)))
 
 MySketch()   
     
