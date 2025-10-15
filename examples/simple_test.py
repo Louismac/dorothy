@@ -20,10 +20,10 @@ class MySketch:
     def setup(self):
         self.l = dot.get_layer()
         dot.begin_layer(self.l)
+        dot.background(dot.beige)
         dot.fill((255, 255, 0))
         dot.circle((200, 300), 50)
         dot.end_layer()
-        dot.background(dot.beige)
 
     def draw(self):
         dot.draw_layer(self.l)
