@@ -14,7 +14,7 @@ Dorothy in action
 
 - 🎵 **Audio-First**: Built specifically for music visualisation with FFT, beat detection, and amplitude analysis
 - 🎨 **Artist-Friendly**: Processing/p5.js-style API that feels natural for creative coders
-- ⚡ **Real-Time**: Smooth visuals with efficient OpenCV rendering
+- ⚡ **Real-Time**: Smooth visuals with efficient OpenGL rendering
 - 🤖 **AI-Ready**: Seamless integration with RAVE, MAGNet, and other ML audio models
 - 🐍 **Pure Python**: Use NumPy, PyTorch, TensorFlow, or any Python library alongside Dorothy
 
@@ -147,7 +147,6 @@ dot.line((x1, y1), (x2, y2))         # Draw lines
 ### Interaction
 ```python
 dot.mouse_x, dot.mouse_y             # Mouse position
-dot.mouse_down                       # Mouse pressed?
 dot.width, dot.height                # Canvas dimensions
 dot.millis, dot.frames               # Time and frame count
 ```
