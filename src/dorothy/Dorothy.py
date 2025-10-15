@@ -321,7 +321,44 @@ class Dorothy:
             observer.join()
             print(f"🔍 DEBUG: Observer stopped")
     
-   
+    def draw_playhead(self, audio_output=0):
+        if audio_output < len(self.music.audio_outputs):
+            output = self.music.audio_outputs[audio_output]
+            if isinstance(output, SamplePlayer):
+                latency = output.buffer_size * output.audio_latency
+                mixed = output.y.mean(axis=0)
+                playhead = int(((output.current_sample-latency) / len(mixed)) *self.width)
+                self.fill(self.white)
+                self.set_stroke_weight(5)
+                self.line((playhead , 0), (playhead, self.height))
+
+    def draw_waveform(self, audio_output = 0, col=None, with_playhead = False):
+        """
+        Draw current waveform loaded into given audio output to layer
+
+        Args:
+            audio_output (int): The index of the audio device to show
+            col (tuple): RGB Colour to draw the waveform. Defaults to black.
+            with_playhead (bool): Show current position in audio. Defaults to false.
+        Returns:
+            layer (np.array): The layer that has been updated 
+        """
+        if audio_output < len(self.music.audio_outputs):
+            output = self.music.audio_outputs[audio_output]
+            if isinstance(output, SamplePlayer):
+                mixed = output.y.mean(axis=0)
+                samples_per_pixel = len(mixed) / self.width
+                self.stroke(col)
+                self.set_stroke_weight(2)
+                for i in range(self.width):
+                    val = mixed[int(samples_per_pixel*i)]
+                    h = int(val * self.height)
+                    y = self.height//2 - h//2
+                    if not col == None:
+                        self.line((i, y), (i, y + h))
+                if with_playhead:
+                    self.draw_playhead(audio_output)
+                    
 
     def get_images(self, root_dir = "data/animal_thumbnails/land_mammals/cat", thumbnail_size = (50,50)):
         #Set the thumbnail size (you can change this but you won't want to make it too big!)
@@ -531,6 +568,16 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.line(pos1, pos2, annotate)
     
+    def polyline(self, points, closed: bool = False):
+        """Draw a circle"""
+        self._ensure_renderer()
+        self.renderer.polyline(points, closed)
+
+    def polygon(self, points):
+        """Draw a circle"""
+        self._ensure_renderer()
+        self.renderer.polygon(points)
+
    # 3D shapes
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
         """Draw a 3D sphere

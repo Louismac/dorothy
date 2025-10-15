@@ -14,7 +14,6 @@ class MySketch:
         
     def draw(self):
         dot.background((255,255,255))
-        waveform = dot.draw_waveform(dot.get_layer(), col=dot.black, with_playhead=True)
-        dot.draw_layer(waveform)
+        dot.draw_waveform(col=dot.black, with_playhead=True)
 
 MySketch()          

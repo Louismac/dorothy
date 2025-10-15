@@ -6,9 +6,6 @@ dot = Dorothy()
 
 class MySketch:
     
-    show_beat = False
-    beat_ptr = 0
-
     def __init__(self):
         dot.start_loop(self.setup, self.draw)  
 
@@ -17,14 +14,12 @@ class MySketch:
         #Play file from your computer
         file_path = "../audio/disco.wav"
         dot.music.start_file_stream(file_path, fft_size=512)
-        dot.background(dot.beige)
-        self.pattern_layer = dot.get_layer()
         self.base_pattern()
         
     def draw(self):
         
         if dot.frames %100==0:
-            dot.background(dot.beige)
+            self.base_pattern()
 
         factor = dot.music.amplitude() * 15 
         centre = np.array([dot.width//2, dot.height//2])
@@ -37,7 +32,8 @@ class MySketch:
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
-        
+        dot.background(dot.beige)
+        self.pattern_layer = dot.get_layer()
         dot.begin_layer(self.pattern_layer)
         dot.stroke((255, 37, 21))
         dot.set_stroke_weight(4)

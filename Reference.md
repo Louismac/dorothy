@@ -23,7 +23,7 @@ Complete reference for Dorothy - A Creative Computing Python Library with Modern
 ### Installation
 
 ```bash
-pip install moderngl moderngl-window PyGLM numpy
+pip install dorothy-cci
 ```
 
 ### Basic Template
@@ -163,6 +163,52 @@ Draw a line.
 dot.stroke((255, 255, 0))
 dot.set_stroke_weight(5)
 dot.line((0, 0), (800, 600))
+```
+
+#### polyline([pts],closed=False)
+
+Draw a multipoint line.
+
+**Parameters:**
+- `points` (List[int, int]): points of the line
+- `closed` (bool): close the line into a shape (beginning to end)
+
+**Example:**
+```python
+ # Star shape (concave)
+points = []
+for i in range(10):
+    angle = i * np.pi / 5 - np.pi / 2
+    r = 100 if i % 2 == 0 else 50
+    x = 400 + r * np.cos(angle)
+    y = 300 + r * np.sin(angle)
+    points.append((x, y))
+
+dot.stroke(dot.red)
+dot.set_stroke_weight(10)
+dot.polyline(points, closed = True)  
+```
+
+#### polygon([pts])
+
+Draw a filled polygon.
+
+**Parameters:**
+- `points` (List[int, int]): points of the polygon
+
+**Example:**
+```python
+ # Star shape (concave)
+points = []
+for i in range(10):
+    angle = i * np.pi / 5 - np.pi / 2
+    r = 100 if i % 2 == 0 else 50
+    x = 400 + r * np.cos(angle)
+    y = 300 + r * np.sin(angle)
+    points.append((x, y))
+
+dot.fill(dot.red)
+dot.polygon(points)  
 ```
 
 ### 3D Shapes
@@ -448,59 +494,78 @@ dot.release_layer(layer)
 
 ### Layer Examples
 
-#### Trail Effect
+#### Scale Layer with Transparency
 
 ```python
-class TrailSketch:
-    def setup(self):
-        self.trail_layer = dot.get_layer()
+class MySketch:
     
+    def __init__(self):
+        dot.start_loop(self.setup, self.draw)  
+
+    def setup(self):
+        print("setup")
+        #Play file from your computer
+        file_path = "../audio/disco.wav"
+        dot.music.start_file_stream(file_path, fft_size=512)
+        dot.background(dot.beige)
+        
+        self.base_pattern()
+        
     def draw(self):
-        dot.background((0, 0, 0))
         
-        # Fade previous trails
-        dot.begin_layer(self.trail_layer)
-        dot.fill((0, 0, 0))  # Black with some transparency
-        dot.rectangle((0, 0), (800, 600))
-        
-        # Draw new content
-        dot.fill((255, 100, 100))
-        dot.circle((dot.mouse_x, dot.mouse_y), 20)
+        if dot.frames %100==0:
+            dot.background(dot.beige)
+            self.base_pattern()
+
+        factor = dot.music.amplitude() * 15 
+        centre = np.array([dot.width//2, dot.height//2])
+        dot.push_matrix()
+        dot.translate(centre[0], centre[1])
+        dot.scale(factor)
+        dot.translate(-centre[0], -centre[1])
+        dot.draw_layer(self.pattern_layer)
+        dot.pop_matrix()
+    
+    #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
+    def base_pattern(self):
+        self.pattern_layer = dot.get_layer()
+        dot.begin_layer(self.pattern_layer)
+        dot.stroke((255, 37, 21))
+        dot.set_stroke_weight(4)
+        size = 30
+        for i in range(dot.width//size):
+            for j in range(dot.height//size):
+                y1 = j*size
+                if np.random.random()<0.5:
+                    y1 = (j+1)*size
+                y2 = j*size
+                if np.random.random()<0.5:
+                    y2 = (j+1)*size
+                dot.line((i*size,y1), ((i+1)*size,y2)) 
         dot.end_layer()
-        
-        # Composite to screen
-        dot.draw_layer(self.trail_layer)
 ```
 
-#### Multiple Layers
+#### Draw ontop of layers
 
 ```python
 def setup(self):
     self.bg_layer = dot.get_layer()
-    self.fg_layer = dot.get_layer()
     
     # Draw static background once
     dot.begin_layer(self.bg_layer)
+    dot.background(dot.black)
     for i in range(100):
         dot.fill((100, 100, 200))
         dot.circle((random() * 800, random() * 600), 5)
     dot.end_layer()
 
-def draw(self):
-    dot.background((0, 0, 0))
-    
+def draw(self):        
     # Draw background layer
-    dot.draw_layer(self.bg_layer, alpha=0.3)
+    dot.draw_layer(self.bg_layer)
     
-    # Draw foreground to layer
-    dot.begin_layer(self.fg_layer)
-    dot.background((0, 0, 0))
+    # Draw foreground
     dot.fill((255, 255, 0))
     dot.circle((dot.mouse_x, dot.mouse_y), 50)
-    dot.end_layer()
-    
-    # Composite foreground
-    dot.draw_layer(self.fg_layer, alpha=0.8)
 ```
 
 ---
@@ -758,8 +823,6 @@ def key_press(key, action, modifiers):
 dot.on_key_press = key_press
 ```
 
-
-
 ---
 
 ## Color Constants
@@ -778,15 +841,6 @@ dot.circle((400, 300), 50)
 
 Dorothy integrates with a comprehensive audio system for playback, analysis, and generation. The audio system runs on separate threads to avoid interfering with rendering.
 
-### Setup
-
-```python
-from dorothy import Dorothy
-from dorothy.audio import Audio  # Or your audio module path
-
-dot = Dorothy()
-dot.music = Audio()
-```
 
 ### Audio Sources
 
@@ -804,8 +858,6 @@ file_id = dot.music.start_file_stream(
     output_device=None,  # None = default output, or device ID
     analyse=True         # Enable FFT and amplitude analysis
 )
-
-dot.music.play(file_id)
 ```
 
 #### Device Input (Microphone/System Audio)
@@ -819,8 +871,6 @@ device_id = dot.music.start_device_stream(
     sr=44100,
     analyse=True
 )
-
-dot.music.play(device_id)
 ```
 
 #### Custom Audio Generation (DSP)
@@ -1132,159 +1182,112 @@ fft = dot.music.fft()[::4]  # Every 4th value
 #### Example 1: FFT Visualizer
 
 ```python
-class FFTVisualizer:
-    def setup(self):
-        self.file_id = dot.music.start_file_stream(
-            "song.wav",
-            fft_size=2048,
-            buffer_size=2048
-        )
-        dot.music.play()
+def setup(self):
+    self.file_id = dot.music.start_file_stream(
+        "song.wav",
+        fft_size=2048,
+        buffer_size=2048
+    )
+    dot.music.play()
+
+def draw(self):
+    dot.background((10, 10, 15))
     
-    def draw(self):
-        dot.background((10, 10, 15))
+    # Get FFT data
+    fft = dot.music.fft()
+    
+    # Draw frequency bars
+    bar_width = dot.width / len(fft[::4])
+    for i, magnitude in enumerate(fft[::4]):
+        x = i * bar_width
+        height = magnitude * 500
         
-        # Get FFT data
-        fft = dot.music.fft()
+        # Color based on frequency
+        hue = i / len(fft[::4])
+        r = int(255 * (1 - hue))
+        g = int(255 * hue)
         
-        # Draw frequency bars
-        bar_width = dot.width / len(fft[::4])
-        for i, magnitude in enumerate(fft[::4]):
-            x = i * bar_width
-            height = magnitude * 500
-            
-            # Color based on frequency
-            hue = i / len(fft[::4])
-            r = int(255 * (1 - hue))
-            g = int(255 * hue)
-            
-            dot.fill((r, g, 200))
-            dot.no_stroke()
-            dot.rectangle((x, 600), (x + bar_width - 2, 600 - height))
+        dot.fill((r, g, 200))
+        dot.no_stroke()
+        dot.rectangle((x, 600), (x + bar_width - 2, 600 - height))
 ```
 
 #### Example 2: Beat Detection
 
 ```python
-class BeatReactive:
-    def setup(self):
-        dot.music.start_file_stream("song.wav")
-        dot.music.play()
-        self.beat_time = 0
-        self.beat_intensity = 0
+def setup(self):
+    dot.music.start_file_stream("song.wav")
+    dot.music.play()
+    self.beat_time = 0
+    self.beat_intensity = 0
+
+def draw(self):
+    dot.background((20, 20, 30))
     
-    def draw(self):
-        dot.background((20, 20, 30))
-        
-        # Detect beats
-        if dot.music.is_beat():
-            self.beat_time = dot.frames
-            self.beat_intensity = 1.0
-        
-        # Fade beat intensity
-        self.beat_intensity *= 0.95
-        
-        # Draw pulsing circle on beat
-        radius = 100 + self.beat_intensity * 200
-        alpha = int(self.beat_intensity * 255)
-        dot.fill((255, 100, 100, alpha))
-        dot.circle((400, 300), radius)
-        
-        # Amplitude meter
-        amp = dot.music.amplitude()
-        dot.fill((100, 255, 100))
-        dot.rectangle((50, 550), (50 + amp * 700, 570))
+    # Detect beats
+    if dot.music.is_beat():
+        self.beat_time = dot.frames
+        self.beat_intensity = 1.0
+    
+    # Fade beat intensity
+    self.beat_intensity *= 0.95
+    
+    # Draw pulsing circle on beat
+    radius = 100 + self.beat_intensity * 200
+    alpha = int(self.beat_intensity * 255)
+    dot.fill((255, 100, 100, alpha))
+    dot.circle((400, 300), radius)
+    
+    # Amplitude meter
+    amp = dot.music.amplitude()
+    dot.fill((100, 255, 100))
+    dot.rectangle((50, 550), (50 + amp * 700, 570))
 ```
 
 #### Example 3: Microphone Reactive
 
 ```python
-class MicReactive:
-    def setup(self):
-        # Find microphone device
-        import sounddevice as sd
-        devices = sd.query_devices()
-        for i, device in enumerate(devices):
-            if 'microphone' in device['name'].lower():
-                print(f"Using device {i}: {device['name']}")
-                self.mic_id = dot.music.start_device_stream(
-                    device=i,
-                    fft_size=1024,
-                    buffer_size=1024
-                )
-                break
+def setup(self):
+    # Find microphone device
+    import sounddevice as sd
+    devices = sd.query_devices()
+    for i, device in enumerate(devices):
+        if 'microphone' in device['name'].lower():
+            print(f"Using device {i}: {device['name']}")
+            self.mic_id = dot.music.start_device_stream(
+                device=i,
+                fft_size=1024,
+                buffer_size=1024
+            )
+            break
+
+def draw(self):
+    dot.background((15, 15, 20))
     
-    def draw(self):
-        dot.background((15, 15, 20))
+    # Get microphone FFT
+    fft = dot.music.fft(self.mic_id)
+    amp = dot.music.amplitude(self.mic_id)
+    
+    # Radial frequency visualization
+    for i, magnitude in enumerate(fft[::2]):
+        angle = (i / len(fft[::2])) * 2 * np.pi
+        length = 100 + magnitude * 200
         
-        # Get microphone FFT
-        fft = dot.music.fft(self.mic_id)
-        amp = dot.music.amplitude(self.mic_id)
+        x1 = 400 + 100 * np.cos(angle)
+        y1 = 300 + 100 * np.sin(angle)
+        x2 = 400 + length * np.cos(angle)
+        y2 = 300 + length * np.sin(angle)
         
-        # Radial frequency visualization
-        for i, magnitude in enumerate(fft[::2]):
-            angle = (i / len(fft[::2])) * 2 * np.pi
-            length = 100 + magnitude * 200
-            
-            x1 = 400 + 100 * np.cos(angle)
-            y1 = 300 + 100 * np.sin(angle)
-            x2 = 400 + length * np.cos(angle)
-            y2 = 300 + length * np.sin(angle)
-            
-            dot.stroke((100, 200, 255))
-            dot.set_stroke_weight(2)
-            dot.line((x1, y1), (x2, y2))
-        
-        # Center amplitude circle
-        dot.fill((255, 100, 100))
-        dot.no_stroke()
-        dot.circle((400, 300), 30 + amp * 70)
+        dot.stroke((100, 200, 255))
+        dot.set_stroke_weight(2)
+        dot.line((x1, y1), (x2, y2))
+    
+    # Center amplitude circle
+    dot.fill((255, 100, 100))
+    dot.no_stroke()
+    dot.circle((400, 300), 30 + amp * 70)
 ```
 
-#### Example 4: RAVE Interactive
-
-```python
-class RAVEInteractive:
-    def setup(self):
-        self.rave_id = dot.music.start_rave_stream(
-            "vintage.ts",
-            latent_dim=16
-        )
-        self.z = torch.randn(1, 16, 1)
-        dot.music.play(self.rave_id)
-    
-    def draw(self):
-        dot.background((25, 25, 35))
-        
-        # Update latent based on mouse
-        mouse_x_norm = dot.mouse_x / dot.width
-        mouse_y_norm = dot.mouse_y / dot.height
-        
-        # Smoothly interpolate latent
-        target_z = torch.randn(1, 16, 1) * mouse_x_norm
-        self.z = 0.95 * self.z + 0.05 * target_z
-        
-        # Update RAVE
-        dot.music.audio_outputs[self.rave_id].current_latent = self.z
-        
-        # Visualize latent dimensions
-        for i in range(16):
-            val = float(self.z[0, i, 0])
-            x = 50 + i * 45
-            height = val * 100
-            
-            color = (100, 150, 255) if val > 0 else (255, 100, 100)
-            dot.fill(color)
-            dot.rectangle((x, 300), (x + 40, 300 - height))
-        
-        # Visualize output
-        fft = dot.music.fft(self.rave_id)
-        for i, val in enumerate(fft[::8]):
-            x = i * 30
-            h = val * 200
-            dot.fill((255, 200, 100))
-            dot.rectangle((x, 600), (x + 28, 600 - h))
-```
 
 ### Troubleshooting Audio
 
@@ -1471,44 +1474,43 @@ class WebcamSketch:
         self.layer = None
         dot.start_loop(self.setup, self.draw)
     
+class MySketch:
+
+    def __init__(self):
+        self.camera = cv2.VideoCapture(0)
+        dot.start_loop(self.setup, self.draw)  
+
     def setup(self):
-        dot.music.start_device_stream(2)
-        dot.music.play()
-        self.layer = dot.get_layer()
-    
+        #Play file from your computer
+        file_path = "../audio/disco.wav"
+        dot.music.start_file_stream(file_path, fft_size=512)
+            
     def draw(self):
-        ret, frame = self.camera.read()
-        if not ret:
-            return
-        
-        # Process frame
-        frame = cv2.resize(frame, (640, 480))
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Crop center
-        h, w = frame.shape[:2]
-        crop = frame[h//4:h*3//4, w//4:w*3//4]
-        
-        # Clear screen
-        dot.background((0, 0, 0))
-        
-        # Draw to layer with audio reactive scale
-        dot.begin_layer(self.layer)
-        dot.background((0, 0, 0))
-        
-        dot.push_matrix()
-        # Scale from center based on amplitude
-        factor = 1.0 + dot.music.amplitude * 2.0
-        dot.translate(dot.width//2, dot.height//2)
-        dot.scale(factor)
-        dot.translate(-crop.shape[1]//2, -crop.shape[0]//2)
-        dot.paste(crop, (0, 0))
-        dot.pop_matrix()
-        
-        dot.end_layer()
-        
-        # Draw layer to screen
-        dot.draw_layer(self.layer)
+        success, camera_feed = self.camera.read()
+        if success:
+            if success:
+
+                target_size = (640, 480)
+                camera_feed = cv2.resize(camera_feed, target_size)
+                camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
+                
+                w, h = target_size
+                crop_x1 = w // 4
+                crop_y1 = h // 4
+                crop_x2 = w // 4 * 3
+                crop_y2 = h // 4 * 3
+                cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
+                
+                crop_w = crop_x2 - crop_x1
+                crop_h = crop_y2 - crop_y1
+
+                dot.push_matrix()
+                dot.translate(dot.width//2, dot.height//2, 0)
+                factor = (dot.music.amplitude() * 5) + 1
+                dot.scale(factor)
+                dot.translate(-crop_w//2, -crop_h//2, 0)
+                dot.paste(cropped, (0, 0))
+                dot.pop_matrix()
 
 WebcamSketch()
 ```

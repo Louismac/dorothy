@@ -2,10 +2,12 @@
 #Changes you make and then save this file will be reflected in the window
 import numpy as np
 import librosa
+from dorothy import Dorothy
 
+dot = Dorothy()
 class MySketch:
 
-    def setup(self, dot):
+    def setup(self):
         self.phase = 0.0 
         self.sr = 44100
 
@@ -22,11 +24,11 @@ class MySketch:
         dot.stroke(dot.red)
         dot.set_stroke_weight(10)
 
-    def draw(self, dot):
+    def draw(self):
         #Audio Callback function
         def get_frame(size):
             #Get parameters from mouse
-            frequency = 300
+            frequency = 700
             amplitude = dot.mouse_y/dot.height
             #Get increments
             delta = 2 * np.pi * frequency / self.sr 
@@ -40,7 +42,7 @@ class MySketch:
         dot.music.audio_outputs[0].get_frame = get_frame
 
         #draw chromagram
-        dot.background(dot.white)
+        dot.background(dot.red)
         for i,c in enumerate(self.chroma):
             x = (dot.width//12)*i
             y = int(dot.height - (dot.height*c))

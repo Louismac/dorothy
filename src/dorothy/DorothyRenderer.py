@@ -817,7 +817,174 @@ class DorothyRenderer:
             center_y = (pos1[1] + pos2[1]) / 2
             self._draw_annotation((center_x, center_y), 
                                 f"({int(pos1[0])}, {int(pos1[1])})\n({int(pos2[0])}, {int(pos2[1])})")
-    
+            
+    def polyline(self, points, closed: bool = False):
+        """Draw a polyline (connected line segments)
+        
+        Args:
+            points: List of (x, y) coordinates
+            closed: If True, connect last point back to first point
+        """
+        if len(points) < 2:
+            return  # Need at least 2 points for a line
+        
+        # Create vertices for the line strip
+        vertices = []
+        for x, y in points:
+            vertices.extend([x, y])
+        
+        # If closed, add the first point again at the end
+        if closed:
+            vertices.extend([points[0][0], points[0][1]])
+        
+        vertices = np.array(vertices, dtype='f4')
+        
+        vbo = self.ctx.buffer(vertices)
+        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
+        
+        # Enable blending for transparency
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        
+        # Set uniforms
+        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
+        self.shader_2d['model'].write(self.transform.matrix)
+        
+        # Draw stroke
+        if self.use_stroke:
+            self.ctx.line_width = self._stroke_weight
+            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+            vao.render(moderngl.LINE_STRIP)
+        
+        vao.release()
+        vbo.release()
+
+    def polygon(self, points):
+        """Draw a filled polygon with proper triangulation
+        
+        Args:
+            points: List of (x, y) coordinates defining the polygon vertices
+        """
+        if len(points) < 3:
+            return  # Need at least 3 points for a polygon
+        
+        # Triangulate the polygon using ear clipping algorithm
+        def triangulate(vertices):
+            """Simple ear clipping triangulation for polygons"""
+            if len(vertices) < 3:
+                return []
+            
+            # Make a copy to work with
+            verts = list(vertices)
+            triangles = []
+            
+            while len(verts) > 3:
+                # Find an ear (a triangle that doesn't contain other vertices)
+                ear_found = False
+                for i in range(len(verts)):
+                    prev = verts[i - 1]
+                    curr = verts[i]
+                    next_v = verts[(i + 1) % len(verts)]
+                    
+                    # Check if this is a valid ear
+                    if is_ear(prev, curr, next_v, verts):
+                        triangles.extend([prev, curr, next_v])
+                        verts.pop(i)
+                        ear_found = True
+                        break
+                
+                if not ear_found:
+                    # Fallback: just use remaining vertices as one triangle
+                    if len(verts) >= 3:
+                        triangles.extend(verts[:3])
+                    break
+            
+            # Add the last triangle
+            if len(verts) == 3:
+                triangles.extend(verts)
+            
+            return triangles
+        
+        def is_ear(prev, curr, next_v, all_verts):
+            """Check if the triangle (prev, curr, next) is an ear"""
+            # Check if angle at curr is convex
+            cross = (curr[0] - prev[0]) * (next_v[1] - prev[1]) - (curr[1] - prev[1]) * (next_v[0] - prev[0])
+            if cross <= 0:  # Reflex angle
+                return False
+            
+            # Check if any other vertex is inside this triangle
+            for v in all_verts:
+                if v == prev or v == curr or v == next_v:
+                    continue
+                if point_in_triangle(v, prev, curr, next_v):
+                    return False
+            
+            return True
+        
+        def point_in_triangle(p, a, b, c):
+            """Check if point p is inside triangle abc"""
+            def sign(p1, p2, p3):
+                return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+            
+            d1 = sign(p, a, b)
+            d2 = sign(p, b, c)
+            d3 = sign(p, c, a)
+            
+            has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+            has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+            
+            return not (has_neg and has_pos)
+        
+        # Triangulate the polygon
+        triangulated = triangulate(points)
+        
+        if not triangulated:
+            return
+        
+        # Create vertices array from triangulated points
+        vertices = []
+        for x, y in triangulated:
+            vertices.extend([x, y])
+        
+        vertices = np.array(vertices, dtype='f4')
+        
+        vbo = self.ctx.buffer(vertices)
+        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
+        
+        # Enable blending for transparency
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        
+        # Set uniforms
+        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
+        self.shader_2d['model'].write(self.transform.matrix)
+        
+        # Draw fill
+        if self.use_fill:
+            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
+            vao.render(moderngl.TRIANGLES)
+        
+        # Draw stroke
+        if self.use_stroke:
+            # Create separate vertices for stroke outline
+            stroke_vertices = []
+            for x, y in points:
+                stroke_vertices.extend([x, y])
+            # Close the loop
+            stroke_vertices.extend([points[0][0], points[0][1]])
+            
+            stroke_vbo = self.ctx.buffer(np.array(stroke_vertices, dtype='f4'))
+            stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+            
+            self.ctx.line_width = self._stroke_weight
+            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+            stroke_vao.render(moderngl.LINE_STRIP)
+            
+            stroke_vao.release()
+            stroke_vbo.release()
+        
+        vao.release()
+        vbo.release()
     # ====== 3D Drawing Methods ======
     
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):

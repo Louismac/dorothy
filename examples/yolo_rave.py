@@ -116,7 +116,7 @@ class MySketch:
                             new_latent = self.latent_generator.sample_latent(right_wrist_y)
                             dot.music.audio_outputs[self.rave_id].current_latent = new_latent
    
-            dot.canvas = camera_feed
+            dot.paste(camera_feed,(0,0))
 
              
 MySketch()  

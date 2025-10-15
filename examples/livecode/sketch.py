@@ -9,12 +9,11 @@ class MySketch:
             
     def setup(self):
         pass
-
-    def run_once(self):
-        dot.background(dot.red)
                 
     def draw(self):
-        dot.fill(dot.red)
+        dot.background(dot.red)
+        dot.fill(dot.green)
+        dot.rectangle((0,dot.frames%400),(100,100))
 
 
 

@@ -9,37 +9,33 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
-        print("setup")
-       #Play file from your computer
         file_path = "../audio/disco.wav"
         dot.music.start_file_stream(file_path, buffer_size=2048)
-        
-        #Pick or just stream from your computer
-        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        # print(sd.query_devices())
-        #dot.music.start_device_stream(3)
-        dot.stroke(dot.grey)
-        
-    def draw(self):
-        
-        new_layer = dot.get_layer()
-        dot.background((22, 208, 165))
-        theta = dot.music.amplitude() * 3 * 2 * np.pi
-        centre = np.array([dot.width//2, dot.height//2])
-        
-        #Initially draw line in middle
+        dot.fill((255, 0, 0))
+        self.layer = dot.get_layer()
+        dot.begin_layer(self.layer)
+        dot.fill(dot.yellow)
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
+        dot.rectangle(top_left, bottom_right)
+        dot.end_layer()
+        
+        self.theta = 0
+
+    def draw(self):
+        # Clear with semi-transparent red for trails
+        dot.fill((255, 0, 0, 20))
+        dot.rectangle((0, 0), (dot.width, dot.height))
+        
+        # Rotate and draw the yellow rectangle
+        self.theta += dot.music.amplitude() * np.pi
         centre = np.array([dot.width//2, dot.height//2])
-        dot.rectangle(top_left, bottom_right, layer = new_layer)
-        new_layer = dot.rotate_layer(new_layer, theta, centre)
-        dot.draw_layer(new_layer)
+        
+        dot.push_matrix()
+        dot.translate(centre[0], centre[1]) 
+        dot.rotate(self.theta)
+        dot.translate(-centre[0], -centre[1]) 
+        dot.draw_layer(self.layer)
+        dot.pop_matrix()
 
 MySketch()          
-
-
-
-
-
-
-
