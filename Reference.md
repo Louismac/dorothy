@@ -1337,7 +1337,7 @@ dot.music.play()
 
 ### Setup
 
-Create two files:
+Create two files in the same directory, and make sure you are in this directory when you run the code:
 
 **main.py** (run this):
 ```python

@@ -9,1038 +9,18 @@ This refactored version maintains the original Processing-like API while adding:
 """
 
 import numpy as np
-import moderngl
 import moderngl_window as mglw
-from moderngl_window import geometry
 import glm
 from typing import Tuple, Optional, Callable
 import time
 from .css_colours import css_colours
 from .Audio import *
-import signal
-import traceback
+from .DorothyWindow import DorothyWindow
 import cv2
 import wave
 import subprocess
 import datetime
-
-class Transform:
-    """Manages transformation matrices"""
-    def __init__(self):
-        self.matrix = glm.mat4(1.0)  # Identity matrix
-        self.stack = []
-    
-    def push(self):
-        self.stack.append(glm.mat4(self.matrix))
-    
-    def pop(self):
-        if self.stack:
-            self.matrix = self.stack.pop()
-    
-    def reset(self):
-        self.matrix = glm.mat4(1.0)
-    
-    def translate(self, x: float, y: float, z: float = 0):
-        """Translate"""
-        self.matrix = glm.translate(self.matrix, glm.vec3(x, y, z))
-    
-    def rotate(self, angle: float, x: float = 0, y: float = 0, z: float = 1):
-        """Rotate around an axis
-        
-        Args:
-            angle: Rotation angle in radians
-            x, y, z: Rotation axis (default: z-axis for 2D rotation)
-        """
-        self.matrix = glm.rotate(self.matrix, angle, glm.vec3(x, y, z))
-    
-    def scale(self, x: float, y: float = None, z: float = None):
-        """Scale
-        
-        Args:
-            x: Scale factor for x-axis (if y and z are None, scales uniformly)
-            y: Scale factor for y-axis (default: same as x)
-            z: Scale factor for z-axis (default: same as x)
-        """
-        y = y if y is not None else x
-        z = z if z is not None else x
-        self.matrix = glm.scale(self.matrix, glm.vec3(x, y, z))
-
-
-class Camera:
-    """3D Camera with perspective and orthographic modes"""
-    def __init__(self, width: int, height: int):
-        self.position = glm.vec3(0, 0, 5)
-        self.target = glm.vec3(0, 0, 0)
-        self.up = glm.vec3(0, 1, 0)
-        self.fov = 60
-        self.aspect = width / height
-        self.near = 0.1
-        self.far = 100.0
-        self.mode = '3d'  # '3d' or '2d'
-        self.width = width
-        self.height = height
-    
-    def get_view_matrix(self):
-        return glm.lookAt(self.position, self.target, self.up)
-    
-    def get_projection_matrix(self):
-        if self.mode == '3d':
-            return glm.perspective(glm.radians(self.fov), self.aspect, self.near, self.far)
-        else:
-            # Orthographic projection for 2D mode
-            return glm.ortho(0, self.width, self.height, 0, -1, 1)
-
-
-class DorothyRenderer:
-    """Core rendering engine using ModernGL"""
-    
-    def __init__(self, ctx: moderngl.Context, width: int, height: int):
-        self.ctx = ctx
-        self.width = width
-        self.height = height
-        
-        # State
-        self.fill_color = (255, 255, 255, 255)
-        self.stroke_color = (0, 0, 0, 255)
-        self._stroke_weight = 1
-        self.use_fill = True
-        self.use_stroke = False
-        
-        # Transform and camera
-        self.transform = Transform()
-        self.camera = Camera(width, height)
-        
-        # Setup shaders
-        self._setup_shaders()
-        
-        # Geometry cache
-        self._setup_geometry()
-        
-        # Background
-        self.background_color = (0, 0, 0, 1)
-        
-        # Layer system
-        self.layers = {}  # Dictionary of layer_id -> framebuffer
-        self.layer_counter = 0
-        self.active_layer = None  # Currently rendering to a layer
-        
-    def _setup_shaders(self):
-        """Initialize shader programs"""
-        
-        # Basic 3D shader with lighting
-        self.shader_3d = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                uniform mat4 model;
-                uniform mat4 view;
-                uniform mat4 projection;
-                
-                in vec3 in_position;
-                in vec3 in_normal;
-                
-                out vec3 v_normal;
-                out vec3 v_position;
-                
-                void main() {
-                    vec4 world_pos = model * vec4(in_position, 1.0);
-                    v_position = world_pos.xyz;
-                    v_normal = mat3(transpose(inverse(model))) * in_normal;
-                    gl_Position = projection * view * world_pos;
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform vec4 color;
-                uniform vec3 light_pos;
-                uniform vec3 camera_pos;
-                uniform bool use_lighting;
-                
-                in vec3 v_normal;
-                in vec3 v_position;
-                
-                out vec4 fragColor;
-                
-                void main() {
-                    if (use_lighting) {
-                        vec3 normal = normalize(v_normal);
-                        vec3 light_dir = normalize(light_pos - v_position);
-                        vec3 view_dir = normalize(camera_pos - v_position);
-                        vec3 reflect_dir = reflect(-light_dir, normal);
-                        
-                        // Ambient
-                        float ambient = 0.3;
-                        
-                        // Diffuse
-                        float diffuse = max(dot(normal, light_dir), 0.0);
-                        
-                        // Specular
-                        float specular = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.5;
-                        
-                        float lighting = ambient + diffuse + specular;
-                        fragColor = vec4(color.rgb * lighting, color.a);
-                    } else {
-                        fragColor = color;
-                    }
-                }
-            '''
-        )
-        
-        # Simple 2D shader
-        self.shader_2d = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                uniform mat4 projection;
-                uniform mat4 model;
-                
-                in vec2 in_position;
-                
-                void main() {
-                    gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform vec4 color;
-                out vec4 fragColor;
-                
-                void main() {
-                    fragColor = color;
-                }
-            '''
-        )
-        
-        # Texture shader for rendering layers
-        self.shader_texture = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                in vec2 in_position;
-                in vec2 in_texcoord;
-                
-                out vec2 v_texcoord;
-                
-                void main() {
-                    v_texcoord = in_texcoord;
-                    gl_Position = vec4(in_position, 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform sampler2D texture0;
-                uniform float alpha;
-                
-                in vec2 v_texcoord;
-                out vec4 fragColor;
-                
-                void main() {
-                    vec4 texColor = texture(texture0, v_texcoord);
-                    fragColor = vec4(texColor.rgb, texColor.a * alpha);
-                }
-            '''
-        )
-        
-        # Create fullscreen quad for texture rendering
-        vertices = np.array([
-            # Position   # TexCoord
-            -1.0, -1.0,  0.0, 0.0,
-             1.0, -1.0,  1.0, 0.0,
-             1.0,  1.0,  1.0, 1.0,
-            -1.0, -1.0,  0.0, 0.0,
-             1.0,  1.0,  1.0, 1.0,
-            -1.0,  1.0,  0.0, 1.0,
-        ], dtype='f4')
-        
-        self.quad_vbo = self.ctx.buffer(vertices)
-        self.quad_vao = self.ctx.simple_vertex_array(
-            self.shader_texture, 
-            self.quad_vbo, 
-            'in_position', 'in_texcoord'
-        )
-        
-    def _setup_geometry(self):
-        """Setup reusable geometry"""
-        # 3D primitives will be created on-demand using moderngl_window.geometry
-        self.sphere_geometry = None
-        self.box_geometry = None
-        
-    def clear(self, color: Optional[Tuple] = None):
-        """Clear the screen"""
-        if color:
-            self.background_color = self._normalize_color(color)
-        self.ctx.clear(*self.background_color)
-    
-    # ====== Layer Management ======
-    
-    def get_layer(self) -> int:
-        """Create a new layer (framebuffer) and return its ID
-        
-        Returns:
-            layer_id: Unique identifier for this layer
-        """
-        layer_id = self.layer_counter
-        self.layer_counter += 1
-        
-        # Create texture for this layer with alpha channel
-        texture = self.ctx.texture((self.width, self.height), 4)
-        texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
-        
-        # Create depth buffer for the framebuffer
-        depth = self.ctx.depth_renderbuffer((self.width, self.height))
-        
-        # Create framebuffer
-        fbo = self.ctx.framebuffer(
-            color_attachments=[texture],
-            depth_attachment=depth
-        )
-        
-        # Store layer
-        self.layers[layer_id] = {
-            'fbo': fbo,
-            'texture': texture,
-            'depth': depth
-        }
-        
-        # Clear the layer initially
-        fbo.use()
-        fbo.clear(0.0, 0.0, 0.0, 0.0)
-        self.ctx.screen.use()
-        
-        print(f"Created layer {layer_id}: {self.width}x{self.height}")
-        
-        return layer_id
-    
-    def begin_layer(self, layer_id: int):
-        """Start rendering to a specific layer
-        
-        Args:
-            layer_id: The layer to render to (from get_layer())
-        """
-        if layer_id not in self.layers:
-            raise ValueError(f"Layer {layer_id} does not exist")
-        
-        print(f"Begin rendering to layer {layer_id}")
-        self.active_layer = layer_id
-        fbo = self.layers[layer_id]['fbo']
-        fbo.use()
-        
-        # DON'T clear - we want to preserve existing content for trails
-        # If you want to clear, call clear_layer() first
-    
-    def end_layer(self):
-        """Stop rendering to layer, return to screen"""
-        print(f"End layer, returning to screen")
-        self.active_layer = None
-        self.ctx.screen.use()
-    
-    def draw_layer(self, layer_id: int, alpha: float = 1.0, x: int = 0, y: int = 0):
-        """Draw a layer to the screen with optional transparency
-        
-        Args:
-            layer_id: The layer to draw
-            alpha: Transparency (0.0 = invisible, 1.0 = opaque)
-            x, y: Position offset (TODO: implement positioning)
-        """
-        if layer_id not in self.layers:
-            raise ValueError(f"Layer {layer_id} does not exist")
-        
-        print(f"Drawing layer {layer_id} with alpha={alpha}")
-        
-        # Save which framebuffer we were rendering to
-        was_rendering_to_layer = self.active_layer
-        
-        # Make sure we're rendering to screen
-        self.ctx.screen.use()
-        self.active_layer = None
-        
-        # Enable proper alpha blending for layer compositing
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (
-            moderngl.SRC_ALPHA,
-            moderngl.ONE_MINUS_SRC_ALPHA
-        )
-        
-        # Bind the layer's texture
-        texture = self.layers[layer_id]['texture']
-        texture.use(0)
-        
-        # Set shader uniforms
-        self.shader_texture['texture0'] = 0
-        self.shader_texture['alpha'] = alpha
-        
-        # Draw fullscreen quad with the texture
-        self.quad_vao.render(moderngl.TRIANGLES)
-        
-        print(f"Layer {layer_id} drawn")
-        
-        # Restore the framebuffer we were rendering to
-        if was_rendering_to_layer is not None:
-            self.active_layer = was_rendering_to_layer
-            self.layers[was_rendering_to_layer]['fbo'].use()
-    
-    def release_layer(self, layer_id: int):
-        """Free a layer's resources
-        
-        Args:
-            layer_id: The layer to release
-        """
-        if layer_id in self.layers:
-            self.layers[layer_id]['fbo'].release()
-            self.layers[layer_id]['texture'].release()
-            del self.layers[layer_id]
-    
-    def clear_layer(self, layer_id: int, color: Tuple[float, float, float, float] = (0, 0, 0, 0)):
-        """Clear a layer with a specific color
-        
-        Args:
-            layer_id: The layer to clear
-            color: RGBA color (0.0-1.0 range)
-        """
-        if layer_id not in self.layers:
-            raise ValueError(f"Layer {layer_id} does not exist")
-        
-        fbo = self.layers[layer_id]['fbo']
-        fbo.clear(*color)
-    
-    # ====== Image/Texture Pasting ======
-
-    def get_pixels(self) -> np.ndarray:
-        """Get current screen pixels as numpy array
-        
-        Returns:
-            np.ndarray: RGB image array (height, width, 3) in uint8 format
-        """
-        # Read pixels from the screen framebuffer
-        pixels = self.ctx.screen.read(components=3)
-        
-        # Convert to numpy array
-        img = np.frombuffer(pixels, dtype=np.uint8)
-        img = img.reshape((self.height, self.width, 3))
-        
-        # Flip vertically (OpenGL origin is bottom-left)
-        img = np.flipud(img)
-        
-        # Convert RGB to BGR for OpenCV compatibility
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        
-        return img
-        """Free a layer's resources
-        
-        Args:
-            layer_id: The layer to release
-        """
-        if layer_id in self.layers:
-            self.layers[layer_id]['fbo'].release()
-            self.layers[layer_id]['texture'].release()
-            del self.layers[layer_id]
-    
-    
-    def paste(self, image: np.ndarray, position: Tuple[int, int], 
-              size: Optional[Tuple[int, int]] = None, alpha: float = 1.0):
-        """Paste a numpy array (image) onto the canvas
-        
-        Args:
-            image: NumPy array of pixels. Can be:
-                   - (H, W, 3) for RGB
-                   - (H, W, 4) for RGBA
-                   - (H, W) for grayscale
-            position: (x, y) position to paste (top-left corner)
-            size: Optional (width, height) to resize image. If None, uses original size
-            alpha: Overall transparency (0.0 = invisible, 1.0 = opaque)
-        """
-        # Normalize image array
-        img = self._prepare_image_array(image)
-        h, w = img.shape[:2]
-        
-        # Determine target size
-        if size is None:
-            target_w, target_h = w, h
-        else:
-            target_w, target_h = size
-        
-        print(f"Pasting image: {w}x{h} at {position}, target size: {target_w}x{target_h}")
-        
-        # Create texture
-        texture = self.ctx.texture((w, h), 4, img.tobytes())
-        texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
-        
-        # Use the 2D shader with projection and transform
-        x, y = position
-        
-        # Create vertices in pixel coordinates (6 vertices for 2 triangles)
-        # Format: x, y, u, v for each vertex
-        # Standard texture coords: (0,0) = bottom-left, (1,1) = top-right in OpenGL
-        # But images are top-left origin, so we flip V: top=0, bottom=1
-        vertices = np.array([
-            # Triangle 1
-            x, y, 0.0, 0.0,                           # Top-left
-            x + target_w, y, 1.0, 0.0,                # Top-right
-            x + target_w, y + target_h, 1.0, 1.0,     # Bottom-right
-            # Triangle 2
-            x, y, 0.0, 0.0,                           # Top-left
-            x + target_w, y + target_h, 1.0, 1.0,     # Bottom-right
-            x, y + target_h, 0.0, 1.0                 # Bottom-left
-        ], dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        
-        # Create a shader program that combines 2D transform with texture
-        if not hasattr(self, 'shader_texture_2d'):
-            print("Creating shader_texture_2d")
-            self.shader_texture_2d = self.ctx.program(
-                vertex_shader='''
-                    #version 330
-                    
-                    uniform mat4 projection;
-                    uniform mat4 model;
-                    
-                    in vec2 in_position;
-                    in vec2 in_texcoord;
-                    
-                    out vec2 v_texcoord;
-                    
-                    void main() {
-                        v_texcoord = in_texcoord;
-                        gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
-                    }
-                ''',
-                fragment_shader='''
-                    #version 330
-                    
-                    uniform sampler2D texture0;
-                    uniform float alpha;
-                    
-                    in vec2 v_texcoord;
-                    out vec4 fragColor;
-                    
-                    void main() {
-                        vec4 texColor = texture(texture0, v_texcoord);
-                        fragColor = vec4(texColor.rgb, texColor.a * alpha);
-                    }
-                '''
-            )
-        
-        vao = self.ctx.simple_vertex_array(
-            self.shader_texture_2d,
-            vbo,
-            'in_position', 'in_texcoord'
-        )
-        
-        # Set uniforms - use current transform and camera
-        self.shader_texture_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_texture_2d['model'].write(self.transform.matrix)
-        self.shader_texture_2d['texture0'] = 0
-        self.shader_texture_2d['alpha'] = alpha
-        
-        print(f"Camera mode: {self.camera.mode}")
-        print(f"Transform matrix: {self.transform.matrix}")
-        
-        # Bind texture and render
-        texture.use(0)
-        vao.render(moderngl.TRIANGLES)
-        
-        print("Paste rendered")
-        
-        # Cleanup
-        vao.release()
-        vbo.release()
-        texture.release()
-    
-    def _prepare_image_array(self, image: np.ndarray) -> np.ndarray:
-        """Prepare image array for OpenGL texture
-        
-        Converts various image formats to RGBA uint8
-        """
-        img = np.asarray(image)
-        
-        # Handle different input formats
-        if img.dtype == np.float32 or img.dtype == np.float64:
-            # Assume 0-1 range, convert to 0-255
-            img = (img * 255).astype(np.uint8)
-        elif img.dtype != np.uint8:
-            img = img.astype(np.uint8)
-        
-        # Handle different channel counts
-        if len(img.shape) == 2:
-            # Grayscale -> RGBA
-            h, w = img.shape
-            rgba = np.zeros((h, w, 4), dtype=np.uint8)
-            rgba[:, :, 0] = img
-            rgba[:, :, 1] = img
-            rgba[:, :, 2] = img
-            rgba[:, :, 3] = 255
-            img = rgba
-        elif img.shape[2] == 3:
-            # RGB -> RGBA
-            h, w = img.shape[:2]
-            rgba = np.zeros((h, w, 4), dtype=np.uint8)
-            rgba[:, :, :3] = img
-            rgba[:, :, 3] = 255
-            img = rgba
-        elif img.shape[2] == 4:
-            # Already RGBA
-            pass
-        else:
-            raise ValueError(f"Unsupported image shape: {img.shape}")
-        
-        # OpenGL expects origin at bottom-left, flip vertically
-        img = np.flipud(img)
-        
-        return img
-        
-    def _normalize_color(self, color: Tuple) -> Tuple[float, float, float, float]:
-        """Convert color from 0-255 to 0-1 range"""
-        if len(color) == 3:
-            return (color[0]/255, color[1]/255, color[2]/255, 1.0)
-        elif len(color) == 4:
-            return (color[0]/255, color[1]/255, color[2]/255, color[3]/255)
-        else:
-            raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
-    
-    def _draw_annotation(self, position: Tuple[float, float], text: str):
-        """Draw annotation text near a shape (simplified version)
-        
-        Note: Full text rendering requires a font atlas. This is a placeholder
-        that draws a small indicator. For production, integrate a text rendering
-        library like moderngl-text or PIL-based texture text.
-        """
-        # Draw a small cross at the position to indicate annotation point
-        x, y = position
-        offset = 3
-        
-        # Save current stroke settings
-        old_stroke = self.use_stroke
-        old_color = self.stroke_color
-        old_weight = self._stroke_weight
-        
-        # Draw cross
-        self.use_stroke = True
-        self.stroke_color = (255, 255, 0, 255)  # Yellow
-        self._stroke_weight = 1
-        
-        # Vertical line
-        vertices = np.array([x, y - offset, x, y + offset], dtype='f4')
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        vao.render(moderngl.LINES)
-        vao.release()
-        vbo.release()
-        
-        # Horizontal line
-        vertices = np.array([x - offset, y, x + offset, y], dtype='f4')
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        vao.render(moderngl.LINES)
-        vao.release()
-        vbo.release()
-        
-        # Restore stroke settings
-        self.use_stroke = old_stroke
-        self.stroke_color = old_color
-        self._stroke_weight = old_weight
-        
-        # TODO: Actual text rendering would go here
-        # For now, just the cross indicator shows where the annotation would be
-    
-    def _create_circle_vertices(self, center: Tuple[float, float], radius: float, segments: int = 32):
-        """Generate circle vertices"""
-        vertices = [center[0], center[1]]  # Center point first for TRIANGLE_FAN
-        for i in range(segments + 1):  # +1 to close the circle
-            angle = 2 * np.pi * i / segments
-            x = center[0] + radius * np.cos(angle)
-            y = center[1] + radius * np.sin(angle)
-            vertices.extend([x, y])
-        return np.array(vertices, dtype='f4')
-    
-    # ====== 2D Drawing Methods (Processing-like API) ======
-    
-    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
-        """Draw a circle in 2D mode"""
-        vertices = self._create_circle_vertices(center, radius)
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        # Set uniforms
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        
-        # Draw fill
-        if self.use_fill:
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            vao.render(moderngl.TRIANGLE_FAN)
-        
-        # Draw stroke (use LINE_STRIP for circle outline)
-        if self.use_stroke:
-            # Create separate vertices for stroke (without center point)
-            stroke_vertices = []
-            segments = 32
-            for i in range(segments + 1):
-                angle = 2 * np.pi * i / segments
-                x = center[0] + radius * np.cos(angle)
-                y = center[1] + radius * np.sin(angle)
-                stroke_vertices.extend([x, y])
-            
-            stroke_vbo = self.ctx.buffer(np.array(stroke_vertices, dtype='f4'))
-            stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
-            
-            self.ctx.line_width = self._stroke_weight
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            stroke_vao.render(moderngl.LINE_STRIP)
-            
-            stroke_vao.release()
-            stroke_vbo.release()
-        
-        vao.release()
-        vbo.release()
-        
-        # Draw annotation if requested
-        if annotate:
-            self._draw_annotation(center, f"({int(center[0])}, {int(center[1])})\nr={int(radius)}")
-    
-    def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a rectangle"""
-        x1, y1 = pos1
-        x2, y2 = pos2
-        
-        vertices = np.array([
-            x1, y1,
-            x2, y1,
-            x2, y2,
-            x1, y2
-        ], dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        
-        if self.use_fill:
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            vao.render(moderngl.TRIANGLE_FAN)
-        
-        if self.use_stroke:
-            self.ctx.line_width = self._stroke_weight
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            vao.render(moderngl.LINE_LOOP)
-        
-        vao.release()
-        vbo.release()
-        
-        # Draw annotation if requested
-        if annotate:
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
-            self._draw_annotation((center_x, center_y), 
-                                f"({int(x1)}, {int(y1)})\n({int(x2)}, {int(y2)})")
-    
-    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a line"""
-        vertices = np.array([
-            pos1[0], pos1[1],
-            pos2[0], pos2[1]
-        ], dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        self.ctx.line_width = self._stroke_weight
-        self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        vao.render(moderngl.LINES)
-        
-        vao.release()
-        vbo.release()
-        
-        # Draw annotation if requested
-        if annotate:
-            center_x = (pos1[0] + pos2[0]) / 2
-            center_y = (pos1[1] + pos2[1]) / 2
-            self._draw_annotation((center_x, center_y), 
-                                f"({int(pos1[0])}, {int(pos1[1])})\n({int(pos2[0])}, {int(pos2[1])})")
-    
-    # ====== 3D Drawing Methods ======
-    
-    def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
-        """Draw a 3D sphere
-        
-        Args:
-            radius: Sphere radius
-            position: (x, y, z) center position
-        """
-        if not self.sphere_geometry:
-            self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
-        
-        # Apply position and scale
-        self.transform.push()
-        self.transform.translate(position[0], position[1], position[2])
-        self.transform.scale(radius)
-        
-        self._draw_3d_geometry(self.sphere_geometry)
-        
-        self.transform.pop()
-    
-    def box(self, size: Tuple[float, float, float] = (1.0, 1.0, 1.0), 
-            position: Tuple[float, float, float] = (0, 0, 0)):
-        """Draw a 3D box
-        
-        Args:
-            size: (width, height, depth) tuple
-            position: (x, y, z) center position
-        """
-        width, height, depth = size
-        
-        if not self.box_geometry:
-            self.box_geometry = geometry.cube(size=(1.0, 1.0, 1.0))
-        
-        # Apply position and scale
-        self.transform.push()
-        self.transform.translate(position[0], position[1], position[2])
-        self.transform.scale(width, height, depth)
-        
-        self._draw_3d_geometry(self.box_geometry)
-        
-        self.transform.pop()
-    
-    def _draw_3d_geometry(self, geom):
-        """Internal method to render 3D geometry"""
-        self.shader_3d['model'].write(self.transform.matrix)
-        self.shader_3d['view'].write(self.camera.get_view_matrix())
-        self.shader_3d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-        self.shader_3d['light_pos'].write(glm.vec3(5, 5, 5))
-        self.shader_3d['camera_pos'].write(self.camera.position)
-        self.shader_3d['use_lighting'] = True
-        
-        geom.render(self.shader_3d)
-    
-    # ====== State Methods ======
-    
-    def fill(self, color: Tuple):
-        """Set fill color"""
-        # Handle both RGB and RGBA
-        if len(color) == 3:
-            self.fill_color = (*color, 255)
-        else:
-            self.fill_color = color
-        self.use_fill = True
-    
-    def no_fill(self):
-        """Disable fill"""
-        self.use_fill = False
-    
-    def stroke(self, color: Tuple):
-        """Set stroke color"""
-        # Handle both RGB and RGBA
-        if len(color) == 3:
-            self.stroke_color = (*color, 255)
-        else:
-            self.stroke_color = color
-        self.use_stroke = True
-    
-    def no_stroke(self):
-        """Disable stroke"""
-        self.use_stroke = False
-    
-    def set_stroke_weight(self, weight: float):
-        """Set stroke weight"""
-        self._stroke_weight = weight
-    
-    # ====== Transform Methods ======
-    
-    def push_matrix(self):
-        """Save current transformation"""
-        self.transform.push()
-    
-    def pop_matrix(self):
-        """Restore previous transformation"""
-        self.transform.pop()
-    
-    def translate(self, x: float, y: float, z: float = 0):
-        """Translate"""
-        self.transform.translate(x, y, z)
-    
-    def rotate(self, angle: float, x: float = 0, y: float = 0, z: float = 1):
-        """Rotate (angle in radians)"""
-        self.transform.rotate(angle, x, y, z)
-    
-    def scale(self, x: float, y: float = None, z: float = None):
-        """Scale"""
-        self.transform.scale(x, y, z)
-    
-    def reset_transforms(self):
-        """Reset all transformations"""
-        self.transform.reset()
-
-
-class DorothyWindow(mglw.WindowConfig):
-    """Internal window configuration for moderngl-window"""
-    
-    gl_version = (3, 3)
-    title = "Dorothy - ModernGL"
-    resizable = True
-    cursor = True  # Enable cursor tracking
-    samples = 4  # Enable MSAA for smoother lines
-    vsync = True  # Enable vsync to cap framerate and reduce CPU usage
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        # Get the Dorothy instance that's waiting for us
-        self.dorothy = Dorothy._pending_instance
-        self.start_time_millis = int(round(time.time() * 1000))
-        # Setup renderer with the context
-        self.dorothy.renderer = DorothyRenderer(
-            self.ctx, 
-            self.window_size[0], 
-            self.window_size[1]
-        )
-        self.dorothy.wnd = self.wnd
-        self.dorothy._initialized = True
-        self.dorothy.music = Audio()
-        
-        # Set default 2D camera mode
-        self.dorothy.renderer.camera.mode = '2d'
-
-        self.dorothy.keys = self.wnd.keys
-        self.dorothy.modifiers = self.wnd.modifiers
-        
-        # Try to activate/focus the window
-        try:
-            if hasattr(self.wnd._window, 'activate'):
-                self.wnd._window.activate()
-                print("Window activated")
-            if hasattr(self.wnd._window, 'set_visible'):
-                self.wnd._window.set_visible(True)
-                print("Window set visible")
-        except Exception as e:
-            print(f"Could not activate window: {e}")
-    
-
-        # Call user setup
-        if self.dorothy.setup_fn:
-            self.dorothy.setup_fn()
-        
-    def on_render(self, render_time: float, frame_time: float):
-        """Called every frame"""
-        frame_started_at = int(round(time.time() * 1000))
-        # Signal handler function
-        def signal_handler(sig, frame):
-            print('You pressed Ctrl+C! Closing the window.')
-            self.dorothy.exit()
-
-        try:
-            # Link the signal handler to SIGINT
-            signal.signal(signal.SIGTSTP, signal_handler)
-        except Exception as e:
-            done = True
-            print(e)
-            traceback.print_exc()
-            self.dorothy.exit()  
-
-        # Reset transforms
-        self.dorothy.renderer.transform.reset()
-        
-        # Call user draw
-        try:
-            if self.dorothy.draw_fn:
-                self.dorothy.draw_fn()
-        except Exception as e:
-            if self.dorothy.frames < 5:
-                print(f"Error in draw(): {e}")
-
-        if self.dorothy.recording:
-            canvas_rgb = self.dorothy.get_pixels()
-            self.dorothy.video_recording_buffer.append({
-                "frame": canvas_rgb,
-                "timestamp": self.dorothy.millis
-            })
-            
-        self.dorothy.frames += 1
-
-        if self.dorothy.recording and self.dorothy.end_recording_at < self.dorothy.millis:
-            try:
-                self.dorothy.stop_record()
-            except Exception as e:
-                print("error recording video")
-                print(e)
-                traceback.print_exc()
-            self.dorothy.end_recording_at = np.inf
-
-    def on_mouse_position_event(self, x, y, dx, dy):
-        self.dorothy.mouse_x = int(x)
-        self.dorothy.mouse_y = int(y)
-
-    def on_mouse_drag_event(self, x, y, dx, dy):
-        if self.dorothy.on_mouse_drag is not None:
-            self.dorothy.on_mouse_drag(x,y,dx,dy)
-            print("Mouse drag:", x, y, dx, dy)
-
-    def on_mouse_scroll_event(self, x_offset: float, y_offset: float):
-        if self.dorothy.on_scroll is not None:
-            self.dorothy.on_scroll(x_offset,y_offset)
-            print("Mouse wheel:", x_offset, y_offset)
-
-    def on_mouse_press_event(self, x, y, button):
-        if self.dorothy.on_mouse_press is not None:
-            self.dorothy.on_mouse_press(x,y,button)
-            print("Mouse button {} pressed at {}, {}".format(button, x, y))
-
-    def on_mouse_release_event(self, x: int, y: int, button: int):
-        if self.dorothy.on_mouse_release is not None:
-            self.dorothy.on_mouse_release(x,y,button)
-            print("Mouse button {} released at {}, {}".format(button, x, y))
-
-    
-    def on_key_event(self, key, action, modifiers):
-        print(key, action, modifiers)
-        if self.dorothy.on_key_press is not None:
-            self.dorothy.on_key_press(key, action, modifiers)
-        if action == self.wnd.keys.ACTION_PRESS:
-            if key == self.wnd.keys.Q or key == self.wnd.keys.ESCAPE:
-                self.wnd.close()
-                print("Window closing...")
-    
-    def on_close(self):
-        """Called when window is closing"""
-        # Call user cleanup callback
-        print("close!!!")
-        if self.dorothy.on_close:
-            try:
-                self.dorothy.on_close()
-            except Exception as e:
-                print(f"Error in on_close callback: {e}")
-        self.dorothy.exit()  
-
-    
-    def resize(self, width: int, height: int):
-        if self.dorothy.renderer:
-            self.dorothy.renderer.width = width
-            self.dorothy.renderer.height = height
-            self.dorothy.renderer.camera.width = width
-            self.dorothy.renderer.camera.height = height
-            self.dorothy.renderer.camera.aspect = width / height
+import sys
 
 
 class Dorothy:
@@ -1049,9 +29,22 @@ class Dorothy:
     _pending_instance = None
     _instance = None
     
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance  
+    
     def __init__(self, width: int = 800, height: int = 600, title: str = "Dorothy"):
+
+        # Only init once
+        if hasattr(self, '_initialized'):
+            return
+        self._initialized = True
+
         Dorothy._instance = self
         Dorothy._pending_instance = self
+        self._persistent_canvas = None  # Will be created after renderer is ready
+        self._auto_display_canvas = True
         
         # Window configuration
         self.window_size = (width, height)
@@ -1064,6 +57,7 @@ class Dorothy:
 
         self.end_recording_at = np.inf
         self.recording = False
+        self.should_clear = False
         
         # User sketch
         self.setup_fn = None
@@ -1084,6 +78,23 @@ class Dorothy:
 
         self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
         print("done load colours")
+        self._persistent_canvas = None
+
+    def _ensure_persistent_canvas(self):
+        """Create persistent canvas layer on first render"""
+        if self._persistent_canvas is None and self.renderer:
+            self._persistent_canvas = self.renderer.get_layer()
+            # Start with transparent background
+            self.renderer.begin_layer(self._persistent_canvas)
+            self.renderer.ctx.clear(0.0, 0.0, 0.0, 0.0)
+            self.renderer.end_layer()
+    
+    def background(self, color: Tuple):
+        """Clear the persistent canvas with a color"""
+        color = self._parse_color(color)
+        self.renderer.ctx.clear(color[0], color[1], color[2], color[3])
+        self.fill(color)
+        self.rectangle((0,0),(self.width, self.height))
 
     def __getattr__(self, name):
         """Dynamically retrieve color attributes"""
@@ -1130,42 +141,143 @@ class Dorothy:
         # Run the window (this will call setup_fn when ready)
         mglw.run_window_config(DorothyWindow)
     
+
+    """
+    Live coding implementation with debugging
+    Add this to your Dorothy class
+    """
+
     def start_livecode_loop(self, sketch_module):
-        """Start a live coding loop that reloads code on file changes
-        
-        Args:
-            sketch_module: The module containing MySketch class
-            
-        Example:
-            import my_sketch
-            dot.start_livecode_loop(my_sketch)
-        """
+        """Start a live coding loop that reloads code on file changes"""
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
         import importlib
         import traceback
         import inspect
+        from pathlib import Path
+        import time
         
+        sketch_file = Path(sketch_module.__file__)
+        
+        # Debug: Print the file we're watching
+        print(f"🔍 DEBUG: Watching file: {sketch_file}")
+        print(f"🔍 DEBUG: File exists: {sketch_file.exists()}")
+        print(f"🔍 DEBUG: Watching dikrectory: {sketch_file.parent}")
+        
+        #Override the init in case someone is start_loop-ing by mistake
+        def new_init(self):
+            print("Overridden init")
+        sketch_module.MySketch.__init__ = new_init
         my_sketch = sketch_module.MySketch()
-        self.was_error = False
         
-        def setup_wrapper():
+        self.was_error = False
+        self.reload_requested = False
+        self.reload_count = 0
+        
+        class SketchReloadHandler(FileSystemEventHandler):
+            def __init__(self, dorothy_instance):
+                self.dorothy = dorothy_instance
+                self.last_modified = 0
+                self.event_count = 0
+                
+            def on_any_event(self, event):
+                """Catch ALL events - modified, created, moved, etc."""
+                self.event_count += 1
+                
+                # Debug: Print ALL file events
+                print(f"🔍 DEBUG [{self.event_count}]: {event.event_type} event!")
+                print(f"   Path: {event.src_path}")
+                print(f"   Is directory: {event.is_directory}")
+                
+                if event.is_directory:
+                    print(f"   ⏭️  Skipping (directory)")
+                    return
+                
+                # Check if this is our sketch file (by name, not full path)
+                file_path = Path(event.src_path)
+                
+                print(f"   File name: {file_path.name}")
+                print(f"   Target name: {sketch_file.name}")
+                print(f"   Match by name: {file_path.name == sketch_file.name}")
+                
+                # Match by filename (more robust for editor saves)
+                if file_path.name == sketch_file.name and file_path.suffix == '.py':
+                    current_time = time.time()
+                    time_since_last = current_time - self.last_modified
+                    
+                    print(f"   ⏱️  Time since last reload: {time_since_last:.2f}s")
+                    
+                    # Debounce
+                    if time_since_last < 0.5:
+                        print(f"   ⏭️  DEBOUNCED (too soon, need 0.5s)")
+                        return
+                    
+                    print(f"   ✅ SETTING reload_requested = True")
+                    self.last_modified = current_time
+                    self.dorothy.reload_requested = True
+                else:
+                    print(f"   ⏭️  Not our target file")
+        
+        def reload_sketch():
+            """Reload the sketch without closing window"""
             try:
+                print(f"📝 Reloading {sketch_file.name}...")
+                self.reload_count += 1
+                print(f"🔍 DEBUG: Reload count: {self.reload_count}")
+                
+                # Clear any cached modules
+                if sketch_module.__name__ in sys.modules:
+                    print(f"🔍 DEBUG: Removing {sketch_module.__name__} from sys.modules")
+                
+                # Reload the module
                 importlib.reload(sketch_module)
                 new_class = sketch_module.MySketch
+                
+                print(f"🔍 DEBUG: Old class: {my_sketch.__class__}")
+                print(f"🔍 DEBUG: New class: {new_class}")
+                
+                # Update the class
                 my_sketch.__class__ = new_class
+                
+                print(f"🔍 DEBUG: Updated class, calling setup()...")
+                
+                # Re-run setup
+                my_sketch.setup()
+                
+                print(f"✅ Reloaded successfully!")
+                self.was_error = False
+                
+            except Exception:
+                if not self.was_error:
+                    print("❌ Error reloading:")
+                    print(traceback.format_exc())
+                    self.was_error = True
+        
+        def setup_wrapper():
+            """Initial setup"""
+            print(f"🔍 DEBUG: setup_wrapper called")
+            try:
                 my_sketch.setup()
                 self.was_error = False
             except Exception:
                 if not self.was_error:
-                    print("error in setup, code not updated")
+                    print("❌ Error in setup:")
                     print(traceback.format_exc())
                     self.was_error = True
         
         def draw_wrapper():
+            """Draw loop with reload checking"""
+            # Debug every 120 frames (every 2 seconds at 60fps)
+            if self.frames % 120 == 0:
+                print(f"🔍 DEBUG: Frame {self.frames}, reload_requested = {self.reload_requested}")
+            
+            # Check if reload was requested
+            if self.reload_requested:
+                print(f"\n🔥 DEBUG: RELOAD REQUESTED! Calling reload_sketch()")
+                self.reload_requested = False
+                reload_sketch()
+            
             try:
-                importlib.reload(sketch_module)
-                new_class = sketch_module.MySketch
-                my_sketch.__class__ = new_class
-                
                 # Handle run_once function
                 if hasattr(my_sketch, 'run_once'):
                     func_key = inspect.getsource(my_sketch.run_once)
@@ -1178,15 +290,63 @@ class Dorothy:
                         my_sketch.run_once()
                         my_sketch.once_ran = True
                 
+                # Call draw
                 my_sketch.draw()
                 self.was_error = False
+                
             except Exception:
                 if not self.was_error:
+                    print("❌ Error in draw:")
                     print(traceback.format_exc())
-                    print("error in draw loop, code not updated")
                     self.was_error = True
         
-        self.start_loop(setup_wrapper, draw_wrapper)    
+        # Start file watching
+        print(f"🔍 DEBUG: Creating file observer...")
+        event_handler = SketchReloadHandler(self)
+        observer = Observer()
+        observer.schedule(event_handler, path=str(sketch_file.parent), recursive=False)
+        observer.start()
+        print(f"🔍 DEBUG: Observer started successfully")
+        
+        print(f"\n👀 Watching {sketch_file.name} for changes...")
+        print(f"💡 Edit and save {sketch_file.name} to see live updates!")
+        print(f"🎨 Press Q or ESC to quit\n")  
+        
+        try:
+            # This is the ONLY start_loop call
+            self.start_loop(setup_wrapper, draw_wrapper)
+        finally:
+            print(f"🔍 DEBUG: Stopping observer...")
+            observer.stop()
+            observer.join()
+            print(f"🔍 DEBUG: Observer stopped")
+    
+   
+
+    def get_images(self, root_dir = "data/animal_thumbnails/land_mammals/cat", thumbnail_size = (50,50)):
+        #Set the thumbnail size (you can change this but you won't want to make it too big!)
+        images = []
+        import glob 
+        #Search through the separate file extensions 
+        for ext in ('*.jpeg', '*.jpg', '*.png'):
+            #Search through all the image files recursively in the directory
+            for file in glob.glob(f'{root_dir}/**/{ext}', recursive=True):
+                #Open the image using the file path
+                im = cv2.imread(file)
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+                #Create a downsampled image based on the thumbnail size
+                thumbnail = cv2.resize(im, thumbnail_size)
+                thumbnail = np.asarray(thumbnail)
+                #Check not grayscale (only has 2 dimensions)
+                if len(thumbnail.shape) == 3:
+                    #Append thumbnail to the list of all the images
+                    #Drop any channels beyond rbg (e.g. Alpha for .png files)
+                    images.append(thumbnail[:,:,:3])
+
+        print(f'There have been {len(images)} images found')
+        #Convert list of images to a numpy array
+        image_set_array = np.asarray(images)
+        return image_set_array
 
     def exit(self):
         self.music.clean_up()
@@ -1306,11 +466,30 @@ class Dorothy:
         if not self._initialized:
             raise RuntimeError("Dorothy not initialized. Call start_loop() first.")
     
-    def background(self, color: Tuple):
-        """Set background color and clear"""
-        self._ensure_renderer()
-        self.renderer.clear(color)
+    # def background(self, color: Tuple):
+    #     """Set background color and clear"""
+    #     color = self._parse_color(color)
+        
+    #     # If we're rendering to a layer, clear the layer
+    #     if self.renderer.active_layer is not None:
+    #         fbo = self.renderer.layers[self.renderer.active_layer]['fbo']
+    #         fbo.clear(color[0], color[1], color[2], color[3])
+    #     else:
+    #         # Rendering to screen - just set flag
+    #         self.should_clear = True
+    #         self.clear_color = color
     
+    def _parse_color(self, color):
+        """Parse color from various formats to normalized (0-1) values"""
+        if isinstance(color, tuple):
+            if len(color) == 3:
+                r, g, b = color
+                return (r/255.0, g/255.0, b/255.0, 1.0)
+            elif len(color) == 4:
+                r, g, b, a = color
+                return (r/255.0, g/255.0, b/255.0, a/255.0)
+        return color
+
     def fill(self, color: Tuple):
         """Set fill color"""
         self._ensure_renderer()
@@ -1395,10 +574,12 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.rotate(angle, x, y, z)
     
-    def scale(self, s: float):
-        """Scale uniformly"""
+    def scale(self, x: float, y:float=None):
+        """Scale 2D"""
         self._ensure_renderer()
-        self.renderer.scale(s)
+        if y is None:
+            y = x
+        self.renderer.scale(x,y)
     
     def reset_transforms(self):
         """Reset transforms"""
