@@ -17,16 +17,12 @@ from typing import Tuple, Optional, Callable
 import time
 from .css_colours import css_colours
 from .Audio import *
-from time import sleep
-import sys
 import signal
+import traceback
+import cv2
 import wave
 import subprocess
-import importlib
-import traceback
-import inspect
 import datetime
-
 
 class Transform:
     """Manages transformation matrices"""
@@ -411,6 +407,37 @@ class DorothyRenderer:
         fbo.clear(*color)
     
     # ====== Image/Texture Pasting ======
+
+    def get_pixels(self) -> np.ndarray:
+        """Get current screen pixels as numpy array
+        
+        Returns:
+            np.ndarray: RGB image array (height, width, 3) in uint8 format
+        """
+        # Read pixels from the screen framebuffer
+        pixels = self.ctx.screen.read(components=3)
+        
+        # Convert to numpy array
+        img = np.frombuffer(pixels, dtype=np.uint8)
+        img = img.reshape((self.height, self.width, 3))
+        
+        # Flip vertically (OpenGL origin is bottom-left)
+        img = np.flipud(img)
+        
+        # Convert RGB to BGR for OpenCV compatibility
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        
+        return img
+        """Free a layer's resources
+        
+        Args:
+            layer_id: The layer to release
+        """
+        if layer_id in self.layers:
+            self.layers[layer_id]['fbo'].release()
+            self.layers[layer_id]['texture'].release()
+            del self.layers[layer_id]
+    
     
     def paste(self, image: np.ndarray, position: Tuple[int, int], 
               size: Optional[Tuple[int, int]] = None, alpha: float = 1.0):
@@ -942,9 +969,25 @@ class DorothyWindow(mglw.WindowConfig):
         except Exception as e:
             if self.dorothy.frames < 5:
                 print(f"Error in draw(): {e}")
-        
+
+        if self.dorothy.recording:
+            canvas_rgb = self.dorothy.get_pixels()
+            self.dorothy.video_recording_buffer.append({
+                "frame": canvas_rgb,
+                "timestamp": self.dorothy.millis
+            })
+            
         self.dorothy.frames += 1
-    
+
+        if self.dorothy.recording and self.dorothy.end_recording_at < self.dorothy.millis:
+            try:
+                self.dorothy.stop_record()
+            except Exception as e:
+                print("error recording video")
+                print(e)
+                traceback.print_exc()
+            self.dorothy.end_recording_at = np.inf
+
     def on_mouse_position_event(self, x, y, dx, dy):
         self.dorothy.mouse_x = int(x)
         self.dorothy.mouse_y = int(y)
@@ -1001,73 +1044,7 @@ class DorothyWindow(mglw.WindowConfig):
 
 
 class Dorothy:
-    """
-    Main Dorothy class with Processing-like API
-    
-    Usage:
-        dot = Dorothy()
-        
-        # Test layer transparency
-    class LayerTransparencyTest:
-        def __init__(self):
-            self.layer1 = None
-            self.layer2 = None
-            dot.start_loop(self.setup, self.draw)
-        
-        def setup(self):
-            print("=== Layer Transparency Test ===")
-            self.layer1 = dot.get_layer()
-            self.layer2 = dot.get_layer()
-            
-            # Draw static content to layer 1 (red circle)
-            dot.begin_layer(self.layer1)
-            dot.fill((255, 0, 0))
-            dot.no_stroke()
-            dot.circle((300, 300), 100)
-            dot.end_layer()
-            
-            # Draw static content to layer 2 (blue circle)
-            dot.begin_layer(self.layer2)
-            dot.fill((0, 0, 255))
-            dot.no_stroke()
-            dot.circle((500, 300), 100)
-            dot.end_layer()
-            
-            print("Layers created and drawn to")
-        
-        def draw(self):
-            # Clear background to dark gray
-            dot.background((50, 50, 50))
-            
-            # Draw both layers with different alpha values
-            dot.draw_layer(self.layer1, alpha=1.0)  # Full opacity
-            dot.draw_layer(self.layer2, alpha=0.5)  # Half transparent
-            
-            # Draw some direct shapes on screen for comparison
-            dot.fill((0, 255, 0))
-            dot.no_stroke()
-            dot.circle((400, 150), 50)  # Green circle on screen
-            
-            if dot.frames == 1:
-                print("You should see:")
-                print("- Red circle (opaque) at left")
-                print("- Blue circle (50% transparent) at right - should see gray through it")
-                print("- Green circle at top")
-    
-    class MySketch:
-            def __init__(self):
-                dot.start_loop(self.setup, self.draw)
-            
-            def setup(self):
-                dot.background((255, 255, 255))
-            
-            def draw(self):
-                dot.fill((255, 0, 0))
-                dot.circle((400, 300), 50)
-        
-        MySketch()
-    """
-    
+
     # Class variables for window management
     _pending_instance = None
     _instance = None
@@ -1084,6 +1061,9 @@ class Dorothy:
         self.renderer = None
         self.wnd = None
         self._initialized = False
+
+        self.end_recording_at = np.inf
+        self.recording = False
         
         # User sketch
         self.setup_fn = None
@@ -1106,11 +1086,37 @@ class Dorothy:
         print("done load colours")
 
     def __getattr__(self, name):
-        # Dynamically retrieve colour attributes
-        try:
-            return self._colours[name]
-        except KeyError:
-            raise AttributeError(f"{name} not found in colour attributes")
+        """Dynamically retrieve color attributes"""
+        # Check if _colours exists first (in case called during __init__)
+        if '_colours' in self.__dict__:
+            if name in self._colours:
+                return self._colours[name]
+            # Provide helpful error for possible typos
+            close_matches = [c for c in self._colours.keys() if c.startswith(name[:3])]
+            if close_matches:
+                raise AttributeError(
+                    f"'{type(self).__name__}' object has no attribute '{name}'. "
+                    f"Did you mean one of: {', '.join(close_matches[:5])}?"
+                )
+        
+        # Standard error message
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+    
+        # Screen capture
+    def get_pixels(self) -> np.ndarray:
+        """Get current screen pixels as numpy array (for recording/screenshots)
+        
+        Returns:
+            np.ndarray: BGR image array (height, width, 3) compatible with OpenCV
+            
+        Example:
+            frame = dot.get_pixels()
+            cv2.imwrite('screenshot.png', frame)
+        """
+        self._ensure_renderer()
+        return self.renderer.get_pixels()
     
     def start_loop(self, setup_fn: Callable, draw_fn: Callable):
         """Start the render loop with setup and draw functions"""
@@ -1184,6 +1190,99 @@ class Dorothy:
 
     def exit(self):
         self.music.clean_up()
+
+    def start_record(self, audio_output=0, end=None):
+        """
+        Start collecting frames
+        """
+        if not self.recording:
+            print("starting record", self.millis, end)
+            self.video_recording_buffer = []
+            self.start_record_time = self.millis
+            if audio_output < len(self.music.audio_outputs):
+                print("starting record audio", audio_output)
+                output = self.music.audio_outputs[audio_output]
+                output.recording_buffer = []
+                output.recording = True
+            self.recording = True
+            if not end == None:
+                self.end_recording_at = self.millis + end
+            
+    def stop_record(self, output_video_path = None, fps = 25, audio_output = 0, audio_latency = 6):
+        """
+        Stop collecting frames and render capture
+        Args:
+            output_video_path (str): where to save file
+            fps (int): The frame rate to render the video. Defaults to 25
+            audio_output (int): which audio device to use
+            audio_latency (int): number of frames to pad to resync audio with video
+        """
+        if output_video_path is None:
+            output_video_path = "record_output_" + datetime.datetime.now().strftime("%Y_%m_%d_%h_%H_%M_%S") + ".mp4"
+        if self.recording:
+            print("stopping record, writing file")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_video_path, fourcc, fps, (self.width, self.height))
+            frame_interval = (1.0 / fps) * 1000
+            next_frame_time = self.start_record_time
+
+            for i in range(1, len(self.video_recording_buffer)):
+                current_frame = self.video_recording_buffer[i]["frame"]
+                current_time = self.video_recording_buffer[i]["timestamp"]
+                
+                while next_frame_time <= current_time:
+                    out.write(current_frame) 
+                    next_frame_time += frame_interval
+
+            out.release()
+            self.recording = False
+            self.video_recording_buffer = []
+
+            if audio_output < len(self.music.audio_outputs):
+                output = self.music.audio_outputs[audio_output]
+                
+                def save_audio_to_wav(audio_frames, sample_rate, file_name):
+                    audio_frames = np.array(audio_frames)
+                    print("Before reshape:", np.array(audio_frames).shape)
+                    audio_frames_flat = audio_frames.reshape(-1, audio_frames.shape[-1])
+                    print("After reshape:", audio_frames_flat.shape)
+                    with wave.open(file_name, 'wb') as wav_file:
+                        wav_file.setnchannels(audio_frames_flat.shape[1]) # should be stereo
+                        wav_file.setsampwidth(2)  # 16-bit audio
+                        wav_file.setframerate(sample_rate)
+                        wav_file.writeframes((audio_frames_flat * 32767).astype(np.int16).tobytes())
+
+                def combine_audio_video(wav_file, mp4_file, output_file):
+                    command = [
+                        'ffmpeg', '-y', '-i', mp4_file, '-i', wav_file,
+                        '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', output_file
+                    ]
+                    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    if result.returncode == 0:
+                        print(f"Successfully combined audio and video into {output_file}")
+                        os.remove(wav_file)
+                        os.remove(mp4_file)
+                        os.rename(output_file, mp4_file)
+                        print(f"Renamed {output_file} to {mp4_file}")
+                    else:
+                        print(f"Error combining audio and video: {result.stderr}")
+                
+                #mono
+                audio_data = np.array(output.recording_buffer)
+                print(audio_data.shape)
+                if len(audio_data) > 0:
+                    combined_file = 'combined_video.mp4'
+                    sample_rate = output.sr  
+                    audio_file = 'output_audio.wav'
+                    
+                    #padd some zeros to get back in sync with visuals (audio is early apparently)
+                    audio_data = np.pad(audio_data, ((audio_latency,0),(0,0), (0, 0)), mode='constant', constant_values=0)
+                    save_audio_to_wav(audio_data, sample_rate, audio_file)
+                    combine_audio_video(audio_file, output_video_path, combined_file)
+                    output.audio_recording_buffer = []
+                    output.recording = False
+                else:
+                    print("no audio to write to file")
 
     # ====== Properties ======
     
@@ -1405,180 +1504,3 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.paste(image, position, size, alpha)
 
-
-# ====== Example Usage ======
-
-if __name__ == "__main__":
-    # Create Dorothy instance - now works correctly!
-    dot = Dorothy(width=800, height=600, title="Dorothy Demo")
-    
-    # Simple test to verify basic drawing
-    class SimpleTest:
-        def __init__(self):
-            dot.start_loop(self.setup, self.draw)
-        
-        def setup(self):
-            print("Setup called!")
-            print("Move mouse around the window to test mouse events")
-            # Camera is 2D by default
-        
-        def draw(self):
-            # Clear background
-            dot.background((50, 50, 60))
-            
-            # Draw a red circle
-            dot.fill((255, 0, 0))
-            dot.no_stroke()
-            dot.circle((400, 300), 100)
-            
-            # Draw a blue rectangle with stroke
-            dot.fill((0, 0, 255))
-            dot.stroke((255, 255, 0))
-            dot.set_stroke_weight(3)
-            dot.rectangle((100, 100), (200, 200))
-            
-            # Draw a line
-            dot.stroke((0, 255, 0))
-            dot.set_stroke_weight(5)
-            dot.line((50, 50), (750, 550))
-            
-            # Draw circle at mouse position
-            dot.fill((255, 255, 255))
-            dot.no_stroke()
-            dot.circle((dot.mouse_x, dot.mouse_y), 20)
-            
-            # Print mouse position to console (throttled by frame rate)
-            if dot.frames % 30 == 0:  # Print every 30 frames
-                print(f"Mouse: ({dot.mouse_x}, {dot.mouse_y}), Down: {dot.mouse_down}")
-    
-    class MySketch:
-        def __init__(self):
-            self.angle = 0
-            self.trail_layer = None
-            dot.start_loop(self.setup, self.draw)
-        
-        def setup(self):
-            print("=== MySketch Setup ===")
-            self.trail_layer = dot.get_layer()
-            print(f"Trail layer ID: {self.trail_layer}")
-        
-        def draw(self):
-            # Clear screen
-            dot.background((30, 30, 40))
-            
-            # Calculate position
-            x = 400 + 200 * np.cos(self.angle)
-            y = 300 + 200 * np.sin(self.angle)
-            
-            # Draw to trail layer
-            dot.begin_layer(self.trail_layer)
-            
-            # Optional: fade effect with semi-transparent background
-            if dot.frames % 2 == 0:  # Only fade every other frame for slower fade
-                dot.fill((30, 30, 40))
-                dot.no_stroke()
-                dot.rectangle((0, 0), (800, 600))
-            
-            # Draw new circle
-            dot.fill((255, 100, 100))
-            dot.no_stroke()
-            dot.circle((x, y), 20)
-            
-            dot.end_layer()
-            
-            # Draw the trail layer to screen
-            dot.draw_layer(self.trail_layer, alpha=1.0)
-            
-            # Also draw current position directly on screen (bright green)
-            dot.fill((100, 255, 100))
-            dot.circle((x, y), 10)
-            
-            self.angle += 0.05
-            
-            # Debug every 60 frames
-            if dot.frames % 60 == 0:
-                print(f"Frame {dot.frames}, angle={self.angle:.2f}, pos=({x:.0f}, {y:.0f})")
-    
-    # Alternate example with 3D:
-    class Example3D:
-        def __init__(self):
-            self.angle = 0
-            dot.start_loop(self.setup, self.draw)
-        
-        def setup(self):
-            print("3D Setup!")
-            dot.camera_3d()
-            dot.set_camera((0, 0, 5), (0, 0, 0))
-        
-        def draw(self):
-            dot.background((30, 30, 40))
-            
-            # Draw 3D rotating cube
-            dot.push_matrix()
-            dot.translate(0, 0, 0)
-            dot.rotate(self.angle, 1, 1, 0)
-            dot.fill((255, 100, 100))
-            dot.box(1, 1, 1)
-            dot.pop_matrix()
-            
-            # Draw 3D sphere
-            dot.push_matrix()
-            dot.translate(-2, 0, 0)
-            dot.fill((100, 255, 100))
-            dot.sphere(0.5)
-            dot.pop_matrix()
-            
-            self.angle += 0.01
-    
-    # Example with image pasting:
-    class ImageExample:
-        def __init__(self):
-            self.angle = 0
-            self.image = None
-            dot.start_loop(self.setup, self.draw)
-        
-        def setup(self):
-            print("Image Example Setup!")
-            dot.camera_2d()
-            
-            # Create a procedural image (checkerboard pattern)
-            # In real use, you'd load this with cv2.imread() or PIL
-            size = 100
-            self.image = np.zeros((size, size, 4), dtype=np.uint8)
-            
-            # Create checkerboard
-            square_size = 10
-            for i in range(size):
-                for j in range(size):
-                    if ((i // square_size) + (j // square_size)) % 2 == 0:
-                        self.image[i, j] = [255, 100, 100, 255]  # Red
-                    else:
-                        self.image[i, j] = [100, 100, 255, 255]  # Blue
-        
-        def draw(self):
-            dot.background((30, 30, 40))
-            
-            # Paste image at different positions with different effects
-            
-            # Static image
-            dot.paste(self.image, (50, 50))
-            
-            # Rotated position (using angle)
-            x = 400 + 150 * np.cos(self.angle)
-            y = 300 + 150 * np.sin(self.angle)
-            dot.paste(self.image, (int(x), int(y)), size=(50, 50), alpha=0.8)
-            
-            # Scaled and faded
-            scale = 0.5 + 0.5 * np.sin(self.angle * 2)
-            size = int(100 * scale)
-            dot.paste(self.image, (600, 400), size=(size, size), alpha=scale)
-            
-            self.angle += 0.02
-    
-    # Run the sketch - window will open and render
-    # Choose which example to run:
-    # SimpleTest()  # Start with this to verify basic drawing works
-    LayerTransparencyTest()  # Test if layers support transparency
-    # MySketch()  # 2D with trails - should work now with debugging
-    # Example3D()  # 3D rotating objects
-    # ImageExample()  # Image pasting demonstration
