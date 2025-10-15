@@ -11,6 +11,14 @@ class MySketch:
 
     def setup(self):
         print("setup")
+        self.color = dot.red
+        def mouse_pressed(x,y,b):
+            if self.color == dot.red:
+                self.color = dot.blue
+            else:
+                self.color = dot.red
+            print("HERERERE",x,y,b)
+        dot.on_mouse_press = mouse_pressed
         # #Play file from your computer
         # file_path = "../audio/disco.wav"
         # dot.music.start_file_stream(file_path, fft_size=512)
@@ -21,8 +29,7 @@ class MySketch:
         #dot.music.start_device_stream(3)
     
     def draw(self):
-        dot.fill((255, 255, 0))
-        print(dot.mouse_x, dot.mouse_y)
+        dot.fill(self.color)
         dot.circle((dot.mouse_x, dot.mouse_y), 100)
 
 MySketch()          

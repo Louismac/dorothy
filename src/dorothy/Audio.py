@@ -21,6 +21,7 @@ except ImportError:
 class Audio:
     
     audio_outputs = []  
+    clocks = []
 
     def __init__(self):
         print("Loading Audio Engine")
@@ -176,6 +177,13 @@ class Audio:
         index = len(self.audio_outputs)-1
         self.play(index)
         return index
+
+    def get_clock(self, bpm=120):
+        c = Clock()
+        c.set_bpm(bpm)
+        self.clocks.append(c)
+        return self.clocks[len(self.clocks)-1]
+    
     
     #We actually return a previous value to account for audio latency
     def fft(self, output = 0):
@@ -192,7 +200,7 @@ class Audio:
             return o.fft_vals[(o.audio_buffer_write_ptr+1)%o.audio_latency]
     
     #We actually return a previous value to account for audio latency
-    def amplitude(self, output = 0, smooth =1):
+    def amplitude(self, output = 0):
         """
         Return current amplitude (for visualising)
         
@@ -224,6 +232,12 @@ class Audio:
         if output < len(self.audio_outputs):
             o = self.audio_outputs[output]
             o.resume()
+    
+    def clean_up(self):
+        for o in self.audio_outputs:
+            o.stop()  
+        for c in self.clocks:
+            c.stop()  
 
     #Has there been a beat since this was last called?
     def is_beat(self, output=0):
@@ -552,12 +566,12 @@ class AudioCapture(AudioDevice):
                 if audio_data.ndim == 1:
                     audio_data = audio_data[:,np.newaxis]
                 #duplicate to fill channels (mostly generating mono)
-                diff = channels - audio_data.shape[1]
+                dif = channels - audio_data.shape[1]
                 # print(audio_data.ndim,audio_data.shape,dif)
-                if diff > 0:
+                if dif > 0:
                     #Tile out one channel
                     audio_data = np.tile(audio_data, (1,channels))
-                elif diff < 0:
+                elif dif < 0:
                     audio_data = audio_data[:,:channels]
                 # print(audio_data.ndim,audio_data.shape)
                 self.recording_buffer.append(audio_data)

@@ -569,7 +569,10 @@ class DorothyRenderer:
         """Convert color from 0-255 to 0-1 range"""
         if len(color) == 3:
             return (color[0]/255, color[1]/255, color[2]/255, 1.0)
-        return (color[0]/255, color[1]/255, color[2]/255, color[3]/255)
+        elif len(color) == 4:
+            return (color[0]/255, color[1]/255, color[2]/255, color[3]/255)
+        else:
+            raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
     def _draw_annotation(self, position: Tuple[float, float], text: str):
         """Draw annotation text near a shape (simplified version)
@@ -637,6 +640,10 @@ class DorothyRenderer:
         vbo = self.ctx.buffer(vertices)
         vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
         
+        # Enable blending for transparency
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        
         # Set uniforms
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(self.transform.matrix)
@@ -689,6 +696,10 @@ class DorothyRenderer:
         vbo = self.ctx.buffer(vertices)
         vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
         
+        # Enable blending for transparency
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(self.transform.matrix)
         
@@ -720,6 +731,10 @@ class DorothyRenderer:
         
         vbo = self.ctx.buffer(vertices)
         vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
+
+        # Enable blending for transparency
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(self.transform.matrix)
@@ -740,19 +755,46 @@ class DorothyRenderer:
     
     # ====== 3D Drawing Methods ======
     
-    def sphere(self, radius: float = 1.0, detail: int = 32):
-        """Draw a 3D sphere"""
+    def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
+        """Draw a 3D sphere
+        
+        Args:
+            radius: Sphere radius
+            position: (x, y, z) center position
+        """
         if not self.sphere_geometry:
-            self.sphere_geometry = geometry.sphere(radius=radius, sectors=detail, rings=detail)
+            self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
+        
+        # Apply position and scale
+        self.transform.push()
+        self.transform.translate(position[0], position[1], position[2])
+        self.transform.scale(radius)
         
         self._draw_3d_geometry(self.sphere_geometry)
+        
+        self.transform.pop()
     
-    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0):
-        """Draw a 3D box"""
+    def box(self, size: Tuple[float, float, float] = (1.0, 1.0, 1.0), 
+            position: Tuple[float, float, float] = (0, 0, 0)):
+        """Draw a 3D box
+        
+        Args:
+            size: (width, height, depth) tuple
+            position: (x, y, z) center position
+        """
+        width, height, depth = size
+        
         if not self.box_geometry:
-            self.box_geometry = geometry.cube(size=(width, height, depth))
+            self.box_geometry = geometry.cube(size=(1.0, 1.0, 1.0))
+        
+        # Apply position and scale
+        self.transform.push()
+        self.transform.translate(position[0], position[1], position[2])
+        self.transform.scale(width, height, depth)
         
         self._draw_3d_geometry(self.box_geometry)
+        
+        self.transform.pop()
     
     def _draw_3d_geometry(self, geom):
         """Internal method to render 3D geometry"""
@@ -770,7 +812,11 @@ class DorothyRenderer:
     
     def fill(self, color: Tuple):
         """Set fill color"""
-        self.fill_color = color
+        # Handle both RGB and RGBA
+        if len(color) == 3:
+            self.fill_color = (*color, 255)
+        else:
+            self.fill_color = color
         self.use_fill = True
     
     def no_fill(self):
@@ -779,7 +825,11 @@ class DorothyRenderer:
     
     def stroke(self, color: Tuple):
         """Set stroke color"""
-        self.stroke_color = color
+        # Handle both RGB and RGBA
+        if len(color) == 3:
+            self.stroke_color = (*color, 255)
+        else:
+            self.stroke_color = color
         self.use_stroke = True
     
     def no_stroke(self):
@@ -845,6 +895,9 @@ class DorothyWindow(mglw.WindowConfig):
         
         # Set default 2D camera mode
         self.dorothy.renderer.camera.mode = '2d'
+
+        self.dorothy.keys = self.wnd.keys
+        self.dorothy.modifiers = self.wnd.modifiers
         
         # Try to activate/focus the window
         try:
@@ -856,20 +909,11 @@ class DorothyWindow(mglw.WindowConfig):
                 print("Window set visible")
         except Exception as e:
             print(f"Could not activate window: {e}")
-        
+    
+
         # Call user setup
         if self.dorothy.setup_fn:
             self.dorothy.setup_fn()
-    
-        self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
-        print("done load colours")
-
-    def __getattr__(self, name):
-        # Dynamically retrieve colour attributes
-        try:
-            return self._colours[name]
-        except KeyError:
-            raise AttributeError(f"{name} not found in colour attributes")
         
     def on_render(self, render_time: float, frame_time: float):
         """Called every frame"""
@@ -904,27 +948,48 @@ class DorothyWindow(mglw.WindowConfig):
     def on_mouse_position_event(self, x, y, dx, dy):
         self.dorothy.mouse_x = int(x)
         self.dorothy.mouse_y = int(y)
-        # print(self.dorothy.mouse_x, self.dorothy.mouse_y)
-        # print("Mouse position:", x, y, dx, dy)
 
     def on_mouse_drag_event(self, x, y, dx, dy):
-        print("Mouse drag:", x, y, dx, dy)
+        if self.dorothy.on_mouse_drag is not None:
+            self.dorothy.on_mouse_drag(x,y,dx,dy)
+            print("Mouse drag:", x, y, dx, dy)
 
     def on_mouse_scroll_event(self, x_offset: float, y_offset: float):
-        print("Mouse wheel:", x_offset, y_offset)
+        if self.dorothy.on_scroll is not None:
+            self.dorothy.on_scroll(x_offset,y_offset)
+            print("Mouse wheel:", x_offset, y_offset)
 
     def on_mouse_press_event(self, x, y, button):
-        print("Mouse button {} pressed at {}, {}".format(button, x, y))
+        if self.dorothy.on_mouse_press is not None:
+            self.dorothy.on_mouse_press(x,y,button)
+            print("Mouse button {} pressed at {}, {}".format(button, x, y))
 
     def on_mouse_release_event(self, x: int, y: int, button: int):
-        print("Mouse button {} released at {}, {}".format(button, x, y))
+        if self.dorothy.on_mouse_release is not None:
+            self.dorothy.on_mouse_release(x,y,button)
+            print("Mouse button {} released at {}, {}".format(button, x, y))
+
     
-    def key_event(self, key, action, modifiers):
-        """Handle keyboard events"""
+    def on_key_event(self, key, action, modifiers):
+        print(key, action, modifiers)
+        if self.dorothy.on_key_press is not None:
+            self.dorothy.on_key_press(key, action, modifiers)
         if action == self.wnd.keys.ACTION_PRESS:
             if key == self.wnd.keys.Q or key == self.wnd.keys.ESCAPE:
                 self.wnd.close()
                 print("Window closing...")
+    
+    def on_close(self):
+        """Called when window is closing"""
+        # Call user cleanup callback
+        print("close!!!")
+        if self.dorothy.on_close:
+            try:
+                self.dorothy.on_close()
+            except Exception as e:
+                print(f"Error in on_close callback: {e}")
+        self.dorothy.exit()  
+
     
     def resize(self, width: int, height: int):
         if self.dorothy.renderer:
@@ -1023,6 +1088,12 @@ class Dorothy:
         # User sketch
         self.setup_fn = None
         self.draw_fn = None
+        self.on_close = None
+        self.on_mouse_press = None
+        self.on_mouse_release = None
+        self.on_mouse_drag = None
+        self.on_scroll = None
+        self.on_key_press = None
         
         # Processing-like properties
         self.mouse_x = 0
@@ -1030,13 +1101,16 @@ class Dorothy:
         self.mouse_down = False
         self.frames = 0
         self.start_time = time.time()
-        
-        # Color constants (for compatibility)
-        self.black = (0, 0, 0)
-        self.white = (255, 255, 255)
-        self.red = (255, 0, 0)
-        self.green = (0, 255, 0)
-        self.blue = (0, 0, 255)
+
+        self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
+        print("done load colours")
+
+    def __getattr__(self, name):
+        # Dynamically retrieve colour attributes
+        try:
+            return self._colours[name]
+        except KeyError:
+            raise AttributeError(f"{name} not found in colour attributes")
     
     def start_loop(self, setup_fn: Callable, draw_fn: Callable):
         """Start the render loop with setup and draw functions"""
@@ -1109,8 +1183,7 @@ class Dorothy:
         self.start_loop(setup_wrapper, draw_wrapper)    
 
     def exit(self):
-        # self.music.clean_up()
-        sys.exit(0)
+        self.music.clean_up()
 
     # ====== Properties ======
     
@@ -1180,16 +1253,27 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.line(pos1, pos2, annotate)
     
-    # 3D shapes
-    def sphere(self, radius: float = 1.0):
-        """Draw a 3D sphere"""
+   # 3D shapes
+    def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
+        """Draw a 3D sphere
+        
+        Args:
+            radius: Sphere radius
+            position: (x, y, z) center position
+        """
         self._ensure_renderer()
-        self.renderer.sphere(radius)
+        self.renderer.sphere(radius, position)
     
-    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0):
-        """Draw a 3D box"""
+    def box(self, size: Tuple[float, float, float] = (1.0, 1.0, 1.0), 
+            position: Tuple[float, float, float] = (0, 0, 0)):
+        """Draw a 3D box
+        
+        Args:
+            size: (width, height, depth) tuple
+            position: (x, y, z) center position
+        """
         self._ensure_renderer()
-        self.renderer.box(width, height, depth)
+        self.renderer.box(size, position)
     
     # Transforms
     def push_matrix(self):

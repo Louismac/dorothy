@@ -1,5 +1,7 @@
 src/build/
 src/dist/
+examples/models/
+models/
 PyPI-Recovery-Codes-louismac-2024-09-12T09_33_54.656610.txt
 examples/model/
 *.pyc

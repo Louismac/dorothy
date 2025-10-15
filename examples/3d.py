@@ -1,5 +1,4 @@
 from dorothy import Dorothy 
-import librosa
 import numpy as np
 
 dot = Dorothy(640,480)
@@ -10,26 +9,32 @@ class Example3D:
     
     def setup(self):
         print("3D Setup!")
-        dot.camera_3d()
+        
         dot.set_camera((0, 0, 5), (0, 0, 0))
     
     def draw(self):
         dot.background((30, 30, 40))
         
-        # Draw 3D rotating cube
+        # 3D box (animated)
         dot.push_matrix()
-        dot.translate(0, 0, 0)
-        dot.rotate(self.angle, 1, 1, 0)
-        dot.fill((255, 100, 100))
-        dot.box(1, 1, 1)
+        dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
+        dot.fill((100, 100, 255, 128))
+        dot.box((1, 1, 1), (0.5, 0, 0))
         dot.pop_matrix()
-        
-        # Draw 3D sphere
+
+        # Switch to 2D for rectangle
+        dot.camera_2d()
+
+        # Animate rectangle in 2D (screen coordinates)
         dot.push_matrix()
-        dot.translate(-2, 0, 0)
-        dot.fill((100, 255, 100))
-        dot.sphere(0.5)
+        x_offset = 100 * np.sin(np.pi * dot.frames * 0.01)  # Scale to pixels
+        dot.translate(x_offset, 0, 0)
+        dot.rectangle((0, 0), (300, 300))
         dot.pop_matrix()
+
+        dot.camera_3d()
+        # 3D sphere (static)
+        dot.fill((255, 100, 100, 128))
+        dot.sphere(1.0, (0, 0, 0))
         
-        self.angle += 0.01
 Example3D()
