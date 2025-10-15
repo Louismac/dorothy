@@ -87,7 +87,6 @@ class DorothyWindow(mglw.WindowConfig):
         # Display the persistent canvas to screen
         self.dorothy.renderer.draw_layer(self.dorothy._persistent_canvas)
     
-
        # Signal handler function
         def signal_handler(sig, frame):
             print('You pressed Ctrl+C! Closing the window.')

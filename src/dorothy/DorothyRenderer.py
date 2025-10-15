@@ -397,8 +397,12 @@ class DorothyRenderer:
         # If you want to clear, call clear_layer() first
     
     def end_layer(self):
-        """Stop rendering to layer, return to screen"""
+        """Stop rendering to layer"""
+        if self.active_layer is None:
+            return  # Already not in a layer
+        
         self.active_layer = None
+        # Default to screen (but don't explicitly call .use() to avoid overriding)
         self.ctx.screen.use()
         self.ctx.viewport = (0, 0, self.width, self.height)
     
@@ -415,7 +419,7 @@ class DorothyRenderer:
         
         # Don't change render target - draw to whatever is currently active
         # (This will be the persistent canvas during user's draw loop)
-        
+        self.ctx.disable(moderngl.DEPTH_TEST)
         # Enable proper alpha blending for layer compositing
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_equation = moderngl.FUNC_ADD
@@ -459,6 +463,7 @@ class DorothyRenderer:
             vao.render(moderngl.TRIANGLES)
             vao.release()
             vbo.release()
+            self.ctx.enable(moderngl.DEPTH_TEST)
         else:
             # Use simple fullscreen shader (NDC coordinates)
             shader = self.shader_texture
