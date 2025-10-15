@@ -14,6 +14,7 @@ class DorothyWindow(mglw.WindowConfig):
     samples = 4  # Enable MSAA for smoother lines
     clear_color = None
     aspect_ratio = None
+    vsync = True
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -77,11 +78,7 @@ class DorothyWindow(mglw.WindowConfig):
         
         # End drawing to persistent canvas
         self.dorothy.renderer.end_layer()
-        
-        # Check layer contents
-        fbo = self.dorothy.renderer.layers[self.dorothy._persistent_canvas]['fbo']
-        pixels = fbo.read(components=4)
-        non_zero = len([b for b in pixels if b > 0])
+
         # print(f"Layer has {non_zero} non-zero bytes")
         self.ctx.clear(0.0, 0.0, 0.0, 1.0)
         # Display the persistent canvas to screen

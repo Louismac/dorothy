@@ -18,7 +18,7 @@ class MySketch:
         dot.fill(dot.darkgreen)
         dot.circle(((dot.frames*2)%dot.width, (dot.frames*2)%dot.width), 100)
 
-        dot.fill((200,120,0,10))
-        dot.rectangle((0,0),(dot.width,dot.height))
+        # dot.fill((200,120,0,10))
+        # dot.rectangle((0,0),(dot.width,dot.height))
 
 MySketch()
