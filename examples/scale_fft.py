@@ -14,16 +14,15 @@ class MySketch:
     file_path = "../audio/drums.wav"
     self.rgb_images = np.array([np.array(Image.open(f'../images/aligned_faces/face_{i}.jpg')) for i in range(8)])
     dot.music.start_file_stream(file_path, fft_size=512, buffer_size=512)
-    dot.start_record(0, 10000)
   
   def draw(self):
 
     dot.background(dot.black)
     for bin_num, bin_val in enumerate(dot.music.fft()[:256:8]):
       x = bin_num*50
-      layer = dot.get_layer()
-      dot.paste(layer, self.rgb_images[bin_num%8], (x, 0))
-      layer = dot.scale_layer(layer, 1, bin_val)
-      dot.draw_layer(layer)
+      dot.push_matrix()
+      dot.scale(1,bin_val)
+      dot.paste(self.rgb_images[bin_num%8], (x, 0))
+      dot.pop_matrix()
 
 MySketch() 

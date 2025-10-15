@@ -1,12 +1,41 @@
 from dorothy import Dorothy
 
-dot = Dorothy(width=1080, height=960, title="Dorothy Demo")
- 
+dot = Dorothy(640,480)
 
-def setup():
-    dot.background((255, 255, 255))
+class MySketch:
 
-def draw():
-    dot.circle((dot.mouse_x, dot.mouse_y), 20)
+    def __init__(self):
+        dot.start_loop(self.setup, self.draw)           
+        
+    # def setup(self):
+    #     print("SETUP: drawing yellow circle")
+    #     dot.background(dot.beige)
+    #     dot.fill((255, 255, 0))
+    #     dot.circle((200, 300), 50)
 
-dot.start_loop(setup, draw)
+    # def draw(self):
+    #     dot.fill((0, 255, 0))
+    #     dot.circle((dot.frames, 300), 30)
+
+    def setup(self):
+        self.l = dot.get_layer()
+        dot.begin_layer(self.l)
+        dot.fill((255, 255, 0))
+        dot.circle((200, 300), 50)
+        dot.end_layer()
+        dot.background(dot.beige)
+
+    def draw(self):
+        dot.draw_layer(self.l)
+        dot.fill((0, 255, 0))
+        dot.circle((dot.frames, 300), 30)
+
+MySketch()   
+    
+
+
+
+
+
+
+

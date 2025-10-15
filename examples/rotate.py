@@ -25,19 +25,15 @@ class MySketch:
         dot.background((22, 208, 165))
         theta = dot.music.amplitude() * 3 * 2 * np.pi
         centre = np.array([dot.width//2, dot.height//2])
-        # #Initially draw line in middle
-        # top_left = (dot.width//2, 0)
-        # bottom_right = centre
-        # #rotate
-        # dot.rotate(theta)
-        # dot.line(top_left, bottom_right)
-
-        #Initially draw line in middle
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
-        dot.rotate(theta, centre)
-        dot.rectangle(top_left, bottom_right, annotate=True)
+        dot.push_matrix()
+        dot.translate(centre[0],centre[1])
+        dot.rotate(theta)
+        dot.translate(-centre[0],-centre[1])
+        dot.rectangle(top_left, bottom_right)
+        dot.pop_matrix()
         
 
 MySketch()          

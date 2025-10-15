@@ -28,7 +28,7 @@ class MySketch:
        
         to_paste = self.dataset[self.current_image]
         #Paste into canvas
-        dot.paste(dot.canvas, to_paste)
+        dot.paste(to_paste, (0,0))
 
 MySketch()          
 

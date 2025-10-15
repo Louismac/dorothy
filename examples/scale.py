@@ -22,18 +22,24 @@ class MySketch:
     def draw(self):
         
         dot.background((77, 72, 79))
-        
         factor = dot.music.amplitude() * 15 
-
         dot.stroke(dot.red)
         #Initially draw line in middle
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
-        #scale
-        dot.scale(factor, factor, centre)
+
+        dot.push_matrix()
+        
+        # move to middle to scale from centre as origin
+        dot.translate(centre[0],centre[1])
+        dot.scale(factor)
+        # move back to top corner to draw
+        dot.translate(-centre[0],-centre[1])
         dot.line(top_left, bottom_right)
         dot.circle(centre, 100)
+
+        dot.pop_matrix()
         
 MySketch()          
 

@@ -8,7 +8,6 @@ class MySketch:
     
     show_beat = False
     beat_ptr = 0
-    pattern_layer = dot.get_layer()
 
     def __init__(self):
         dot.start_loop(self.setup, self.draw)  
@@ -17,40 +16,30 @@ class MySketch:
         print("setup")
         #Play file from your computer
         file_path = "../audio/disco.wav"
-        #dot.music.start_file_stream(file_path, fft_size=512)
-        
-        #Pick or just stream from your computer
-        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        print(sd.query_devices())
-        dot.music.start_device_stream(2)
-        dot.start_record(end=5000)
+        dot.music.start_file_stream(file_path, fft_size=512)
+        self.pattern_layer = dot.get_layer()
         self.base_pattern()
+        dot.background(dot.beige)
         
     def draw(self):
-
-        extra_scale = 1
-        if dot.music.is_beat():
-            self.show_beat = True
-            self.beat_ptr = 0
-
-        if self.show_beat:
-            extra_scale = 1.5
-            self.beat_ptr += np.pi/15
-            if self.beat_ptr > np.pi:
-                self.show_beat = False
-
-        new_canvas = dot.get_layer()
-        new_canvas = self.pattern_layer.copy()
-        factor = (np.sin(self.beat_ptr)+1)*extra_scale
-        origin = (dot.width//2, dot.height//2)
-        new_canvas = dot.scale_layer(new_canvas, factor, factor, origin)
-        dot.draw_layer(new_canvas)
+  
+            factor = dot.music.amplitude() * 15 
+            centre = np.array([dot.width//2, dot.height//2])
+            dot.push_matrix()
+            dot.translate(centre[0], centre[1])
+            dot.scale(factor)
+            dot.translate(-centre[0], -centre[1])
+            dot.draw_layer(self.pattern_layer)
+            dot.pop_matrix()
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
+        
+        dot.begin_layer(self.pattern_layer)
         dot.stroke((255, 37, 21))
+        dot.set_stroke_weight(4)
         size = 30
-        dot.background((208, 184, 158))
+        dot.background((0,0,0,0))
         for i in range(dot.width//size):
             for j in range(dot.height//size):
                 y1 = j*size
@@ -59,8 +48,8 @@ class MySketch:
                 y2 = j*size
                 if np.random.random()<0.5:
                     y2 = (j+1)*size
-
-                dot.line((i*size,y1), ((i+1)*size,y2), layer = self.pattern_layer) 
+                dot.line((i*size,y1), ((i+1)*size,y2)) 
+        dot.end_layer()
         
 MySketch()         
 

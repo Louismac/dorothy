@@ -17,7 +17,7 @@ class MySketch:
         latent_dim = 16
         print(sd.query_devices())
         
-        rave_id = dot.music.start_rave_stream("/Users/lmccallum/Documents/checkpoints/RAVE/rave_jungle.ts", latent_dim=latent_dim)
+        rave_id = dot.music.start_rave_stream("models/rave_jungle.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
         # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
@@ -79,22 +79,16 @@ class MySketch:
 
     def draw(self):
         dot.background((255,255,255))
-        win_size = 10
-        scale = 15
-        alpha = 0.4
 
-        #Only draw 20 rectangles
-        for i in range(20):
-            #Get max fft val in window of frequeny bins
-            window = dot.music.fft()[i*win_size:(i+1)*win_size]
-            val = int(np.mean(window))
-            width = val*(i*scale)
-            top_left = (dot.width//2-width,dot.height//2-width)
-            bottom_right = (dot.width//2+width,dot.height//2+width)
-            #draw to an alpha layer
-            new_layer = dot.get_layer()
-            rectangle(new_layer, top_left, bottom_right, (10*val,26*val,143*val), -1)
-            dot.draw_layer(new_layer, alpha)
+        for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
+            bin_val = bin_val * 10
+            pt1 = (bin_num*50, dot.height)
+            pt2 = (0, dot.height-int(bin_val*1000))
+            color = (0,(1-bin_val)*255,0)
+            thickness = 1+int(bin_val*2)
+            dot.stroke(color)
+            dot.set_stroke_weight(thickness)
+            dot.line(pt1, pt2)
 
 MySketch()          
 
