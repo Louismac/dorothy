@@ -11,7 +11,6 @@ class MySketch:
     def setup(self):
         self.rgb_image = Image.open('../images/space.jpg')
         self.mario = Image.open('../images/mario.png')
-        # self.grayscale = self.rgb_image.convert('L')
         self.grayscale = np.array(self.rgb_image)
         self.rgb_image = np.array(self.rgb_image)
         self.layer = dot.get_layer()
