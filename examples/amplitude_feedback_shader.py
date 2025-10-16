@@ -26,8 +26,8 @@ class MySketch:
         
     def draw(self):
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
-        dot.apply_shader(self.feedback, accumulate=True, zoom=0.99)
+        dot.circle((dot.width//2,dot.height//2),100)
+        dot.apply_shader(self.feedback, accumulate=True, zoom=1-(dot.music.amplitude()*5))
 
 MySketch()   
     
