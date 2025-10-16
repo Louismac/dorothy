@@ -13,11 +13,6 @@ class ImageExample:
         dot.start_loop(self.setup, self.draw)
     
     def setup(self):
-        print("Image Example Setup!")
-        dot.camera_2d()
-        
-        # Create a procedural image (checkerboard pattern)
-        # In real use, you'd load this with cv2.imread() or PIL
         self.rgb_image = Image.open('../images/space.jpg')
         self.mario = Image.open('../images/mario.png')
         self.grayscale = self.rgb_image.convert('L')
@@ -25,7 +20,6 @@ class ImageExample:
         self.rgb_image = np.array(self.rgb_image)
 
 
-    
     def draw(self):
         dot.background((30, 30, 40))
         
@@ -42,7 +36,7 @@ class ImageExample:
         # Scaled and faded
         scale = 0.5 + 0.5 * np.sin(self.angle * 2)
         size = int(100 * scale)
-        dot.paste(self.rgb_image, (600, 400), size=(size, size), alpha=scale)
+        dot.paste(self.rgb_image, (0, 0), size=(size, size), alpha=scale)
         
         self.angle += 0.02
 ImageExample()
