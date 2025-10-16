@@ -337,6 +337,7 @@ class AudioDevice:
         
         print("play_audio", "channels", self.channels, self.sr, "output_device",self.output_device)
         with sd.OutputStream(channels=self.channels, samplerate=self.sr, blocksize=self.buffer_size, device=self.output_device) as stream:
+            self.stream = stream
             while self.running:
                 if not self.pause_event.is_set():
                     audio_data = self.audio_callback()
@@ -376,6 +377,15 @@ class AudioDevice:
         if self.running:
             self.running = False
             self.play_thread.join()
+        try:
+            if hasattr(self, 'stream') and self.stream:
+                if self.stream.active == True:
+                    self.stream.abort()
+                self.stream.close()
+                self.stream = None
+        except Exception as e:
+            print(f"Error stopping stream: {e}")
+        
 
 #Generating audio from MAGNet models https://github.com/Louismac/MAGNet
 class MAGNetPlayer(AudioDevice):

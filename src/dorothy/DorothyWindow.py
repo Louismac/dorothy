@@ -60,45 +60,51 @@ class DorothyWindow(mglw.WindowConfig):
         """Called every frame"""
 
         # Create persistent canvas if needed
-        self.dorothy._ensure_persistent_canvas()
-        
-        # Initialize non-accumulating shader output tracker
-        self.dorothy._non_accumulating_shader_output = None
-        
-        # ALL user drawing goes to the persistent canvas
-        self.dorothy.renderer.begin_layer(self.dorothy._persistent_canvas)
-        self.dorothy.renderer.transform.reset()
-        
-        # Call user draw function
         try:
-            if self.dorothy.draw_fn:
-                self.dorothy.draw_fn()
-        except Exception as e:
-            if self.dorothy.frames < 5:
-                print(f"Error in draw(): {e}")
-        
-        # End drawing to persistent canvas
-        self.dorothy.renderer.end_layer()
-        
-        # Clear screen
-        self.ctx.screen.use()
-        self.ctx.clear(0.0, 0.0, 0.0, 1.0)
-        
-        # Display either shader output OR persistent canvas
-        if self.dorothy._non_accumulating_shader_output is not None:
-            # Non-accumulating shader was used - display its output
-            self.dorothy.renderer.draw_layer(self.dorothy._non_accumulating_shader_output)
+            self.dorothy._ensure_persistent_canvas()
             
-            # Clean up the temporary shader output
-            temp_layer = self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
-            temp_layer['fbo'].release()
-            temp_layer['texture'].release()
-            del self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
-        else:
-            # Normal mode - display persistent canvas
-            self.dorothy.renderer.draw_layer(self.dorothy._persistent_canvas)
-        
-        self.end_render()
+            # Initialize non-accumulating shader output tracker
+            self.dorothy._non_accumulating_shader_output = None
+            
+            # ALL user drawing goes to the persistent canvas
+            self.dorothy.renderer.begin_layer(self.dorothy._persistent_canvas)
+            self.dorothy.renderer.transform.reset()
+            
+            # Call user draw function
+            try:
+                if self.dorothy.draw_fn:
+                    self.dorothy.draw_fn()
+            except Exception as e:
+                if self.dorothy.frames < 5:
+                    print(f"Error in draw(): {e}")
+            
+            # End drawing to persistent canvas
+            self.dorothy.renderer.end_layer()
+            
+            # Clear screen
+            self.ctx.screen.use()
+            self.ctx.clear(0.0, 0.0, 0.0, 1.0)
+            
+            # Display either shader output OR persistent canvas
+            if self.dorothy._non_accumulating_shader_output is not None:
+                # Non-accumulating shader was used - display its output
+                self.dorothy.renderer.draw_layer(self.dorothy._non_accumulating_shader_output)
+                
+                # Clean up the temporary shader output
+                temp_layer = self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
+                temp_layer['fbo'].release()
+                temp_layer['texture'].release()
+                del self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
+            else:
+                # Normal mode - display persistent canvas
+                self.dorothy.renderer.draw_layer(self.dorothy._persistent_canvas)
+            
+            self.end_render()
+            
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            self.dorothy.exit()  
 
     def end_render(self):
        # Signal handler function
@@ -110,7 +116,6 @@ class DorothyWindow(mglw.WindowConfig):
             # Link the signal handler to SIGINT
             signal.signal(signal.SIGTSTP, signal_handler)
         except Exception as e:
-            done = True
             print(e)
             traceback.print_exc()
             self.dorothy.exit()  
@@ -131,6 +136,7 @@ class DorothyWindow(mglw.WindowConfig):
                 print("error recording video")
                 print(e)
                 traceback.print_exc()
+                self.dorothy.exit() 
             self.dorothy.end_recording_at = np.inf
 
     def on_mouse_position_event(self, x, y, dx, dy):

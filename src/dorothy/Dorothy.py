@@ -1,12 +1,4 @@
-"""
-Dorothy - Refactored with ModernGL for 3D support and GPU acceleration
 
-This refactored version maintains the original Processing-like API while adding:
-- GPU-accelerated rendering with ModernGL
-- Native 3D support (sphere, box, camera, lighting)
-- Much better performance
-- Backward compatibility with existing Dorothy code
-"""
 
 import numpy as np
 import moderngl_window as mglw
@@ -21,6 +13,7 @@ import wave
 import subprocess
 import datetime
 import sys
+import traceback
 
 
 class Dorothy:
@@ -139,7 +132,12 @@ class Dorothy:
         DorothyWindow.title = self.window_title
         
         # Run the window (this will call setup_fn when ready)
-        mglw.run_window_config(DorothyWindow)
+        try:
+            mglw.run_window_config(DorothyWindow)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            self.exit()  
     
 
     """
@@ -503,19 +501,6 @@ class Dorothy:
         if not self._initialized:
             raise RuntimeError("Dorothy not initialized. Call start_loop() first.")
     
-    # def background(self, color: Tuple):
-    #     """Set background color and clear"""
-    #     color = self._parse_color(color)
-        
-    #     # If we're rendering to a layer, clear the layer
-    #     if self.renderer.active_layer is not None:
-    #         fbo = self.renderer.layers[self.renderer.active_layer]['fbo']
-    #         fbo.clear(color[0], color[1], color[2], color[3])
-    #     else:
-    #         # Rendering to screen - just set flag
-    #         self.should_clear = True
-    #         self.clear_color = color
-    
     def _parse_color(self, color):
         """Parse color from various formats to normalized (0-1) values"""
         if isinstance(color, tuple):
@@ -658,14 +643,6 @@ class Dorothy:
         Returns:
             layer_id: Unique identifier for this layer
             
-        Example:
-            layer = dot.get_layer()
-            dot.begin_layer(layer)
-            # Draw to layer...
-            dot.circle((100, 100), 50)
-            dot.end_layer()
-            # Later, composite the layer
-            dot.draw_layer(layer, alpha=0.5)
         """
         self._ensure_renderer()
         return self.renderer.get_layer()
@@ -702,6 +679,7 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.release_layer(layer_id)
+    
 
     def apply_shader(self, fragment_shader_code: str, accumulate: bool = True, **uniforms):
         """Apply a custom post-processing shader to the canvas
@@ -712,14 +690,6 @@ class Dorothy:
                     If False, shader is just a display filter (post-processing)
             **uniforms: Additional uniforms to pass to the shader
         
-        Examples:
-            # Feedback effect (accumulates)
-            dot.apply_shader(zoom_shader, accumulate=True, zoom=0.99)
-            
-            # Post-processing (doesn't accumulate)
-            dot.background((0, 0, 0))  # Can clear freely
-            dot.circle((100, 100), 50)
-            dot.apply_shader(blur_shader, accumulate=False)
         """
         self._ensure_renderer()
         result = self.renderer.apply_shader(fragment_shader_code, uniforms, accumulate)
@@ -745,16 +715,6 @@ class Dorothy:
             size: Optional (width, height) to resize. None = original size
             alpha: Overall transparency (0.0-1.0)
             
-        Example:
-            # Load image with PIL/cv2/etc
-            import cv2
-            img = cv2.imread('image.png')
-            
-            # Paste at position
-            dot.paste(img, (100, 100))
-            
-            # Paste with resize and transparency
-            dot.paste(img, (200, 200), size=(100, 100), alpha=0.5)
         """
         self._ensure_renderer()
         self.renderer.paste(image, position, size, alpha)

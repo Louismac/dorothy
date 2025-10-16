@@ -106,6 +106,7 @@ class DorothyRenderer:
         
         # Layer system
         self.layers = {}  # Dictionary of layer_id -> framebuffer
+        self.layer_stack = []
         self.layer_counter = 0
         self.active_layer = None  # Currently rendering to a layer
         
@@ -248,7 +249,6 @@ class DorothyRenderer:
                 
                 void main() {
                     v_texcoord = in_texcoord;
-                    // Apply transforms in screen space, not NDC
                     gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
                 }
             ''',
@@ -380,32 +380,42 @@ class DorothyRenderer:
         return layer_id
     
     def begin_layer(self, layer_id: int):
-        """Start rendering to a specific layer
-        
-        Args:
-            layer_id: The layer to render to (from get_layer())
-        """
+        """Start rendering to a specific layer"""
         if layer_id not in self.layers:
             raise ValueError(f"Layer {layer_id} does not exist")
+        
+        # Push current layer onto stack
+        self.layer_stack.append(self.active_layer)
         
         self.active_layer = layer_id
         fbo = self.layers[layer_id]['fbo']
         fbo.use()
         self.ctx.viewport = (0, 0, self.width, self.height)
-        
-        # DON'T clear - we want to preserve existing content for trails
-        # If you want to clear, call clear_layer() first
-    
+
+
     def end_layer(self):
-        """Stop rendering to layer"""
+        """Stop rendering to layer, return to previous layer"""
         if self.active_layer is None:
-            return  # Already not in a layer
+            return
         
-        self.active_layer = None
-        # Default to screen (but don't explicitly call .use() to avoid overriding)
-        self.ctx.screen.use()
+        # Pop previous layer from stack
+        if self.layer_stack:
+            prev_layer = self.layer_stack.pop()
+            
+            if prev_layer is not None:
+                # Return to previous layer
+                self.active_layer = prev_layer
+                self.layers[prev_layer]['fbo'].use()
+            else:
+                # Return to screen
+                self.active_layer = None
+                self.ctx.screen.use()
+        else:
+            # No stack, default to screen
+            self.active_layer = None
+            self.ctx.screen.use()
         self.ctx.viewport = (0, 0, self.width, self.height)
-    
+
     def draw_layer(self, layer_id: int, alpha: float = 1.0, x: int = 0, y: int = 0):
         """Draw a layer to the current render target with optional transparency
         
@@ -440,17 +450,16 @@ class DorothyRenderer:
             # Use transform-aware shader with screen-space coordinates
             shader = self.shader_texture_transform
             
-            # Create vertices in screen coordinates (covers full screen)
             vertices = np.array([
-                # Position (screen coords)  # TexCoord
-                0, 0,                        0.0, 0.0,  # Top-left
-                self.width, 0,               1.0, 0.0,  # Top-right
-                self.width, self.height,     1.0, 1.0,  # Bottom-right
-                0, 0,                        0.0, 0.0,  # Top-left
-                self.width, self.height,     1.0, 1.0,  # Bottom-right
-                0, self.height,              0.0, 1.0,  # Bottom-left
+                # Position (screen coords)  # TexCoord (V flipped!)
+                0, 0,                        0.0, 1.0,  # Top-left
+                self.width, 0,               1.0, 1.0,  # Top-right
+                self.width, self.height,     1.0, 0.0,  # Bottom-right
+                0, 0,                        0.0, 1.0,  # Top-left
+                self.width, self.height,     1.0, 0.0,  # Bottom-right
+                0, self.height,              0.0, 0.0,  # Bottom-left
             ], dtype='f4')
-            
+                        
             vbo = self.ctx.buffer(vertices)
             vao = self.ctx.simple_vertex_array(shader, vbo, 'in_position', 'in_texcoord')
             
