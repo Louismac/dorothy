@@ -1,11 +1,9 @@
 from dorothy import Dorothy
 import numpy as np
-import sounddevice as sd
-import torch
 
 dot = Dorothy(800,600)
 
-class FFTVisualizer:
+class MySketch:
     def __init__(self):
         dot.start_loop(self.setup, self.draw)
 
@@ -66,7 +64,7 @@ class FFTVisualizer:
         dot.set_stroke_weight(2)
         dot.polygon(points)
     
-FFTVisualizer()
+MySketch()
 
 
 

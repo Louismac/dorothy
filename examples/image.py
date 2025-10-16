@@ -6,7 +6,7 @@ from PIL import Image
 
 dot = Dorothy(640,480)
 
-class ImageExample:
+class MySketch:
     def __init__(self):
         self.angle = 0
         self.image = None
@@ -39,4 +39,5 @@ class ImageExample:
         dot.paste(self.rgb_image, (0, 0), size=(size, size), alpha=scale)
         
         self.angle += 0.02
-ImageExample()
+        
+MySketch()

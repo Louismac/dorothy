@@ -445,9 +445,9 @@ Create a new layer.
 layer = dot.get_layer()
 ```
 
-### begin_layer(layer_id)
+### with dot.layer(layer_id)
 
-Start rendering to a layer.
+Start rendering to a layer in a block, end when block ends
 
 **Parameters:**
 - `layer_id` (int): Layer ID from `get_layer()`
@@ -455,18 +455,10 @@ Start rendering to a layer.
 **Example:**
 ```python
 layer = dot.get_layer()
-dot.begin_layer(layer)
-dot.circle((400, 300), 100)
-dot.end_layer()
-```
-
-### end_layer()
-
-Stop rendering to layer, return to screen.
-
-**Example:**
-```python
-dot.end_layer()
+with dot.layer(layer): # start drawing to layer
+    dot.circle((400, 300), 100)
+    dot.rectangle((400, 300), (500,500))
+# end drawing to layer
 ```
 
 ### draw_layer(layer_id, alpha=1.0)
@@ -531,20 +523,19 @@ class MySketch:
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
         self.pattern_layer = dot.get_layer()
-        dot.begin_layer(self.pattern_layer)
-        dot.stroke((255, 37, 21))
-        dot.set_stroke_weight(4)
-        size = 30
-        for i in range(dot.width//size):
-            for j in range(dot.height//size):
-                y1 = j*size
-                if np.random.random()<0.5:
-                    y1 = (j+1)*size
-                y2 = j*size
-                if np.random.random()<0.5:
-                    y2 = (j+1)*size
-                dot.line((i*size,y1), ((i+1)*size,y2)) 
-        dot.end_layer()
+        with dot.layer(self.pattern_layer):
+            dot.stroke((255, 37, 21))
+            dot.set_stroke_weight(4)
+            size = 30
+            for i in range(dot.width//size):
+                for j in range(dot.height//size):
+                    y1 = j*size
+                    if np.random.random()<0.5:
+                        y1 = (j+1)*size
+                    y2 = j*size
+                    if np.random.random()<0.5:
+                        y2 = (j+1)*size
+                    dot.line((i*size,y1), ((i+1)*size,y2)) 
 ```
 
 #### Draw ontop of layers
@@ -554,12 +545,11 @@ def setup(self):
     self.bg_layer = dot.get_layer()
     
     # Draw static background once
-    dot.begin_layer(self.bg_layer)
-    dot.background(dot.black)
-    for i in range(100):
-        dot.fill((100, 100, 200))
-        dot.circle((random() * 800, random() * 600), 5)
-    dot.end_layer()
+    with dot.layer(self.bg_layer):
+        dot.background(dot.black)
+        for i in range(100):
+            dot.fill((100, 100, 200))
+            dot.circle((random() * 800, random() * 600), 5)
 
 def draw(self):        
     # Draw background layer
@@ -1682,7 +1672,6 @@ dot = Dorothy()
 class WebcamSketch:
     def __init__(self):
         self.camera = cv2.VideoCapture(0)
-        self.layer = None
         dot.start_loop(self.setup, self.draw)
     
 class MySketch:
@@ -1699,29 +1688,28 @@ class MySketch:
     def draw(self):
         success, camera_feed = self.camera.read()
         if success:
-            if success:
 
-                target_size = (640, 480)
-                camera_feed = cv2.resize(camera_feed, target_size)
-                camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
-                
-                w, h = target_size
-                crop_x1 = w // 4
-                crop_y1 = h // 4
-                crop_x2 = w // 4 * 3
-                crop_y2 = h // 4 * 3
-                cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
-                
-                crop_w = crop_x2 - crop_x1
-                crop_h = crop_y2 - crop_y1
+            target_size = (640, 480)
+            camera_feed = cv2.resize(camera_feed, target_size)
+            camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
+            
+            w, h = target_size
+            crop_x1 = w // 4
+            crop_y1 = h // 4
+            crop_x2 = w // 4 * 3
+            crop_y2 = h // 4 * 3
+            cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
+            
+            crop_w = crop_x2 - crop_x1
+            crop_h = crop_y2 - crop_y1
 
-                dot.push_matrix()
-                dot.translate(dot.width//2, dot.height//2, 0)
-                factor = (dot.music.amplitude() * 5) + 1
-                dot.scale(factor)
-                dot.translate(-crop_w//2, -crop_h//2, 0)
-                dot.paste(cropped, (0, 0))
-                dot.pop_matrix()
+            dot.push_matrix()
+            dot.translate(dot.width//2, dot.height//2, 0)
+            factor = (dot.music.amplitude() * 5) + 1
+            dot.scale(factor)
+            dot.translate(-crop_w//2, -crop_h//2, 0)
+            dot.paste(cropped, (0, 0))
+            dot.pop_matrix()
 
 WebcamSketch()
 ```

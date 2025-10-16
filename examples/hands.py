@@ -46,6 +46,6 @@ class MySketch:
                             dot.line(pts[0],pts[1],camera_feed)
 
             camera_feed = cv2.flip(camera_feed, 1)
-            dot.canvas = camera_feed
+            dot.paste(camera_feed, (0,0))
         
 MySketch()          

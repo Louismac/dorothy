@@ -13,12 +13,11 @@ class MySketch:
         dot.music.start_file_stream(file_path, buffer_size=2048)
         dot.fill((255, 0, 0))
         self.layer = dot.get_layer()
-        dot.begin_layer(self.layer)
-        dot.fill(dot.yellow)
-        top_left = (dot.width//4, dot.height//4)
-        bottom_right = (dot.width//4*3, dot.height//4*3)
-        dot.rectangle(top_left, bottom_right)
-        dot.end_layer()
+        with dot.layer(self.layer):
+            dot.fill(dot.yellow)
+            top_left = (dot.width//4, dot.height//4)
+            bottom_right = (dot.width//4*3, dot.height//4*3)
+            dot.rectangle(top_left, bottom_right)
         
         self.theta = 0
 

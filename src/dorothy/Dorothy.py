@@ -651,19 +651,17 @@ class Dorothy:
         self._ensure_renderer()
         return self.renderer.get_layer()
     
-    def begin_layer(self, layer_id: int):
-        """Start rendering to a specific layer
-        
-        Args:
-            layer_id: The layer ID from get_layer()
-        """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def layer(self, layer_id):
+        """Context manager for drawing to a layer"""
         self._ensure_renderer()
         self.renderer.begin_layer(layer_id)
-    
-    def end_layer(self):
-        """Stop rendering to layer, return to screen"""
-        self._ensure_renderer()
-        self.renderer.end_layer()
+        try:
+            yield
+        finally:
+            self.renderer.end_layer()
     
     def draw_layer(self, layer_id: int, alpha: float = 1.0):
         """Draw a layer to the screen with transparency

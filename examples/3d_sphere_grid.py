@@ -30,8 +30,8 @@ class MySketch:
     def draw(self):
         dot.background(dot.white)
         dot.fill(dot.red)
-
-        self.theta += dot.music.amplitude()
+        amp = dot.music.amplitude()
+        self.theta += amp
         x = 7 * math.cos(self.theta)
         z = 7 * math.sin(self.theta)
         dot.set_camera((x, 3, z), (0, 0, 0))
@@ -45,10 +45,10 @@ class MySketch:
                 
                 dot.push_matrix()
                 dot.translate(x, y, z)
-                dot.sphere(dot.music.amplitude() * 20)
+                dot.sphere(amp * 20)
                 dot.pop_matrix()
                 # print(x,y)
-        dot.apply_shader(self.rgb_split, accumulate=False, offset=0.01)
+        dot.apply_shader(self.rgb_split, accumulate=False, offset=amp*0.5)
 
 MySketch()   
     

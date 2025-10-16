@@ -17,7 +17,6 @@ class MySketch:
         self.pattern_layer = dot.get_layer()
         self.base_pattern()
 
-        
     def draw(self):
         
         if dot.frames %100==0:
@@ -38,22 +37,21 @@ class MySketch:
         #clear main canvas
         dot.background(dot.beige)
         
-        dot.begin_layer(self.pattern_layer)
-        #clear pattern layer to transparent
-        dot.background((0,0,0,0))
-        dot.stroke((255, 37, 21))
-        dot.set_stroke_weight(4)
-        size = 30
-        for i in range(dot.width//size):
-            for j in range(dot.height//size):
-                y1 = j*size
-                if np.random.random()<0.5:
-                    y1 = (j+1)*size
-                y2 = j*size
-                if np.random.random()<0.5:
-                    y2 = (j+1)*size
-                dot.line((i*size,y1), ((i+1)*size,y2)) 
-        dot.end_layer()
+        with dot.layer(self.pattern_layer):
+            #clear pattern layer to transparent
+            dot.background((0,0,0,0))
+            dot.stroke((255, 37, 21))
+            dot.set_stroke_weight(4)
+            size = 30
+            for i in range(dot.width//size):
+                for j in range(dot.height//size):
+                    y1 = j*size
+                    if np.random.random()<0.5:
+                        y1 = (j+1)*size
+                    y2 = j*size
+                    if np.random.random()<0.5:
+                        y2 = (j+1)*size
+                    dot.line((i*size,y1), ((i+1)*size,y2)) 
         
 MySketch()         
 

@@ -505,6 +505,7 @@ class DorothyRenderer:
             raise ValueError(f"Layer {layer_id} does not exist")
         
         fbo = self.layers[layer_id]['fbo']
+        fbo.use()
         fbo.clear(*color)
     
     # ====== Image/Texture Pasting ======

@@ -17,29 +17,27 @@ class MySketch:
     def draw(self):
         success, camera_feed = self.camera.read()
         if success:
-            if success:
+            target_size = (640, 480)
+            camera_feed = cv2.resize(camera_feed, target_size)
+            camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
+            
+            w, h = target_size
+            crop_x1 = w // 4
+            crop_y1 = h // 4
+            crop_x2 = w // 4 * 3
+            crop_y2 = h // 4 * 3
+            cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
+            
+            crop_w = crop_x2 - crop_x1
+            crop_h = crop_y2 - crop_y1
 
-                target_size = (640, 480)
-                camera_feed = cv2.resize(camera_feed, target_size)
-                camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
-                
-                w, h = target_size
-                crop_x1 = w // 4
-                crop_y1 = h // 4
-                crop_x2 = w // 4 * 3
-                crop_y2 = h // 4 * 3
-                cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
-                
-                crop_w = crop_x2 - crop_x1
-                crop_h = crop_y2 - crop_y1
-
-                dot.push_matrix()
-                dot.translate(dot.width//2, dot.height//2, 0)
-                factor = (dot.music.amplitude() * 5) + 1
-                dot.scale(factor)
-                dot.translate(-crop_w//2, -crop_h//2, 0)
-                dot.paste(cropped, (0, 0))
-                dot.pop_matrix()
+            dot.push_matrix()
+            dot.translate(dot.width//2, dot.height//2, 0)
+            factor = (dot.music.amplitude() * 5) + 1
+            dot.scale(factor)
+            dot.translate(-crop_w//2, -crop_h//2, 0)
+            dot.paste(cropped, (0, 0))
+            dot.pop_matrix()
         
 
 MySketch()          
