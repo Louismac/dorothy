@@ -8,6 +8,7 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)           
         
     def setup(self):
+        #Listen to mic or internal loop back (e.g. blackhole)
         dot.music.start_device_stream(1)
         self.feedback = '''
         #version 330

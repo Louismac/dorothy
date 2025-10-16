@@ -13,16 +13,18 @@ class MySketch:
         print("setup")
         #Play file from your computer
         file_path = "../audio/disco.wav"
-        # dot.music.start_file_stream(file_path, fft_size=512)
+        dot.music.start_file_stream(file_path, fft_size=512)
+        self.pattern_layer = dot.get_layer()
         self.base_pattern()
+
         
     def draw(self):
         
         if dot.frames %100==0:
             self.base_pattern()
 
-        # factor = dot.music.amplitude() * 15 
-        factor = (dot.frames % 20) / 8
+        factor = dot.music.amplitude() * 15 
+        #factor = (dot.frames % 20) / 8
         centre = np.array([dot.width//2, dot.height//2])
         dot.push_matrix()
         dot.translate(centre[0], centre[1])
@@ -33,9 +35,12 @@ class MySketch:
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
+        #clear main canvas
         dot.background(dot.beige)
-        self.pattern_layer = dot.get_layer()
+        
         dot.begin_layer(self.pattern_layer)
+        #clear pattern layer to transparent
+        dot.background((0,0,0,0))
         dot.stroke((255, 37, 21))
         dot.set_stroke_weight(4)
         size = 30

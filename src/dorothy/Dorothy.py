@@ -83,11 +83,11 @@ class Dorothy:
             self.renderer.end_layer()
     
     def background(self, color: Tuple):
-        """Clear the persistent canvas with a color"""
+        """Clear the active layer with a color"""
         color = self._parse_color(color)
-        self.renderer.ctx.clear(color[0], color[1], color[2], color[3])
-        self.fill(color)
-        self.rectangle((0,0),(self.width, self.height))
+        layer_id = self.renderer.active_layer
+        # print(f"clearing layer:{layer_id}")
+        self.renderer.clear_layer(layer_id, color)
 
     def __getattr__(self, name):
         """Dynamically retrieve color attributes"""
@@ -488,6 +488,10 @@ class Dorothy:
     @property
     def height(self) -> int:
         return self.window_size[1]
+    
+    @property
+    def centre(self) -> Tuple:
+        return (self.width//2, self.height/2)
     
     @property
     def millis(self) -> float:

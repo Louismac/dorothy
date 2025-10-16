@@ -37,6 +37,7 @@ class MySketch:
                 
                 theta = dot.music.amplitude() * 15 * 2 * np.pi
                 origin = np.array([x+size/2, y+size/2])
+                #rotate around different origins depending on grid position
                 dot.push_matrix()
                 dot.translate(origin[0],origin[1])
                 #rotate
