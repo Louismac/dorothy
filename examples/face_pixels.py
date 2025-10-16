@@ -28,8 +28,8 @@ class MySketch:
             #Loop over faces
             for face_x, face_y, face_w, face_h in faces:
                 #Chop out the face
-                face_pixels = camera_feed[face_y:face_y+face_h,face_x:face_x+face_w].copy()
-                skip = 12
+                face_pixels = camera_feed[face_y:face_y+face_h,face_x:face_x+face_w]
+                skip = 15
                 #Downsample the face
                 downsampled = face_pixels[::skip,::skip]
                 radius = 6

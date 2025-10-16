@@ -13,7 +13,7 @@ class MySketch:
         print("setup")
         #Play file from your computer
         file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
+        # dot.music.start_file_stream(file_path, fft_size=512)
         self.base_pattern()
         
     def draw(self):
@@ -21,7 +21,8 @@ class MySketch:
         if dot.frames %100==0:
             self.base_pattern()
 
-        factor = dot.music.amplitude() * 15 
+        # factor = dot.music.amplitude() * 15 
+        factor = (dot.frames % 20) / 8
         centre = np.array([dot.width//2, dot.height//2])
         dot.push_matrix()
         dot.translate(centre[0], centre[1])

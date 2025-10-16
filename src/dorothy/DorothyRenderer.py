@@ -500,6 +500,134 @@ class DorothyRenderer:
     
     # ====== Image/Texture Pasting ======
 
+    def apply_shader(self, fragment_shader_code: str, uniforms: dict = None, accumulate: bool = True):
+        """Apply a custom fragment shader to the current canvas
+        
+        Args:
+            fragment_shader_code: GLSL fragment shader code
+            uniforms: Optional dict of additional uniforms to set
+            accumulate: If True, shader modifies persistent canvas (feedback effects)
+                    If False, shader output is shown but not fed back (post-processing)
+        """
+        vertex_shader = '''
+            #version 330
+            
+            in vec2 in_position;
+            in vec2 in_texcoord;
+            
+            out vec2 v_texcoord;
+            
+            void main() {
+                v_texcoord = in_texcoord;
+                gl_Position = vec4(in_position, 0.0, 1.0);
+            }
+        '''
+        
+        try:
+            custom_shader = self.ctx.program(
+                vertex_shader=vertex_shader,
+                fragment_shader=fragment_shader_code
+            )
+        except Exception as e:
+            print(f"Shader compilation error: {e}")
+            return None
+        
+        if self.active_layer is None:
+            print("Warning: apply_shader called outside of layer context")
+            custom_shader.release()
+            return None
+        
+        # Get current layer
+        layer = self.layers[self.active_layer]
+        old_texture = layer['texture']
+        old_fbo = layer['fbo']
+        
+        # Create NEW texture and FBO for the shader output
+        new_texture = self.ctx.texture((self.width, self.height), 4)
+        new_fbo = self.ctx.framebuffer(color_attachments=[new_texture])
+        
+        # Create VAO specifically for this custom shader
+        custom_vao = self.ctx.simple_vertex_array(
+            custom_shader,
+            self.quad_vbo,
+            'in_position',
+            'in_texcoord'
+        )
+        
+        # Render to new FBO with custom shader
+        new_fbo.use()
+        old_texture.use(0)
+        
+        # Set uniforms
+        try:
+            custom_shader['texture0'] = 0
+        except KeyError:
+            pass
+        
+        try:
+            custom_shader['resolution'] = (float(self.width), float(self.height))
+        except KeyError:
+            pass
+        
+        if uniforms:
+            for name, value in uniforms.items():
+                try:
+                    if isinstance(value, (int, float)):
+                        custom_shader[name] = float(value)
+                    elif isinstance(value, (tuple, list)):
+                        custom_shader[name] = tuple(float(v) for v in value)
+                    else:
+                        custom_shader[name] = value
+                except KeyError:
+                    pass
+        
+        self.ctx.disable(moderngl.BLEND)
+        custom_vao.render(moderngl.TRIANGLES)
+        
+        if accumulate:
+            # ACCUMULATING MODE: Replace persistent canvas with shader output
+            # Shader effects build up over frames
+            layer['texture'] = new_texture
+            layer['fbo'] = new_fbo
+            
+            # Clean up old resources
+            old_fbo.release()
+            old_texture.release()
+            
+            # Set new FBO as active
+            new_fbo.use()
+            
+            # Clean up shader resources
+            custom_vao.release()
+            custom_shader.release()
+            
+            return None
+        else:
+            # NON-ACCUMULATING MODE: Keep persistent canvas unchanged
+            # Return the shader output to be displayed instead
+            
+            # Restore the original FBO as active (keep persistent canvas intact)
+            old_fbo.use()
+            
+            # Clean up shader resources
+            custom_vao.release()
+            custom_shader.release()
+            
+            # Return a temporary layer ID that on_render can display
+            # Store it temporarily
+            temp_layer_id = -1  # Special ID for non-accumulating shader output
+            self.layers[temp_layer_id] = {
+                'fbo': new_fbo,
+                'texture': new_texture,
+                'depth': None
+            }
+            
+            # Re-enable blending
+            self.ctx.enable(moderngl.BLEND)
+            self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+            
+            return temp_layer_id
+
     def get_pixels(self) -> np.ndarray:
         """Get current screen pixels as numpy array
         

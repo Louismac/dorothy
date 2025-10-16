@@ -702,6 +702,33 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.release_layer(layer_id)
+
+    def apply_shader(self, fragment_shader_code: str, accumulate: bool = True, **uniforms):
+        """Apply a custom post-processing shader to the canvas
+        
+        Args:
+            fragment_shader_code: GLSL fragment shader source code
+            accumulate: If True, shader effects build up over frames (feedback)
+                    If False, shader is just a display filter (post-processing)
+            **uniforms: Additional uniforms to pass to the shader
+        
+        Examples:
+            # Feedback effect (accumulates)
+            dot.apply_shader(zoom_shader, accumulate=True, zoom=0.99)
+            
+            # Post-processing (doesn't accumulate)
+            dot.background((0, 0, 0))  # Can clear freely
+            dot.circle((100, 100), 50)
+            dot.apply_shader(blur_shader, accumulate=False)
+        """
+        self._ensure_renderer()
+        result = self.renderer.apply_shader(fragment_shader_code, uniforms, accumulate)
+        
+        # Store for on_render to display
+        if result is not None:
+            self._non_accumulating_shader_output = result
+        else:
+            self._non_accumulating_shader_output = None
     
     # Images
     def paste(self, image: np.ndarray, position: Tuple[int, int], 

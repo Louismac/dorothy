@@ -8,14 +8,12 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)           
         
     def setup(self):
-        #Play file from your computer
-        file_path = "../audio/gospel.wav"
-        dot.music.start_file_stream(file_path,buffer_size=2048)
+        dot.music.start_device_stream(1)
         
     def draw(self):
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.rectangle((0,0),(dot.width,int(dot.music.amplitude()*dot.height*10)))
+        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
 
 MySketch()   
     

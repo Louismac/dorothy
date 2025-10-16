@@ -58,14 +58,15 @@ class DorothyWindow(mglw.WindowConfig):
 
     def on_render(self, render_time: float, frame_time: float):
         """Called every frame"""
-        
+
         # Create persistent canvas if needed
         self.dorothy._ensure_persistent_canvas()
-                
+        
+        # Initialize non-accumulating shader output tracker
+        self.dorothy._non_accumulating_shader_output = None
+        
         # ALL user drawing goes to the persistent canvas
         self.dorothy.renderer.begin_layer(self.dorothy._persistent_canvas)
-        
-        # Reset transforms
         self.dorothy.renderer.transform.reset()
         
         # Call user draw function
@@ -78,12 +79,28 @@ class DorothyWindow(mglw.WindowConfig):
         
         # End drawing to persistent canvas
         self.dorothy.renderer.end_layer()
-
-        # print(f"Layer has {non_zero} non-zero bytes")
+        
+        # Clear screen
+        self.ctx.screen.use()
         self.ctx.clear(0.0, 0.0, 0.0, 1.0)
-        # Display the persistent canvas to screen
-        self.dorothy.renderer.draw_layer(self.dorothy._persistent_canvas)
-    
+        
+        # Display either shader output OR persistent canvas
+        if self.dorothy._non_accumulating_shader_output is not None:
+            # Non-accumulating shader was used - display its output
+            self.dorothy.renderer.draw_layer(self.dorothy._non_accumulating_shader_output)
+            
+            # Clean up the temporary shader output
+            temp_layer = self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
+            temp_layer['fbo'].release()
+            temp_layer['texture'].release()
+            del self.dorothy.renderer.layers[self.dorothy._non_accumulating_shader_output]
+        else:
+            # Normal mode - display persistent canvas
+            self.dorothy.renderer.draw_layer(self.dorothy._persistent_canvas)
+        
+        self.end_render()
+
+    def end_render(self):
        # Signal handler function
         def signal_handler(sig, frame):
             print('You pressed Ctrl+C! Closing the window.')
@@ -99,6 +116,7 @@ class DorothyWindow(mglw.WindowConfig):
             self.dorothy.exit()  
             
         self.dorothy.frames += 1
+        
         if self.dorothy.recording:
             canvas_rgb = self.dorothy.get_pixels()
             self.dorothy.video_recording_buffer.append({

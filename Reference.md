@@ -11,10 +11,12 @@ Complete reference for Dorothy - A Creative Computing Python Library with Modern
 - [Layer System](#layer-system)
 - [Image Functions](#image-functions)
 - [Camera Functions](#camera-functions)
+- [Shaders](#custom-shaders-reference)
 - [Properties](#properties)
 - [Color Constants](#color-constants)
 - [Audio Integration](#audio-integration)
 - [Live Coding](#live-coding)
+  
 
 ---
 
@@ -681,6 +683,215 @@ z = 5 * math.sin(angle)
 dot.set_camera((x, 2, z), (0, 0, 0))
 ```
 
+---
+
+## Custom Shaders Reference
+
+Apply custom GLSL fragment shaders to create visual effects and post-processing.
+
+## Basic Usage
+
+```python
+dot.apply_shader(shader_code, accumulate=True, **uniforms)
+```
+
+**Parameters:**
+- `shader_code` (str): GLSL fragment shader source code
+- `accumulate` (bool): 
+  - `True`: Shader modifies persistent canvas, effects build up (feedback effects)
+  - `False`: Shader is display-only filter, canvas unchanged (post-processing)
+- `**uniforms`: Additional uniforms to pass to shader (e.g., `time=1.5`, `amount=0.1`)
+
+## Shader Template
+
+```glsl
+#version 330
+
+uniform sampler2D texture0;  // The canvas texture (always available)
+uniform vec2 resolution;      // Canvas size in pixels (optional)
+
+in vec2 v_texcoord;          // Texture coordinates (0-1)
+out vec4 fragColor;          // Output color
+
+void main() {
+    vec4 color = texture(texture0, v_texcoord);
+    // Modify color here
+    fragColor = color;
+}
+```
+
+## Accumulating vs Non-Accumulating
+
+### Accumulating (`accumulate=True`)
+Shader output **replaces** the persistent canvas. Effects build up over frames.
+
+**Use for:** Feedback effects, trails, decay, generative art
+
+```python
+feedback_shader = '''
+#version 330
+uniform sampler2D texture0;
+uniform float fade;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec4 color = texture(texture0, v_texcoord);
+    color.rgb *= fade;  // Fade each frame
+    fragColor = color;
+}
+'''
+
+def draw():
+    # Don't call background() - let trails accumulate
+    dot.circle((dot.mouse_x, dot.mouse_y), 20)
+    dot.apply_shader(feedback_shader, accumulate=True, fade=0.98)
+```
+
+### Non-Accumulating (`accumulate=False`)
+Shader output is **displayed** but canvas remains unchanged. No feedback.
+
+**Use for:** Blur, color grading, pixelation, distortion
+
+```python
+blur_shader = '''
+#version 330
+uniform sampler2D texture0;
+uniform vec2 resolution;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec2 pixel = 1.0 / resolution;
+    vec4 color = vec4(0.0);
+    
+    for(int x = -2; x <= 2; x++) {
+        for(int y = -2; y <= 2; y++) {
+            color += texture(texture0, v_texcoord + vec2(x, y) * pixel);
+        }
+    }
+    
+    fragColor = color / 25.0;
+}
+'''
+
+def draw():
+    dot.background((0, 0, 0))  # Can clear freely
+    dot.circle((dot.mouse_x, dot.mouse_y), 50)
+    dot.apply_shader(blur_shader, accumulate=False)
+```
+
+## Example Effects
+
+### Color Inversion
+```python
+invert = '''
+#version 330
+uniform sampler2D texture0;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec4 color = texture(texture0, v_texcoord);
+    color.rgb = 1.0 - color.rgb;
+    fragColor = color;
+}
+'''
+
+dot.apply_shader(invert, accumulate=False)
+```
+
+### RGB Split
+```python
+rgb_split = '''
+#version 330
+uniform sampler2D texture0;
+uniform float offset;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    float r = texture(texture0, v_texcoord + vec2(offset, 0.0)).r;
+    float g = texture(texture0, v_texcoord).g;
+    float b = texture(texture0, v_texcoord - vec2(offset, 0.0)).b;
+    fragColor = vec4(r, g, b, 1.0);
+}
+'''
+
+dot.apply_shader(rgb_split, accumulate=False, offset=0.01)
+```
+
+### Feedback Zoom
+```python
+zoom = '''
+#version 330
+uniform sampler2D texture0;
+uniform float amount;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = (v_texcoord - 0.5) * amount + 0.5;
+    vec4 color = texture(texture0, uv);
+    color.rgb *= 0.99;  // Fade slightly
+    fragColor = color;
+}
+'''
+
+dot.apply_shader(zoom, accumulate=True, amount=0.99)
+```
+
+### Pixelation
+```python
+pixelate = '''
+#version 330
+uniform sampler2D texture0;
+uniform vec2 resolution;
+uniform float pixelSize;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec2 pixels = resolution / pixelSize;
+    vec2 uv = floor(v_texcoord * pixels) / pixels;
+    fragColor = texture(texture0, uv);
+}
+'''
+
+dot.apply_shader(pixelate, accumulate=False, pixelSize=8.0)
+```
+
+### Kaleidoscope
+```python
+kaleidoscope = '''
+#version 330
+uniform sampler2D texture0;
+uniform float segments;
+in vec2 v_texcoord;
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = v_texcoord - 0.5;
+    float angle = atan(uv.y, uv.x);
+    float radius = length(uv);
+    
+    angle = mod(angle, 6.28318 / segments);
+    uv = vec2(cos(angle), sin(angle)) * radius + 0.5;
+    
+    fragColor = texture(texture0, uv);
+}
+'''
+
+dot.apply_shader(kaleidoscope, accumulate=False, segments=6.0)
+```
+
+## Tips
+
+- **Accumulating shaders**: Avoid calling `dot.background()` in draw loop or effects will be cleared
+- **Non-accumulating shaders**: Safe to call `dot.background()` - shader is just a filter
+- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects
+- **Performance**: Complex shaders (many texture lookups) may reduce framerate
+- **Debugging**: If shader doesn't compile, check console for error messages
 ---
 
 ## Properties
