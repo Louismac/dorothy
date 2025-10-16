@@ -872,7 +872,13 @@ dot.apply_shader(kaleidoscope, accumulate=False, segments=6.0)
 
 - **Accumulating shaders**: Avoid calling `dot.background()` in draw loop or effects will be cleared
 - **Non-accumulating shaders**: Safe to call `dot.background()` - shader is just a filter
-- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects
+- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects. Make sure you have `accumulate=True` in shaders before the last one in the chain to pass through effects 
+
+```python
+dot.apply_shader(self.pixelate, pixelSize=int(mean_amp*100), accumulate=True)
+dot.apply_shader(self.rgb_split, accumulate=False, offset=mean_amp*0.3)
+```
+
 - **Performance**: Complex shaders (many texture lookups) may reduce framerate
 - **Debugging**: If shader doesn't compile, check console for error messages
 ---

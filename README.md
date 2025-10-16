@@ -13,7 +13,7 @@ Dorothy in action
 ## ✨ Why Dorothy?
 
 - 🎵 **Audio-First**: Built specifically for music visualisation with FFT, beat detection, and amplitude analysis
-- 🎨 **Artist-Friendly**: Processing/p5.js-style API that feels natural for creative coders
+- 🎨 **Artist-Friendly**: Implementing existing best practices for an API that feels natural for creative coders
 - ⚡ **Real-Time**: Smooth visuals with efficient OpenGL rendering
 - 🤖 **AI-Ready**: Seamless integration with RAVE, MAGNet, and other ML audio models
 - 🐍 **Pure Python**: Use NumPy, PyTorch, TensorFlow, or any Python library alongside Dorothy
@@ -252,12 +252,10 @@ Dorothy is MIT licensed. Create amazing things!
 ## 🙏 Acknowledgments
 
 Built with love using:
-- [OpenCV](https://opencv.org/) for fast graphics
+- [ModernGl](https://moderngl.readthedocs.io/en/5.8.2/) for fast graphics
 - [sounddevice](https://python-sounddevice.readthedocs.io/) for audio I/O
 - [librosa](https://librosa.org/) for audio analysis
 - [NumPy](https://numpy.org/) for efficient computing
-
-Inspired by [Processing](https://processing.org/) and [p5.js](https://p5js.org/) - making creative coding accessible to everyone.
 
 ---
 
