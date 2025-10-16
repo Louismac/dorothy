@@ -1093,7 +1093,250 @@ dsp_id = dot.music.start_dsp_stream(
 )
 ```
 
-#### Sample Playback
+### Audio Sequencing Reference
+
+Sequence and trigger audio samples with the Sampler and Clock classes.
+
+#### Sampler
+
+The Sampler class loads and triggers audio samples.
+
+##### Creating a Sampler
+
+```python
+from dorothy.Audio import Sampler
+
+def setup(self):
+    self.sampler = Sampler(dot)
+Loading Samples
+python# Load multiple samples
+paths = [
+    "../audio/kick.wav",
+    "../audio/snare.wav",
+    "../audio/hihat.wav"
+]
+self.sampler.load(paths)
+# Samples are indexed 0, 1, 2, etc.
+```
+
+##### Triggering Samples
+```python
+# Trigger by index
+self.sampler.trigger(0)  # Play first sample (kick)
+self.sampler.trigger(1)  # Play second sample (snare)
+
+# Samples play polyphonically (overlapping is fine)
+```
+
+#### Clock
+
+The Clock class provides tempo-synced timing for sequencing.
+
+##### Creating a Clock
+```python
+def setup(self):
+    self.clock = dot.music.get_clock()
+    self.clock.set_bpm(120)  # Set tempo (default: 80)
+```
+
+###### Clock Callbacks
+```python
+def setup(self):
+    self.clock = dot.music.get_clock()
+    self.clock.set_bpm(120)
+    
+    # Called on every tick
+    self.clock.on_tick = self.on_tick
+    
+    # Start the clock
+    self.clock.play()
+
+def on_tick(self):
+    # This runs at each clock tick
+    print(f"Tick: {self.clock.tick_ctr}")
+```
+
+##### Clock Properties
+```python
+self.clock.tick_ctr          # Current tick number (starts at 0, increments each tick)
+self.clock.bpm               # Current BPM
+self.clock.ticks_per_beat    # Subdivisions per beat (default: 4 = 16th notes)
+self.clock.playing           # True if clock is running
+self.clock.tick_length       # Milliseconds between ticks (calculated from BPM)
+```
+
+##### Clock Methods
+###### play()
+Start the clock. Resets tick_ctr to 0.
+```python
+self.clock.play()
+```
+###### stop()
+Stop the clock.
+```python
+self.clock.stop()
+```
+###### set_bpm(bpm)
+Set the tempo in beats per minute.
+```python
+self.clock.set_bpm(120)  # 120 BPM
+self.clock.set_bpm(80)   # Slower
+self.clock.set_bpm(180)  # Faster
+```
+###### set_tpb(ticks_per_beat)
+Set the tick subdivision per beat.
+```python
+self.clock.set_tpb(4)   # 16th notes (default)
+self.clock.set_tpb(2)   # 8th notes
+self.clock.set_tpb(8)   # 32nd notes
+self.clock.set_tpb(1)   # Quarter notes
+```
+
+Note: Call set_tpb() AFTER set_bpm() to ensure tick length is calculated correctly.
+#### Sequencing Example
+Create a step sequencer with samples:
+```python
+def setup(self):
+    # Load samples
+    paths = [
+        "../audio/kick.wav",
+        "../audio/snare.wav",
+        "../audio/hihat.wav",
+    ]
+    self.sampler = Sampler(dot)
+    self.sampler.load(paths)
+    
+    # Setup clock
+    self.clock = dot.music.get_clock()
+    self.clock.set_bpm(120)
+    self.clock.on_tick = self.on_tick
+    
+    # Define sequence (0 = rest, 1+ = sample index + 1)
+    self.sequence = [
+        1, 0, 0, 0,  # Kick on 1
+        2, 0, 0, 0,  # Snare on 5
+        1, 0, 3, 0,  # Kick + hihat
+        2, 0, 3, 0,  # Snare + hihat
+    ]
+    
+    self.clock.play()
+
+def on_tick(self):
+    # Get current step in sequence
+    step = self.clock.tick_ctr % len(self.sequence)
+    note = self.sequence[step]
+    
+    # Trigger sample if not a rest
+    if note > 0:
+        self.sampler.trigger(note - 1)
+```
+
+#### Visual Sequencer Example
+Draw a step sequencer with playhead:
+```python
+def setup(self):
+    # Load samples
+    paths = [
+        "../audio/snare.wav",
+        "../audio/snare2.wav",
+        "../audio/meow.wav",
+    ]
+    self.sampler = Sampler(dot)
+    self.sampler.load(paths)
+    
+    # Setup clock
+    self.clock = dot.music.get_clock()
+    self.clock.set_bpm(80)
+    self.clock.on_tick = self.on_tick
+    
+    # Sequence (0 = rest, 1-3 = sample indices)
+    self.sequence = [1, 0, 2, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1, 2, 2, 2]
+    
+    # Create grid positions
+    self.grid = np.linspace(0, dot.width, len(self.sequence))
+    
+    self.clock.play()
+
+def on_tick(self):
+    n = len(self.sequence)
+    note = self.sequence[self.clock.tick_ctr % n]
+    
+    if note > 0:
+        self.sampler.trigger(note - 1)
+
+def draw(self):
+    dot.background(dot.darkblue)
+    
+    # Draw all steps
+    y = dot.height / 2
+    for x in self.grid:
+        dot.fill(dot.white)
+        dot.circle((x, y), 10)
+    
+    # Draw playhead
+    n = len(self.sequence)
+    x = self.grid[self.clock.tick_ctr % n]
+    dot.fill(dot.red)
+    dot.circle((x, y), 10)
+```
+
+#### Multiple Tracks
+```python
+def setup(self):
+    self.sampler = Sampler(dot)
+    self.sampler.load(["kick.wav", "snare.wav", "hat.wav"])
+    
+    self.clock = dot.music.get_clock()
+    self.clock.set_bpm(120)
+    self.clock.on_tick = self.on_tick
+    
+    # Separate patterns for each sample
+    self.kick_pattern  = [1, 0, 0, 0, 1, 0, 0, 0]
+    self.snare_pattern = [0, 0, 1, 0, 0, 0, 1, 0]
+    self.hat_pattern   = [1, 1, 1, 1, 1, 1, 1, 1]
+    
+    self.clock.play()
+
+def on_tick(self):
+    step = self.clock.tick_ctr % 8
+    
+    if self.kick_pattern[step]:
+        self.sampler.trigger(0)
+    if self.snare_pattern[step]:
+        self.sampler.trigger(1)
+    if self.hat_pattern[step]:
+        self.sampler.trigger(2)
+```
+
+#### Tips
+
+* BPM range: Typical range is 60-180 BPM
+
+* Tick resolution: Default is 4 ticks per beat (16th notes). Adjust with set_tpb()
+  
+* Timing precision: Clock runs in a separate thread with ~1ms precision
+  
+* Stop before restarting: Call clock.stop() before creating a new Clock or calling play() again
+  
+* Polyphony: Sampler plays samples polyphonically - multiple samples can overlap
+  
+* File formats: Supports WAV
+  
+* Performance: Pre-load all samples in setup() for best performance
+
+#### Common Patterns
+4/4 Time Signature
+```python
+self.clock.set_tpb(4)  # 16th notes
+sequence_length = 16   # 4 beats × 4 ticks
+```
+3/4 Time Signature (Waltz)
+```python
+self.clock.set_tpb(4)
+sequence_length = 12   # 3 beats × 4 ticks
+```
+
+### Stream Samples (Synthesis / DSP)
 
 ```python
 # Play pre-loaded samples
@@ -1112,7 +1355,7 @@ sample_id = dot.music.start_sample_stream(
 )
 ```
 
-#### RAVE Model Generation
+### RAVE Model Generation
 
 ```python
 # Generate audio with RAVE neural vocoder
@@ -1133,7 +1376,7 @@ dot.music.audio_outputs[rave_id].current_latent = z
 dot.music.audio_outputs[rave_id].z_bias = torch.randn(1, 16, 1) * 0.1
 ```
 
-#### MAGNet Model Generation
+### MAGNet Model Generation
 
 ```python
 # Generate audio with MAGNet spectral model
