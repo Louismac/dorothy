@@ -28,12 +28,11 @@ class MySketch:
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
-        dot.push_matrix()
-        dot.translate(centre[0],centre[1])
-        dot.rotate(theta)
-        dot.translate(-centre[0],-centre[1])
-        dot.rectangle(top_left, bottom_right)
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(centre[0],centre[1])
+            dot.rotate(theta)
+            dot.translate(-centre[0],-centre[1])
+            dot.rectangle(top_left, bottom_right)
         
 
 MySketch()          

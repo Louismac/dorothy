@@ -31,13 +31,12 @@ class MySketch:
             crop_w = crop_x2 - crop_x1
             crop_h = crop_y2 - crop_y1
 
-            dot.push_matrix()
-            dot.translate(dot.width//2, dot.height//2, 0)
-            factor = (dot.music.amplitude() * 5) + 1
-            dot.scale(factor)
-            dot.translate(-crop_w//2, -crop_h//2, 0)
-            dot.paste(cropped, (0, 0))
-            dot.pop_matrix()
+            with dot.transform():
+                dot.translate(dot.width//2, dot.height//2, 0)
+                factor = (dot.music.amplitude() * 5) + 1
+                dot.scale(factor)
+                dot.translate(-crop_w//2, -crop_h//2, 0)
+                dot.paste(cropped, (0, 0))
         
 
 MySketch()          

@@ -23,11 +23,10 @@ class Example3D:
         dot.set_camera((x, 2, z), (0, 0, 0))
         
         # 3D box (animated)
-        dot.push_matrix()
-        dot.translate(np.sin(np.pi * dot.frames * 0.01)*5, 0, 0)
-        dot.fill((100, 100, 255, 128))
-        dot.box((1, 1, 1), (0.5, 0, 0))
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(np.sin(np.pi * dot.frames * 0.01)*5, 0, 0)
+            dot.fill((100, 100, 255, 128))
+            dot.box((1, 1, 1), (0.5, 0, 0))
 
         # 3D sphere (static)
         dot.fill((255, 100, 100, 128))

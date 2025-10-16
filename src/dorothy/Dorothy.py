@@ -14,6 +14,8 @@ import subprocess
 import datetime
 import sys
 import traceback
+from contextlib import contextmanager
+
 
 
 class Dorothy:
@@ -590,15 +592,15 @@ class Dorothy:
         self.renderer.box(size, position)
     
     # Transforms
-    def push_matrix(self):
-        """Save current transformation"""
+    @contextmanager
+    def transform(self):
+        """Context manager for transforms"""
         self._ensure_renderer()
         self.renderer.push_matrix()
-    
-    def pop_matrix(self):
-        """Restore transformation"""
-        self._ensure_renderer()
-        self.renderer.pop_matrix()
+        try:
+            yield
+        finally:
+            self.renderer.pop_matrix()
     
     def translate(self, x: float, y: float, z: float = 0):
         """Translate"""
@@ -651,8 +653,6 @@ class Dorothy:
         self._ensure_renderer()
         return self.renderer.get_layer()
     
-    from contextlib import contextmanager
-
     @contextmanager
     def layer(self, layer_id):
         """Context manager for drawing to a layer"""

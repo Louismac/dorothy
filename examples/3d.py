@@ -16,21 +16,19 @@ class Example3D:
         dot.background((30, 30, 40))
         
         # 3D box (animated)
-        dot.push_matrix()
-        dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
-        dot.fill((100, 100, 255, 128))
-        dot.box((1, 1, 1), (0.5, 0, 0))
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
+            dot.fill((100, 100, 255, 128))
+            dot.box((1, 1, 1), (0.5, 0, 0))
 
         # Switch to 2D for rectangle
         dot.camera_2d()
 
         # Animate rectangle in 2D (screen coordinates)
-        dot.push_matrix()
-        x_offset = 100 * np.sin(np.pi * dot.frames * 0.01)  # Scale to pixels
-        dot.translate(x_offset, 0, 0)
-        dot.rectangle((0, 0), (300, 300))
-        dot.pop_matrix()
+        with dot.transform():
+            x_offset = 100 * np.sin(np.pi * dot.frames * 0.01)  # Scale to pixels
+            dot.translate(x_offset, 0, 0)
+            dot.rectangle((0, 0), (300, 300))
 
         dot.camera_3d()
         # 3D sphere (static)

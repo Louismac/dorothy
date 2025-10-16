@@ -25,12 +25,11 @@ class MySketch:
         factor = dot.music.amplitude() * 15 
         #factor = (dot.frames % 20) / 8
         centre = np.array([dot.width//2, dot.height//2])
-        dot.push_matrix()
-        dot.translate(centre[0], centre[1])
-        dot.scale(factor)
-        dot.translate(-centre[0], -centre[1])
-        dot.draw_layer(self.pattern_layer)
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(centre[0], centre[1])
+            dot.scale(factor)
+            dot.translate(-centre[0], -centre[1])
+            dot.draw_layer(self.pattern_layer)
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):

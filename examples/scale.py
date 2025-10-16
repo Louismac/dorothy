@@ -13,33 +13,27 @@ class MySketch:
         #Play file from your computer
         file_path = "../audio/disco.wav"
         dot.music.start_file_stream(file_path)
-        
-        #Pick or just stream from your computer
-        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        # print(sd.query_devices())
-        #dot.music.start_device_stream(3)
+
         
     def draw(self):
         
         dot.background((77, 72, 79))
         factor = dot.music.amplitude() * 15 
         dot.stroke(dot.red)
-        #Initially draw line in middle
         top_left = (dot.width//4, dot.height//4)
         bottom_right = (dot.width//4*3, dot.height//4*3)
         centre = np.array([dot.width//2, dot.height//2])
 
-        dot.push_matrix()
+        with dot.transform():
         
-        # move to middle to scale from centre as origin
-        dot.translate(centre[0],centre[1])
-        dot.scale(factor)
-        # move back to top corner to draw
-        dot.translate(-centre[0],-centre[1])
-        dot.line(top_left, bottom_right)
-        dot.circle(centre, 100)
+            # move to middle to scale from centre as origin
+            dot.translate(centre[0],centre[1])
+            dot.scale(factor)
+            # move back to top corner to draw
+            dot.translate(-centre[0],-centre[1])
+            dot.line(top_left, bottom_right)
+            dot.circle(centre, 100)
 
-        dot.pop_matrix()
         
 MySketch()          
 

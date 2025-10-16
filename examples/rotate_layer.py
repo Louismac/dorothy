@@ -30,11 +30,10 @@ class MySketch:
         self.theta += dot.music.amplitude() * np.pi
         centre = np.array([dot.width//2, dot.height//2])
         
-        dot.push_matrix()
-        dot.translate(centre[0], centre[1]) 
-        dot.rotate(self.theta)
-        dot.translate(-centre[0], -centre[1]) 
-        dot.draw_layer(self.layer)
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(centre[0], centre[1]) 
+            dot.rotate(self.theta)
+            dot.translate(-centre[0], -centre[1]) 
+            dot.draw_layer(self.layer)
 
 MySketch()          

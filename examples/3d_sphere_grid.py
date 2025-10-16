@@ -43,10 +43,9 @@ class MySketch:
                 y = (j - 5) * 1
                 z = 0
                 
-                dot.push_matrix()
-                dot.translate(x, y, z)
-                dot.sphere(amp * 20)
-                dot.pop_matrix()
+                with dot.transform():
+                    dot.translate(x, y, z)
+                    dot.sphere(amp * 20)
                 # print(x,y)
         dot.apply_shader(self.rgb_split, accumulate=False, offset=amp*0.5)
 

@@ -327,22 +327,18 @@ dot.background((30, 30, 40))  # Dark gray
 
 Transforms apply to all subsequent drawing until reset or popped.
 
-### push_matrix()
+### with dot.transform():
 
-Save the current transformation state.
+Save the current transformation state until the block ends.
 
 **Example:**
 ```python
-dot.push_matrix()
-dot.translate(400, 300)
-dot.rotate(0.5)
-dot.circle((0, 0), 50)  # Rotated circle at (400, 300)
-dot.pop_matrix()        # Restore original state
+with dot.transform():
+    dot.translate(400, 300)
+    dot.rotate(0.5)
+    dot.circle((0, 0), 50)  # Rotated circle at (400, 300)
 ```
 
-### pop_matrix()
-
-Restore the previously saved transformation state.
 
 ### translate(x, y, z=0)
 
@@ -419,12 +415,11 @@ dot.reset_transforms()  # Back to original state
 # To scale around a specific point (e.g., center of image):
 center_x, center_y = 400, 300
 
-dot.push_matrix()
-dot.translate(center_x, center_y, 0)     # Move to center
-dot.scale(2.0)                            # Scale from center
-dot.translate(-width/2, -height/2, 0)    # Offset for drawing
-dot.paste(image, (0, 0))                 # Image scales from center
-dot.pop_matrix()
+with dot.transform():
+    dot.translate(center_x, center_y, 0)     # Move to center
+    dot.scale(2.0)                            # Scale from center
+    dot.translate(-width/2, -height/2, 0)    # Offset for drawing
+    dot.paste(image, (0, 0))                 # Image scales from center
 ```
 
 ---
@@ -513,12 +508,11 @@ class MySketch:
 
         factor = dot.music.amplitude() * 15 
         centre = np.array([dot.width//2, dot.height//2])
-        dot.push_matrix()
-        dot.translate(centre[0], centre[1])
-        dot.scale(factor)
-        dot.translate(-centre[0], -centre[1])
-        dot.draw_layer(self.pattern_layer)
-        dot.pop_matrix()
+        with dot.transform():
+            dot.translate(centre[0], centre[1])
+            dot.scale(factor)
+            dot.translate(-centre[0], -centre[1])
+            dot.draw_layer(self.pattern_layer)
     
     #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
     def base_pattern(self):
@@ -598,12 +592,11 @@ dot.paste(img, (200, 200), size=(400, 300))
 dot.paste(img, (0, 0), alpha=0.5)
 
 # Paste with transform (scale from center)
-dot.push_matrix()
-dot.translate(400, 300)
-dot.scale(2.0)
-dot.translate(-img.shape[1]//2, -img.shape[0]//2)
-dot.paste(img, (0, 0))
-dot.pop_matrix()
+with dot.transform():
+    dot.translate(400, 300)
+    dot.scale(2.0)
+    dot.translate(-img.shape[1]//2, -img.shape[0]//2)
+    dot.paste(img, (0, 0))
 ```
 
 ### Working with OpenCV
@@ -1703,13 +1696,12 @@ class MySketch:
             crop_w = crop_x2 - crop_x1
             crop_h = crop_y2 - crop_y1
 
-            dot.push_matrix()
-            dot.translate(dot.width//2, dot.height//2, 0)
-            factor = (dot.music.amplitude() * 5) + 1
-            dot.scale(factor)
-            dot.translate(-crop_w//2, -crop_h//2, 0)
-            dot.paste(cropped, (0, 0))
-            dot.pop_matrix()
+            with dot.transform():
+                dot.translate(dot.width//2, dot.height//2, 0)
+                factor = (dot.music.amplitude() * 5) + 1
+                dot.scale(factor)
+                dot.translate(-crop_w//2, -crop_h//2, 0)
+                dot.paste(cropped, (0, 0))
 
 WebcamSketch()
 ```
@@ -1741,19 +1733,16 @@ class Scene3D:
         # Draw multiple objects
         for i in range(-2, 3):
             for j in range(-2, 3):
-                dot.push_matrix()
-                dot.translate(i * 2, 0, j * 2)
-                
-                # Alternate between spheres and boxes
-                if (i + j) % 2 == 0:
-                    dot.fill((255, 100, 100))
-                    dot.sphere(0.4)
-                else:
-                    dot.fill((100, 100, 255))
-                    dot.box(0.6, 0.6, 0.6)
-                
-                dot.pop_matrix()
-        
+                with dot.transform():
+                    dot.translate(i * 2, 0, j * 2)
+                    
+                    # Alternate between spheres and boxes
+                    if (i + j) % 2 == 0:
+                        dot.fill((255, 100, 100))
+                        dot.sphere(0.4)
+                    else:
+                        dot.fill((100, 100, 255))
+                        dot.box(0.6, 0.6, 0.6)        
         self.angle += 0.01
 
 Scene3D()

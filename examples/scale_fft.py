@@ -20,9 +20,8 @@ class MySketch:
     dot.background(dot.black)
     for bin_num, bin_val in enumerate(dot.music.fft()[:256:8]):
       x = bin_num*50
-      dot.push_matrix()
-      dot.scale(1,bin_val)
-      dot.paste(self.rgb_images[bin_num%8], (x, 0))
-      dot.pop_matrix()
+      with dot.transform():
+        dot.scale(1,bin_val)
+        dot.paste(self.rgb_images[bin_num%8], (x, 0))
 
 MySketch() 
