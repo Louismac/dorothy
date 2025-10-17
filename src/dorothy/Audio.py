@@ -702,111 +702,82 @@ class AudioDevice:
 # Specialized Audio Device Classes
 # ============================================================================
 
+#Generating audio from MAGNet models https://github.com/Louismac/MAGNet
 class MAGNetPlayer(AudioDevice):
-    """Audio generation using MAGNet models."""
-    
-    def __init__(self, model_path: str, dataset_path: str, **kwargs):
-            """Initialize MAGNet player."""
-            if not TORCH_AVAILABLE:
-                raise RuntimeError("PyTorch is required for MAGNet")
-                
-            super().__init__(**kwargs)
-            
-            torch.set_float32_matmul_precision('high')
-            self.device = torch.device('cpu')
-            
-            # Setup generation parameters BEFORE loading dataset
-            self.sequence_length = 40
-            self.frame_size = AudioConfig.MAGNET_FRAME_SIZE
-            self.current_sample = 0
-            
-            # Load model and dataset (now sequence_length exists)
-            self.x_frames = self._load_dataset(dataset_path)
-            self.model = self._load_model(model_path)
-            self.impulse = self.x_frames[np.random.randint(self.x_frames.shape[1])]
-            
-            # Double buffering
-            self.current_buffer = self._get_frame()
-            self.next_buffer = np.zeros(self.frame_size, dtype=np.float32)
-            self._buffer_lock = threading.Lock()
-            
-            # Start generation thread
-            self._start_generator()
+    def __init__(self, model_path, dataset_path, **kwargs):
+        super().__init__(**kwargs)
         
-    def _load_model(self, path: str) -> torch.nn.Module:
-        """Load MAGNet model from checkpoint."""
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Model not found: {path}")
-            
+        torch.set_grad_enabled(False)
+        torch.set_float32_matmul_precision('high')
+        self.device = torch.device('cpu')
+        
+        self.x_frames = self.load_dataset(dataset_path)
+        self.model = self.load_model(model_path)
+        
+        self.current_sample = 0
+        self.impulse = self.x_frames[np.random.randint(self.x_frames.shape[1])]
+        self.sequence_length = 40
+        self.frame_size = 1024*75
+
+        self.current_buffer = self.get_frame()
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        self.generate_thread.start()
+        
+    def load_model(self, path):
         model = RNNModel(input_size=1025, hidden_size=128, num_layers=2, output_size=1025)
-        model.load_state_dict(torch.load(path))
+        checkpoint = path
+        model.load_state_dict(torch.load(checkpoint))
         model.eval()
         return model
 
-    def _load_dataset(self, path: str) -> npt.NDArray[np.float32]:
-        """Load and preprocess dataset."""
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Dataset not found: {path}")
-            
-        x_frames, _ = preprocess_data(
-            path,
-            n_fft=2048,
-            hop_length=512,
-            win_length=2048,
-            sequence_length=self.sequence_length
-        )
+    def load_dataset(self, path):
+        n_fft=2048
+        hop_length=512
+        win_length=2048
+        sequence_length = 40
+        x_frames, _ = preprocess_data(path, n_fft=n_fft, 
+                                            hop_length=hop_length, win_length=win_length, 
+                                            sequence_length=sequence_length)
         return x_frames
 
-    def skip(self, index: int = 0) -> None:
-        """Skip to specific frame index."""
-        if 0 <= index < len(self.x_frames):
+    def skip(self, index = 0):
+        if index < len(self.x_frames):
             self.impulse = self.x_frames[index]
 
-    def _get_frame(self) -> npt.NDArray[np.float32]:
-        """Generate a new audio frame."""
-        hop_length = 512
-        frames_to_get = int(np.ceil(self.frame_size / hop_length)) + 1
-        
+    def fill_next_buffer(self):
+        self.next_buffer = self.get_frame()
+        print("next buffer filled", self.next_buffer.shape)
+
+    def get_frame(self):
+        y = 0
+        hop_length=512
+        frames_to_get = int(np.ceil(self.frame_size/hop_length))+1
+        print("requesting new buffer", self.frame_size, frames_to_get)
         with torch.no_grad():
             y, self.impulse = generate(self.model, self.impulse, frames_to_get, self.x_frames)
-        
         return y[:self.frame_size]
 
-    def _fill_next_buffer(self) -> None:
-        """Fill next buffer in background thread."""
-        while self.running and not self._shutdown_event.is_set():
-            if self._buffer_lock.acquire(blocking=True, timeout=0.1):
-                try:
-                    self.next_buffer = self._get_frame()
-                finally:
-                    self._buffer_lock.release()
-                # Wait until buffer is consumed
-                time.sleep(0.1)
-
-    def _start_generator(self) -> None:
-        """Start background generation thread."""
-        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
-        self.generate_thread.start()
-
-    def audio_callback(self) -> npt.NDArray[np.float32]:
-        """Generate audio samples."""
+    def audio_callback(self):
         if self.pause_event.is_set():
-            return self._get_silence()
-        
-        start = self.current_sample
-        end = self.current_sample + self.buffer_size
-        audio_buffer = self.current_buffer[start:end]
-        
-        self.current_sample += self.buffer_size
-        
-        if self.current_sample >= self.frame_size:
-            self.current_sample = 0
-            with self._buffer_lock:
-                self.current_buffer, self.next_buffer = self.next_buffer, self.current_buffer
-        
-        self.internal_callback()
-        self.on_new_frame(audio_buffer)
-        return audio_buffer * self.gain
+            return np.zero(self.buffer_size, dtype = np.float32) # Fill buffer with silence if paused
+        else:
+            start = self.current_sample
+            end = self.current_sample + self.buffer_size
+            audio_buffer = self.current_buffer[start:end]
+            self.current_sample += self.buffer_size
+            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
+            
+            self.internal_callback()
+            self.on_new_frame(audio_buffer)
+            return audio_buffer * self.gain
 
 
 class CustomPlayer(AudioDevice):
@@ -863,81 +834,55 @@ class CustomPlayer(AudioDevice):
         return audio_buffer * self.gain
 
 
+#Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
-    """Audio generation using RAVE models."""
-    
-    def __init__(self, model_path: str, latent_dim: int = 128, **kwargs):
-        """Initialize RAVE player."""
-        if not TORCH_AVAILABLE:
-            raise RuntimeError("PyTorch is required for RAVE")
-            
+    def __init__(self, model_path, latent_dim=128, **kwargs):
         super().__init__(**kwargs)
         
+        torch.set_grad_enabled(False)
         torch.set_float32_matmul_precision('high')
         self.device = torch.device('cpu')
-        self.frame_size = AudioConfig.RAVE_FRAME_SIZE
+        self.frame_size = 4096//2 #This is the RAVE buffer size 
         self.current_sample = 0
         self.latent_dim = latent_dim
-        
-        # Initialize latent vector
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
-        self.z_bias = torch.zeros(1, latent_dim, 1)
-        
-        # Load model
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model not found: {model_path}")
+        self.z_bias = torch.zeros(1,latent_dim,1)
+        self.model_path = model_path
         self.model = torch.jit.load(model_path).to(self.device)
+        self.current_buffer = self.get_frame()
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        self.generate_thread.start()
         
-        # Double buffering
-        self.current_buffer = self._get_frame()
-        self.next_buffer = np.zeros(self.frame_size, dtype=np.float32)
-        self._buffer_lock = threading.Lock()
-        
-        # Start generation thread
-        self._start_generator()
-        
-    def _get_frame(self) -> npt.NDArray[np.float32]:
-        """Generate a new audio frame."""
+    def fill_next_buffer(self):
+        self.next_buffer = self.get_frame()
+
+    def get_frame(self):
+        y = 0
         with torch.no_grad():
             z = self.current_latent
             y = self.model.decode(z + self.z_bias)
             y = y.reshape(-1).to(self.device).numpy()
+        #Drop second half (RAVE gives us stereo end to end)
         return y[:self.frame_size]
 
-    def _fill_next_buffer(self) -> None:
-        """Fill next buffer in background thread."""
-        while self.running and not self._shutdown_event.is_set():
-            if self._buffer_lock.acquire(blocking=True, timeout=0.1):
-                try:
-                    self.next_buffer = self._get_frame()
-                except Exception as e:
-                    warnings.warn(f"RAVE generation error: {e}")
-                    self.next_buffer.fill(0)
-                finally:
-                    self._buffer_lock.release()
-            time.sleep(0.01)
-
-    def _start_generator(self) -> None:
-        """Start background generation thread."""
-        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
-        self.generate_thread.start()
-
-    def audio_callback(self) -> npt.NDArray[np.float32]:
-        """Generate audio samples."""
+    def audio_callback(self):
         if self.pause_event.is_set():
-            return self._get_silence()
-        
-        audio_buffer = self.current_buffer[self.current_sample:self.current_sample + self.buffer_size]
-        self.current_sample += self.buffer_size
-        
-        if self.current_sample >= self.frame_size:
-            self.current_sample = 0
-            with self._buffer_lock:
-                self.current_buffer, self.next_buffer = self.next_buffer, self.current_buffer
-        
-        self.internal_callback()
-        self.on_new_frame(audio_buffer)
-        return audio_buffer * self.gain
+            print("paused")
+            return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
+        else:
+            audio_buffer = self.current_buffer[self.current_sample:self.current_sample +self.buffer_size]
+            self.current_sample += self.buffer_size
+            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
+            self.internal_callback()
+            self.on_new_frame(audio_buffer)
+            return audio_buffer * self.gain
 
 
 class AudioCapture(AudioDevice):
