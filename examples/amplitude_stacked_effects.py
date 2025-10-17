@@ -11,35 +11,29 @@ class MySketch:
     def setup(self):
         #Listen to mic or internal loop back (e.g. blackhole)
         dot.music.start_device_stream(2)
-        self.pixelate = '''
-        #version 330
-        uniform sampler2D texture0;
-        uniform vec2 resolution;
-        uniform float pixelSize;
-        in vec2 v_texcoord;
-        out vec4 fragColor;
-
-        void main() {
-            vec2 pixels = resolution / pixelSize;
-            vec2 uv = floor(v_texcoord * pixels) / pixels;
-            fragColor = texture(texture0, uv);
-        }
-        '''
         self.layer = dot.get_layer()
         self.rgb_image = Image.open('../images/space.jpg')
+        self.lfo = dot.get_lfo("sine", 0.1, (1,10))
         
     def draw(self):
-        dot.paste(self.rgb_image, (0, 0),(dot.width, dot.height))
+        dot.background(dot.black)
         with dot.layer(self.layer):
-            dot.background(dot.white)
-            dot.fill(dot.red)
-            dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
+            dot.background(dot.black)
+            dot.fill(dot.white)
+            dot.circle((dot.width//2,dot.height//2),200)
             #Remember to accumulate changes through the chain
-            dot.pixelate(pixel_size=8.0, accumulate=True)
-            dot.roll(offset_x=dot.frames, accumulate=True)
+            dot.roll(offset_x=dot.frames*4, accumulate=True)
             dot.tile(8,8, accumulate=True)
-            dot.cutout(dot.red)
-        dot.draw_layer(self.layer)
+            dot.cutout(dot.white, accumulate=True)
+        with dot.transform():
+            dot.translate(dot.centre[0], dot.centre[1])
+            dot.scale(1+dot.music.amplitude()*10)
+            dot.translate(-dot.centre[0], -dot.centre[1])
+            dot.paste(self.rgb_image, (0, 0),(dot.width, dot.height))
+            dot.draw_layer(self.layer)
+
+        tile = dot.lfo_value(self.lfo)
+        dot.tile(tile,tile, accumulate=True)
 
 MySketch()   
     
