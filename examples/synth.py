@@ -26,10 +26,12 @@ class MySketch:
             self.phase += phase_increment * size 
             return audio
         
-        dot.music.start_dsp_stream(get_frame, sr = sr)
+        dot.music.start_dsp_stream(get_frame, sr = sr, buffer_size=512)
     
     def draw(self):
-        pass
+        dot.background(dot.white)
+        dot.fill(dot.red)
+        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
 
 MySketch()          
 

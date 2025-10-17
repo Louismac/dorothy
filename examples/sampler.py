@@ -15,13 +15,13 @@ class MySketch:
             "../audio/snare2.wav",
             "../audio/meow.wav",
         ]
-        self.sampler = Sampler(dot)
+        self.sampler = Sampler(dot.music)
         self.sampler.load(paths)
         
         self.clock = dot.music.get_clock()
         self.clock.set_bpm(80)
         
-        self.sequence = [1,0,2,0,1,0,0,0,3,0,0,0,1,2,2,2]
+        self.sequence = [2,0,2,0,0,0,0,1,0,0,0,0,0,0,0]
         self.clock.on_tick = self.on_tick
         self.clock.play()
         

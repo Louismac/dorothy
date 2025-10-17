@@ -9,7 +9,7 @@ class MySketch:
         
     def setup(self):
         #Listen to mic or internal loop back (e.g. blackhole)
-        dot.music.start_device_stream(1)
+        dot.music.start_device_stream(2)
         self.rgb_split = '''
         #version 330
         uniform sampler2D texture0;

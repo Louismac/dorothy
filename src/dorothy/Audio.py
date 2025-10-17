@@ -217,7 +217,7 @@ class Audio:
         self,
         audio_callback: Callable[[int], npt.NDArray[np.float32]],
         fft_size: int = 512,
-        buffer_size: int = 1024,
+        buffer_size: int = 2048,
         sr: int = AudioConfig.DEFAULT_SAMPLE_RATE,
         output_device: Optional[int] = None,
         analyse: bool = True
@@ -392,6 +392,7 @@ class Audio:
         """Register device and start playback."""
         self.audio_outputs.append(device)
         index = len(self.audio_outputs) - 1
+        print("playing", index)
         self.play(index)
         return index
 
@@ -810,57 +811,36 @@ class MAGNetPlayer(AudioDevice):
 
 
 class CustomPlayer(AudioDevice):
-    """Audio generation using custom DSP callback."""
-    
-    def __init__(self, get_frame: Callable[[int], npt.NDArray[np.float32]], frame_size: int = 512, **kwargs):
-        """Initialize custom player."""
-        super().__init__(**kwargs)
+    def __init__(self, get_frame, frame_size = 512, **kwargs):
+        super().__init__(**kwargs)        
         self.frame_size = frame_size
         self.get_frame = get_frame
         self.current_sample = 0
-        
-        # Double buffering
-        self.current_buffer = np.zeros(self.frame_size, dtype=np.float32)
-        self.next_buffer = np.zeros(self.frame_size, dtype=np.float32)
-        self._buffer_lock = threading.Lock()
-        
-        # Start generation thread
-        self._start_generator()
-        
-    def _fill_next_buffer(self) -> None:
-        """Fill next buffer using custom callback."""
-        while self.running and not self._shutdown_event.is_set():
-            if self.get_frame is not None and self._buffer_lock.acquire(blocking=True, timeout=0.1):
-                try:
-                    self.next_buffer = self.get_frame(self.frame_size).astype(np.float32)
-                except Exception as e:
-                    warnings.warn(f"Custom callback error: {e}")
-                    self.next_buffer.fill(0)
-                finally:
-                    self._buffer_lock.release()
-            time.sleep(0.01)
-
-    def _start_generator(self) -> None:
-        """Start background generation thread."""
-        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
+        self.current_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
         self.generate_thread.start()
+        
+    def fill_next_buffer(self):
+        if self.get_frame is not None:
+            self.next_buffer = self.get_frame(self.frame_size).astype(np.float32)
 
-    def audio_callback(self) -> npt.NDArray[np.float32]:
-        """Generate audio samples."""
+    def audio_callback(self):
         if self.pause_event.is_set():
-            return self._get_silence()
-        
-        audio_buffer = self.current_buffer[self.current_sample:self.current_sample + self.buffer_size]
-        self.current_sample += self.buffer_size
-        
-        if self.current_sample >= self.frame_size:
-            self.current_sample = 0
-            with self._buffer_lock:
-                self.current_buffer, self.next_buffer = self.next_buffer, self.current_buffer
-        
-        self.internal_callback()
-        self.on_new_frame(audio_buffer)
-        return audio_buffer * self.gain
+            print("paused")
+            return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
+        else:
+            audio_buffer = self.current_buffer[self.current_sample:self.current_sample + self.buffer_size]
+            self.current_sample += self.buffer_size
+            if self.current_sample >= self.frame_size:
+                self.current_sample = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+                    self.generate_thread.start()
+            self.internal_callback()
+            self.on_new_frame(audio_buffer)
+            return audio_buffer * self.gain
 
 
 class RAVEPlayer(AudioDevice):
@@ -1122,7 +1102,7 @@ class Sampler:
             return audio
         
         # Start DSP stream
-        self.audio.start_dsp_stream(get_frame, sr=22050, buffer_size=64)
+        self.audio.start_dsp_stream(get_frame, sr=22050, buffer_size=512)
 
     def trigger(self, index: int) -> None:
         """
