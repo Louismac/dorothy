@@ -817,24 +817,39 @@ class CustomPlayer(AudioDevice):
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
     def __init__(self, model_path, latent_dim=128, **kwargs):
+        """Initialize RAVE player."""
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch is required for RAVE")
+        
         super().__init__(**kwargs)
         
         torch.set_grad_enabled(False)
         torch.set_float32_matmul_precision('high')
         self.device = torch.device('cpu')
-        self.frame_size = 4096//2 #This is the RAVE buffer size 
+        self.frame_size = AudioConfig.RAVE_FRAME_SIZE #This is the RAVE buffer size 
         self.current_sample = 0
         self.latent_dim = latent_dim
+
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
         self.z_bias = torch.zeros(1,latent_dim,1)
-        self.model_path = model_path
+
+        # Load model
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model not found: {model_path}")
         self.model = torch.jit.load(model_path).to(self.device)
+
         self.current_buffer = self.get_frame()
         self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
-        self.generate_thread = threading.Thread(target=self.fill_next_buffer)
+        
+        # Start generation thread
+        self._start_generator()
+
+    def _start_generator(self) -> None:
+        """Start background generation thread."""
+        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
         self.generate_thread.start()
         
-    def fill_next_buffer(self):
+    def _fill_next_buffer(self):
         self.next_buffer = self.get_frame()
 
     def get_frame(self):
@@ -847,19 +862,20 @@ class RAVEPlayer(AudioDevice):
         return y[:self.frame_size]
 
     def audio_callback(self):
+        """Generate audio samples."""
         if self.pause_event.is_set():
-            print("paused")
-            return np.zeros((self.channels, self.buffer_size), dtype = np.float32) # Fill buffer with silence if paused
+            return self._get_silence()
         else:
             audio_buffer = self.current_buffer[self.current_sample:self.current_sample +self.buffer_size]
             self.current_sample += self.buffer_size
+
             #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
             if self.current_sample >= self.frame_size:
                 self.current_sample = 0
                 self.current_buffer = self.next_buffer.copy()
                 if not self.generate_thread.is_alive():
-                    self.generate_thread = threading.Thread(target=self.fill_next_buffer)
-                    self.generate_thread.start()
+                    self._start_generator()
+
             self.internal_callback()
             self.on_new_frame(audio_buffer)
             return audio_buffer * self.gain

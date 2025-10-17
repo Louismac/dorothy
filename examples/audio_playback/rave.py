@@ -14,10 +14,10 @@ class MySketch:
 
     def setup(self):
         #Output RAVE from speakers
-        latent_dim = 16
+        latent_dim = 8
         print(sd.query_devices())
         
-        rave_id = dot.music.start_rave_stream("models/rave_jungle.ts", latent_dim=latent_dim)
+        rave_id = dot.music.start_rave_stream("models/taylor_vocals.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
         # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
