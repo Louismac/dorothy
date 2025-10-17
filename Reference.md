@@ -1492,7 +1492,7 @@ dot.music.resume()
 
 You can have multiple audio sources running simultaneously:
 
-See Examples
+See [Examples](examples/multi_audio_outputs.py)
 
 ### Advanced Features
 
@@ -1588,7 +1588,7 @@ fft = dot.music.fft()[::4]  # Every 4th value
 
 ### Complete Audio Examples
 
-Are in the examples folder
+See [Examples](examples)
 
 ### Troubleshooting Audio
 
@@ -1690,7 +1690,7 @@ def run_once(self):
 
 ## Complete Examples
 
-Are in the Examples Folder
+See [Examples](examples)
 
 ## Tips & Best Practices
 
