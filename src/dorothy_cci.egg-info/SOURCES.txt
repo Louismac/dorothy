@@ -3,6 +3,9 @@ README.md
 pyproject.toml
 dorothy/Audio.py
 dorothy/Dorothy.py
+dorothy/DorothyRenderer.py
+dorothy/DorothyShaders.py
+dorothy/DorothyWindow.py
 dorothy/__init__.py
 dorothy/css_colours.py
 dorothy/utils/__init__.py

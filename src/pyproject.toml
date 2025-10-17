@@ -52,9 +52,9 @@ dependencies = [
   "threadpoolctl==3.2.0",
   "typing_extensions==4.15.0",
   "urllib3==2.1.0",
-  "moderngl==5.12.0",
-  "moderngl-window=3.1.1",
-  "PyGLM==2.8.2"
+  "moderngl>=5.12.0",
+  "moderngl-window>=3.1.1",
+  "PyGLM>=2.8.2"
   ]
 
 [project.urls]

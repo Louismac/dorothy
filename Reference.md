@@ -11,7 +11,8 @@ Complete reference for Dorothy - A Creative Computing Python Library with Modern
 - [Layer System](#layer-system)
 - [Image Functions](#image-functions)
 - [Camera Functions](#camera-functions)
-- [Shaders](#custom-shaders-reference)
+- [Video Effects](#video-effects)
+- [Custom Shaders](#custom-shaders-reference)
 - [Properties](#properties)
 - [Color Constants](#color-constants)
 - [Audio Integration](#audio-integration)
@@ -320,6 +321,53 @@ Clear the screen with a color.
 ```python
 dot.background((30, 30, 40))  # Dark gray
 ```
+
+## LFO (Low Frequency Oscillator) Reference
+
+Modulate parameters with cyclical oscillators for animation.
+
+### Creating LFOs
+
+#### `get_lfo(osc, freq, range)`
+Create an LFO that automatically updates each frame.
+```python
+lfo_id = dot.get_lfo(osc='sine', freq=1.0, range=(0, 1))
+```
+
+**Parameters:**
+- `osc` (str): Oscillator type - `'sine'`, `'saw'`, `'square'`, `'triangle'`
+- `freq` (float): Frequency in Hz (cycles per second)
+- `range` (tuple): `(min, max)` to map oscillator output to
+
+**Returns:** LFO ID (int) to use with `lfo_value()`
+
+---
+
+### Reading LFO Values
+
+#### `lfo_value(lfo_id)`
+Get current value of an LFO.
+```python
+value = dot.lfo_value(lfo_id)
+```
+
+**Returns:** Current value mapped to the LFO's range
+
+---
+
+### Oscillator Types
+
+- **`'sine'`**: Smooth wave oscillation
+- **`'saw'`**: Linear ramp up, sharp drop
+- **`'square'`**: Alternates between min/max
+- **`'triangle'`**: Linear ramp up and down
+
+### Tips
+
+- **Frequency**: `0.5` = slow (2 seconds per cycle), `2.0` = fast (0.5 seconds per cycle)
+- **Ranges**: Can be any values - positions, sizes, colors, angles, etc.
+- **Multiple LFOs**: Create as many as needed, each with different frequencies for complex motion
+- **Modulation**: Change LFO frequency/range dynamically by modifying `dot.lfos[lfo_id]['freq']`
 
 ---
 
@@ -666,7 +714,203 @@ z = 5 * math.sin(angle)
 dot.set_camera((x, 2, z), (0, 0, 0))
 ```
 
+
 ---
+### Video Effects
+
+Apply visual effects to your canvas with these built-in shader methods.
+
+### Effect Methods
+
+#### `pixelate(pixel_size, accumulate)`
+Pixelate the canvas into larger blocks.
+```python
+dot.pixelate(pixel_size=8.0, accumulate=False)
+```
+
+**Parameters:**
+- `pixel_size` (float): Size of pixel blocks. Larger = more pixelated (default: 8.0)
+- `accumulate` (bool): If True, effect builds up over frames (default: False)
+
+**Example:**
+```python
+dot.circle((dot.mouse_x, dot.mouse_y), 50)
+dot.pixelate(12.0)
+```
+
+---
+
+#### `blur(accumulate)`
+Apply blur effect to the canvas.
+```python
+dot.blur(accumulate=False)
+```
+
+**Parameters:**
+- `accumulate` (bool): If True, effect builds up over frames (default: False)
+
+**Example:**
+```python
+dot.circle((200, 200), 100)
+dot.blur()
+```
+
+---
+
+#### `rgb_split(offset, accumulate)`
+Split RGB channels for glitch/chromatic aberration effect.
+```python
+dot.rgb_split(offset=0.01, accumulate=False)
+```
+
+**Parameters:**
+- `offset` (float): Distance to split channels, range 0.0-0.1 (default: 0.01)
+- `accumulate` (bool): If True, effect builds up over frames (default: False)
+
+**Example:**
+```python
+dot.circle((dot.mouse_x, dot.mouse_y), 50)
+dot.rgb_split(0.02)
+```
+
+---
+
+#### `feedback(zoom, accumulate)`
+Create feedback/zoom effect with trails.
+```python
+dot.feedback(zoom=0.98, accumulate=True)
+```
+
+**Parameters:**
+- `zoom` (float): Zoom factor per frame. <1.0 zooms out, >1.0 zooms in (default: 0.98)
+- `accumulate` (bool): Should be True for feedback effects (default: True)
+
+**Example:**
+```python
+dot.circle((dot.mouse_x, dot.mouse_y), 20)
+dot.feedback(0.99)  # Slow zoom out with trails
+```
+
+---
+
+#### `roll(offset_x, offset_y, accumulate)`
+Scroll/shift the canvas with wrapping (like `np.roll`).
+```python
+dot.roll(offset_x=0.0, offset_y=0.0, accumulate=True)
+```
+
+**Parameters:**
+- `offset_x` (float): Horizontal shift in pixels. Positive = right (default: 0.0)
+- `offset_y` (float): Vertical shift in pixels. Positive = down (default: 0.0)
+- `accumulate` (bool): Should be True for rolling effects (default: True)
+
+**Example:**
+```python
+dot.circle((dot.width//2, dot.height//2), 50)
+dot.roll(2.0, 0.0)  # Scroll right continuously
+```
+
+---
+
+#### `invert(accumulate)`
+Invert all colors on the canvas.
+```python
+dot.invert(accumulate=False)
+```
+
+**Parameters:**
+- `accumulate` (bool): If True, effect builds up over frames (default: False)
+
+**Example:**
+```python
+dot.background(dot.white)
+dot.fill(dot.red)
+dot.circle((200, 200), 100)
+dot.invert()  # White becomes black, red becomes cyan
+```
+
+---
+
+#### `tile(grid_x, grid_y, accumulate)`
+Tile/repeat the canvas in a grid pattern.
+```python
+dot.tile(grid_x=2, grid_y=2, accumulate=False)
+```
+
+**Parameters:**
+- `grid_x` (int): Number of horizontal tiles (default: 2)
+- `grid_y` (int): Number of vertical tiles (default: 2)
+- `accumulate` (bool): If True, effect builds up over frames (default: False)
+
+**Example:**
+```python
+dot.circle((100, 100), 50)
+dot.tile(4, 4)  # Create 4x4 grid of circles
+```
+
+---
+
+#### `cutout(color, threshold, accumulate)`
+Make pixels of a specific color transparent (chroma key/green screen).
+```python
+dot.cutout(color, threshold=0.1, accumulate=True)
+```
+
+**Parameters:**
+- `color` (tuple or constant): RGB color to cut out, e.g. `(0, 0, 0)` or `dot.green`
+- `threshold` (float): Color matching tolerance. 0.0 = exact, 0.5 = loose (default: 0.1)
+- `accumulate` (bool): If True, effect builds up over frames (default: True)
+
+**Example:**
+```python
+dot.background(dot.black)
+dot.fill(dot.red)
+dot.circle((200, 200), 100)
+dot.cutout((0, 0, 0))  # Remove black background
+```
+
+---
+
+### Accumulating vs Non-Accumulating
+
+**Accumulating (`accumulate=True`)**: Effect modifies the canvas permanently. Subsequent frames build on the modified version. Use for feedback effects, trails, and persistent transformations and for chaining effects together.
+
+**Non-Accumulating (`accumulate=False`)**: Effect is only a display filter. Canvas content remains unchanged. Use for post-processing like blur, pixelate, color correction.
+
+**Example - Accumulating:**
+```python
+def draw(self):
+    dot.circle((dot.mouse_x, dot.mouse_y), 20)
+    dot.feedback(0.99, accumulate=True)  # Creates trails
+```
+
+**Example - Non-Accumulating:**
+```python
+def draw(self):
+    dot.background(dot.white)
+    dot.circle((200, 200), 50)
+    dot.pixelate(8.0, accumulate=False)  # Just a visual filter
+```
+
+---
+
+### Combining Effects
+
+Chain multiple effects together:
+```python
+def draw(self):
+    dot.circle((dot.mouse_x, dot.mouse_y), 30)
+    
+    # Apply multiple effects, remember to accumulate!
+    dot.feedback(0.98, accumulate = True)  # Zoom trails
+    dot.rgb_split(0.015, accumulate = True))  # Glitch
+    dot.pixelate(6.0)  # Retro look
+```
+
+---
+
+
+
 
 ## Custom Shaders Reference
 

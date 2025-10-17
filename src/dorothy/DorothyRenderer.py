@@ -7,13 +7,15 @@ from moderngl_window import geometry
 import glm
 from typing import Tuple, Optional
 import cv2
+from .DorothyShaders import DOTSHADERS
 
 
 class Transform:
-    """Manages transformation matrices"""
+    """Manages transformation matrices""" 
     def __init__(self):
         self.matrix = glm.mat4(1.0)  # Identity matrix
         self.stack = []
+        
     
     def push(self):
         self.stack.append(glm.mat4(self.matrix))
@@ -109,201 +111,40 @@ class DorothyRenderer:
         self.layer_stack = []
         self.layer_counter = 0
         self.active_layer = None  # Currently rendering to a layer
+        self.effect_shaders = {}
+        self.effect_vaos = {}
         
     def _setup_shaders(self):
         """Initialize shader programs"""
         
         # Basic 3D shader with lighting
         self.shader_3d = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                uniform mat4 model;
-                uniform mat4 view;
-                uniform mat4 projection;
-                
-                in vec3 in_position;
-                in vec3 in_normal;
-                
-                out vec3 v_normal;
-                out vec3 v_position;
-                
-                void main() {
-                    vec4 world_pos = model * vec4(in_position, 1.0);
-                    v_position = world_pos.xyz;
-                    v_normal = mat3(transpose(inverse(model))) * in_normal;
-                    gl_Position = projection * view * world_pos;
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform vec4 color;
-                uniform vec3 light_pos;
-                uniform vec3 camera_pos;
-                uniform bool use_lighting;
-                
-                in vec3 v_normal;
-                in vec3 v_position;
-                
-                out vec4 fragColor;
-                
-                void main() {
-                    if (use_lighting) {
-                        vec3 normal = normalize(v_normal);
-                        vec3 light_dir = normalize(light_pos - v_position);
-                        vec3 view_dir = normalize(camera_pos - v_position);
-                        vec3 reflect_dir = reflect(-light_dir, normal);
-                        
-                        // Ambient
-                        float ambient = 0.3;
-                        
-                        // Diffuse
-                        float diffuse = max(dot(normal, light_dir), 0.0);
-                        
-                        // Specular
-                        float specular = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.5;
-                        
-                        float lighting = ambient + diffuse + specular;
-                        fragColor = vec4(color.rgb * lighting, color.a);
-                    } else {
-                        fragColor = color;
-                    }
-                }
-            '''
+            vertex_shader=DOTSHADERS.VERT_3D,
+            fragment_shader=DOTSHADERS.FRAG_3D
         )
         
         # Simple 2D shader
         self.shader_2d = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                uniform mat4 projection;
-                uniform mat4 model;
-                
-                in vec2 in_position;
-                
-                void main() {
-                    gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform vec4 color;
-                out vec4 fragColor;
-                
-                void main() {
-                    fragColor = color;
-                }
-            '''
+            vertex_shader=DOTSHADERS.VERT_2D,
+            fragment_shader=DOTSHADERS.FRAG_2D
         )
         
 # Texture shader for rendering layers
         self.shader_texture = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                in vec2 in_position;
-                in vec2 in_texcoord;
-                
-                out vec2 v_texcoord;
-                
-                void main() {
-                    v_texcoord = in_texcoord;
-                    gl_Position = vec4(in_position, 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform sampler2D texture0;
-                uniform float alpha;
-                
-                in vec2 v_texcoord;
-                out vec4 fragColor;
-                
-                void main() {
-                    vec4 texColor = texture(texture0, v_texcoord);
-                    // Discard fully transparent pixels so they don't overwrite the screen
-                    if (texColor.a < 0.01) {
-                        discard;
-                    }
-                    fragColor = vec4(texColor.rgb, texColor.a * alpha);
-                }
-            '''
+            vertex_shader=DOTSHADERS.VERT_TEXTURE,
+            fragment_shader=DOTSHADERS.FRAG_TEXTURE
         )
         
         # Texture shader with transforms for layer positioning
         self.shader_texture_transform = self.ctx.program(
-            vertex_shader='''
-                #version 330
-                
-                uniform mat4 projection;
-                uniform mat4 model;
-                
-                in vec2 in_position;
-                in vec2 in_texcoord;
-                
-                out vec2 v_texcoord;
-                
-                void main() {
-                    v_texcoord = in_texcoord;
-                    gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-                
-                uniform sampler2D texture0;
-                uniform float alpha;
-                
-                in vec2 v_texcoord;
-                out vec4 fragColor;
-                
-                void main() {
-                    vec4 texColor = texture(texture0, v_texcoord);
-                    // Discard fully transparent pixels so they don't overwrite the screen
-                    if (texColor.a < 0.01) {
-                        discard;
-                    }
-                    fragColor = vec4(texColor.rgb, texColor.a * alpha);
-                }
-            '''
+            vertex_shader=DOTSHADERS.VERT_TEXTURE_TRANSFORM,
+            fragment_shader=DOTSHADERS.FRAG_TEXTURE_TRANSFORM
         )
         
 
         self.shader_texture_2d = self.ctx.program(
-                vertex_shader='''
-                    #version 330
-                    
-                    uniform mat4 projection;
-                    uniform mat4 model;
-                    
-                    in vec2 in_position;
-                    in vec2 in_texcoord;
-                    
-                    out vec2 v_texcoord;
-                    
-                    void main() {
-                        v_texcoord = in_texcoord;
-                        gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
-                    }
-                ''',
-                fragment_shader='''
-                    #version 330
-                    
-                    uniform sampler2D texture0;
-                    uniform float alpha;
-                    
-                    in vec2 v_texcoord;
-                    out vec4 fragColor;
-                    
-                    void main() {
-                        vec4 texColor = texture(texture0, v_texcoord);
-                        fragColor = vec4(texColor.rgb, texColor.a * alpha);
-                    }
-                '''
+                vertex_shader=DOTSHADERS.VERT_TEXTURE_2D,
+                fragment_shader=DOTSHADERS.FRAG_TEXTURE_2D
             )
         
         # Create fullscreen quad for texture rendering
@@ -335,6 +176,8 @@ class DorothyRenderer:
         if color:
             self.background_color = self._normalize_color(color)
         self.ctx.clear(*self.background_color)
+    
+    
     
     # ====== Layer Management ======
     
@@ -510,6 +353,47 @@ class DorothyRenderer:
     
     # ====== Image/Texture Pasting ======
 
+    def get_effect_shader(self, shader_code):
+        shader_hash = hash(shader_code)
+        """Get or create a cached shader program"""
+        if shader_hash not in self.effect_shaders.keys():
+            print(f"Compiling shader...")
+            print(f"Shader code:\n{shader_code}")
+            
+            vertex_shader = '''
+                #version 330
+                
+                in vec2 in_position;
+                in vec2 in_texcoord;
+                
+                out vec2 v_texcoord;
+                
+                void main() {
+                    v_texcoord = in_texcoord;
+                    gl_Position = vec4(in_position, 0.0, 1.0);
+                }
+            '''
+            
+            try:
+                program = self.ctx.program(
+                    vertex_shader=vertex_shader,
+                    fragment_shader=shader_code
+                )
+                
+                print(f"Compilation result type: {type(program)}")
+                self.effect_shaders[shader_hash] = program
+                if not hasattr(program, '__getitem__'):
+                    print("Program doesn't have required methods")
+                    return None
+                    
+            except Exception as e:
+                print(f"Shader compilation exception: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        
+        return self.effect_shaders[shader_hash]
+
     def apply_shader(self, fragment_shader_code: str, uniforms: dict = None, accumulate: bool = True):
         """Apply a custom fragment shader to the current canvas
         
@@ -519,51 +403,34 @@ class DorothyRenderer:
             accumulate: If True, shader modifies persistent canvas (feedback effects)
                     If False, shader output is shown but not fed back (post-processing)
         """
-        vertex_shader = '''
-            #version 330
-            
-            in vec2 in_position;
-            in vec2 in_texcoord;
-            
-            out vec2 v_texcoord;
-            
-            void main() {
-                v_texcoord = in_texcoord;
-                gl_Position = vec4(in_position, 0.0, 1.0);
-            }
-        '''
-        
-        try:
-            custom_shader = self.ctx.program(
-                vertex_shader=vertex_shader,
-                fragment_shader=fragment_shader_code
-            )
-        except Exception as e:
-            print(f"Shader compilation error: {e}")
+        # Get cached shader (or compile if first time)
+        custom_shader = self.get_effect_shader(fragment_shader_code)
+        if custom_shader is None:
+            print("Shader is None, skipping effect")
             return None
-        
-        if self.active_layer is None:
-            print("Warning: apply_shader called outside of layer context")
-            custom_shader.release()
+        # Verify it's a real shader program
+        if not hasattr(custom_shader, 'get'):
+            print(f"Invalid shader object: {type(custom_shader)}")
             return None
-        
         # Get current layer
         layer = self.layers[self.active_layer]
         old_texture = layer['texture']
         old_fbo = layer['fbo']
-        
         # Create NEW texture and FBO for the shader output
         new_texture = self.ctx.texture((self.width, self.height), 4)
         new_fbo = self.ctx.framebuffer(color_attachments=[new_texture])
+        # Get or create cached VAO for this shader
+        shader_hash = hash(fragment_shader_code)
+        if shader_hash not in self.effect_vaos:
+            print("making vao (caching)")
+            self.effect_vaos[shader_hash] = self.ctx.simple_vertex_array(
+                custom_shader,
+                self.quad_vbo,
+                'in_position',
+                'in_texcoord'
+            )
         
-        # Create VAO specifically for this custom shader
-        custom_vao = self.ctx.simple_vertex_array(
-            custom_shader,
-            self.quad_vbo,
-            'in_position',
-            'in_texcoord'
-        )
-        
+        custom_vao = self.effect_vaos[shader_hash]
         # Render to new FBO with custom shader
         new_fbo.use()
         old_texture.use(0)
@@ -590,7 +457,6 @@ class DorothyRenderer:
                         custom_shader[name] = value
                 except KeyError:
                     pass
-        
         self.ctx.disable(moderngl.BLEND)
         custom_vao.render(moderngl.TRIANGLES)
         
@@ -607,10 +473,6 @@ class DorothyRenderer:
             # Set new FBO as active
             new_fbo.use()
             
-            # Clean up shader resources
-            custom_vao.release()
-            custom_shader.release()
-            
             return None
         else:
             # NON-ACCUMULATING MODE: Keep persistent canvas unchanged
@@ -618,10 +480,6 @@ class DorothyRenderer:
             
             # Restore the original FBO as active (keep persistent canvas intact)
             old_fbo.use()
-            
-            # Clean up shader resources
-            custom_vao.release()
-            custom_shader.release()
             
             # Return a temporary layer ID that on_render can display
             # Store it temporarily

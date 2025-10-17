@@ -15,7 +15,7 @@ import datetime
 import sys
 import traceback
 from contextlib import contextmanager
-
+from .DorothyShaders import DOTSHADERS
 
 
 class Dorothy:
@@ -70,6 +70,7 @@ class Dorothy:
         self.mouse_down = False
         self.frames = 0
         self.start_time = time.time()
+        self.lfos = []
 
         self._colours = {name.replace(" ", "_"): rgb for name, rgb in css_colours.items()}
         print("done load colours")
@@ -481,6 +482,102 @@ class Dorothy:
                 else:
                     print("no audio to write to file")
 
+    def get_lfo(self, osc='sine', freq=1.0, range=(0, 1)):
+        """Create a Low Frequency Oscillator for parameter modulation
+        
+        Args:
+            osc: Oscillator type - 'sine', 'saw', 'square', 'triangle'
+            freq: Frequency in Hz (cycles per second)
+            range: Tuple of (min, max) to map oscillator output to
+        
+        Returns:
+            int: LFO ID to use with lfo_value()
+        
+        Example:
+            # Create LFOs in setup
+            self.size_lfo = dot.get_lfo('sine', freq=0.5, range=(20, 100))
+            self.color_lfo = dot.get_lfo('saw', freq=2.0, range=(0, 255))
+            
+            # Use in draw
+            size = dot.lfo_value(self.size_lfo)
+            dot.circle((200, 200), size)
+        """
+        self._ensure_renderer()
+        
+        if not hasattr(self, 'lfos'):
+            self.lfos = []
+        
+        self.lfos.append({
+            "phase": 0.0,
+            "freq": freq,
+            "osc": osc,
+            "range": range,
+            "start": self.millis
+        })
+        
+        return len(self.lfos) - 1
+
+    def update_lfos(self):
+        """Update all LFO phases - called automatically from on_render"""
+        if not hasattr(self, 'lfos'):
+            return
+        
+        for lfo in self.lfos:
+            # Calculate elapsed time in seconds
+            elapsed = (self.millis - lfo['start']) / 1000.0
+            
+            # Update phase based on frequency
+            # phase = (frequency * time) mod 1.0 (keeps phase in 0-1 range)
+            lfo['phase'] = (lfo['freq'] * elapsed) % 1.0
+
+    def lfo_value(self, lfo_id=0):
+        """Get current value of an LFO
+        
+        Args:
+            lfo_id: ID returned from get_lfo()
+        
+        Returns:
+            float: Current LFO value mapped to specified range
+        
+        Example:
+            size = dot.lfo_value(self.size_lfo)
+            dot.circle((200, 200), size)
+        """
+        if not hasattr(self, 'lfos') or lfo_id >= len(self.lfos):
+            return 0.0
+        
+        lfo = self.lfos[lfo_id]
+        phase = lfo['phase']
+        osc_type = lfo['osc']
+        min_val, max_val = lfo['range']
+        
+        # Generate oscillator value based on type (-1 to 1)
+        if osc_type == 'sine':
+            # Sine wave: smooth oscillation
+            raw = np.sin(phase * 2 * np.pi)
+            
+        elif osc_type == 'saw':
+            # Sawtooth wave: linear ramp from -1 to 1
+            raw = (phase * 2) - 1
+            
+        elif osc_type == 'square':
+            # Square wave: alternates between -1 and 1
+            raw = 1.0 if phase < 0.5 else -1.0
+            
+        elif osc_type == 'triangle':
+            # Triangle wave: linear ramp up then down
+            if phase < 0.5:
+                raw = (phase * 4) - 1  # 0->0.5 maps to -1->1
+            else:
+                raw = 3 - (phase * 4)  # 0.5->1 maps to 1->-1
+        else:
+            raw = 0.0
+        
+        # Map from -1..1 to min_val..max_val
+        normalized = (raw + 1.0) / 2.0  # -1..1 to 0..1
+        mapped = min_val + (normalized * (max_val - min_val))
+        
+        return mapped
     # ====== Properties ======
     
     @property
@@ -681,7 +778,106 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.release_layer(layer_id)
+
+    def pixelate(self, pixel_size=8.0, accumulate=False):
+        """Apply pixelation effect
+        
+        Args:
+            pixel_size: Size of pixels (larger = more pixelated)
+            accumulate: If True, effect accumulates; if False, just display filter
+        """
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.PIXELATE, 
+                            accumulate=accumulate,
+                            pixelSize=pixel_size
+                        )
+
+    def blur(self, accumulate=False):
+        """Apply blur effect"""
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.BLUR, accumulate)
+
+    def rgb_split(self, offset=0.01, accumulate=False):
+        """Apply RGB split/glitch effect
+        
+        Args:
+            offset: How far to split RGB channels (0.0-0.1)
+            accumulate: If True, effect accumulates
+        """
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.RGB_SPLIT,
+                          accumulate=accumulate, 
+                            offset=offset 
+                            )
+        
+    def feedback(self, zoom=0.98, accumulate=True):
+        """Apply RGB split/glitch effect
+        
+        Args:
+            offset: How far to split RGB channels (0.0-0.1)
+            accumulate: If True, effect accumulates
+        """
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.FEEDBACK, 
+                          accumulate=accumulate,
+                          zoom=zoom
+                        )
+
+    def roll(self, offset_x=0.0, offset_y=0.0, accumulate=True):
+        """Roll/shift the canvas with wrapping
+        
+        Args:
+            offset_x: Horizontal shift in pixels
+            offset_y: Vertical shift in pixels
+            accumulate: Usually True for rolling effects
+        """
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.ROLL,
+                           accumulate = accumulate,
+                           offset=(offset_x, offset_y))
+        
+    def invert(self, accumulate=False):
+        """Invert colors"""
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.INVERT,accumulate=accumulate)
     
+    def tile(self, grid_x=2, grid_y=2, accumulate=False):
+        """Tile/repeat the canvas in a grid
+        
+        Args:
+            grid_x: Number of tiles horizontally (default: 2)
+            grid_y: Number of tiles vertically (default: 2)
+            accumulate: If True, effect accumulates; if False, just display filter
+        
+        """
+        self._ensure_renderer()
+        self.apply_shader(
+            DOTSHADERS.TILE,
+            accumulate = accumulate,
+            grid_size = (float(grid_x), float(grid_y))
+        )
+
+    def cutout(self, color, threshold=0.1, accumulate=True):
+        """Make pixels of a specific color transparent
+        
+        Args:
+            color: RGB tuple (0-255) or color constant to cut out
+            threshold: How close colors need to match (0.0 = exact, 0.5 = loose)
+            accumulate: If True, effect accumulates (default: True)
+
+        """
+        self._ensure_renderer()
+        
+        # Parse color and normalize to 0-1
+        parsed = self._parse_color(color)
+        normalized = (parsed[0], parsed[1], parsed[2])  # RGB only, no alpha
+        
+        self.apply_shader(
+            DOTSHADERS.CUTOUT,
+            accumulate=accumulate,
+            cutout_color=normalized,
+            threshold=float(threshold)
+        )
 
     def apply_shader(self, fragment_shader_code: str, accumulate: bool = True, **uniforms):
         """Apply a custom post-processing shader to the canvas
@@ -720,4 +916,3 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.paste(image, position, size, alpha)
-

@@ -121,6 +121,7 @@ class DorothyWindow(mglw.WindowConfig):
             self.dorothy.exit()  
             
         self.dorothy.frames += 1
+        self.dorothy.update_lfos()
         
         if self.dorothy.recording:
             canvas_rgb = self.dorothy.get_pixels()

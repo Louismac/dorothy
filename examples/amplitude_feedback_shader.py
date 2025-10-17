@@ -9,7 +9,7 @@ class MySketch:
         
     def setup(self):
         #Listen to mic or internal loop back (e.g. blackhole)
-        dot.music.start_device_stream(1)
+        dot.music.start_device_stream(2)
         self.feedback = '''
         #version 330
         uniform sampler2D texture0;
@@ -28,7 +28,9 @@ class MySketch:
     def draw(self):
         dot.fill(dot.red)
         dot.circle((dot.width//2,dot.height//2),100)
-        dot.apply_shader(self.feedback, accumulate=True, zoom=1-(dot.music.amplitude()*5))
+        #dot.apply_shader(self.feedback, accumulate=True, zoom=1-(dot.music.amplitude()*5))
+        # dot.feedback(accumulate=True, zoom=1-(dot.music.amplitude()*5))
+        dot.invert()
 
 MySketch()   
     

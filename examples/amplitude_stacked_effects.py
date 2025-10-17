@@ -1,4 +1,5 @@
 from dorothy import Dorothy
+from PIL import Image
 
 dot = Dorothy(640,480)
 
@@ -17,19 +18,28 @@ class MySketch:
         uniform float pixelSize;
         in vec2 v_texcoord;
         out vec4 fragColor;
-        
+
         void main() {
             vec2 pixels = resolution / pixelSize;
             vec2 uv = floor(v_texcoord * pixels) / pixels;
             fragColor = texture(texture0, uv);
         }
         '''
+        self.layer = dot.get_layer()
+        self.rgb_image = Image.open('../images/space.jpg')
         
     def draw(self):
-        dot.background(dot.white)
-        dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
-        dot.apply_shader(self.pixelate, pixelSize=8.0, accumulate=False)
+        dot.paste(self.rgb_image, (0, 0),(dot.width, dot.height))
+        with dot.layer(self.layer):
+            dot.background(dot.white)
+            dot.fill(dot.red)
+            dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
+            #Remember to accumulate changes through the chain
+            dot.pixelate(pixel_size=8.0, accumulate=True)
+            dot.roll(offset_x=dot.frames, accumulate=True)
+            dot.tile(8,8, accumulate=True)
+            dot.cutout(dot.red)
+        dot.draw_layer(self.layer)
 
 MySketch()   
     
