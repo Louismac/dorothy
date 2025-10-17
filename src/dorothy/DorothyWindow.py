@@ -77,6 +77,8 @@ class DorothyWindow(mglw.WindowConfig):
             except Exception as e:
                 if self.dorothy.frames < 5:
                     print(f"Error in draw(): {e}")
+                    if self.dorothy.frames == 0:
+                        traceback.print_exc()
             
             # End drawing to persistent canvas
             self.dorothy.renderer.end_layer()
