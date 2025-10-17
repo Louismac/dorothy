@@ -109,19 +109,19 @@ def draw(self):
 ### [All Examples](examples/)
 
 ### 🌟 **Level 1: Your First Steps**
-1. [🎵 Pulse Rectangle](examples/amplitude.py) - Circle that grows with music
-2. [🌈 Color Beats](examples/beats.py) - Colors that change on beats
-3. [📊 Simple Spectrum](examples/fft.py) - Your first FFT visualiser
+1. [🎵 Pulse Rectangle](examples/music_analysis/amplitude.py) - Circle that grows with music
+2. [🌈 Color Beats](examples/music_analysis/beats.py) - Colors that change on beats
+3. [📊 Simple Spectrum](examples/music_analysis/fft.py) - Your first FFT visualiser
 
 ### 🔥 **Level 2: Getting Creative**
-4. [🎭 Mouse Magic](examples/mouse.py) - Interactive drawing with audio
-5. [📹 Webcam Reaktor](examples/webcam.py) - Video effects with music
-6. [✨ Body Tracking](examples/hands.py) - Hand tracking from tensorflow
+4. [🎭 Mouse Magic](examples/interaction/mouse.py) - Interactive drawing with audio
+5. [📹 Webcam Reaktor](examples/video_and_images/webcam.py) - Video effects with music
+6. [✨ Body Tracking](examples/video_and_images/hands.py) - Hand tracking from tensorflow
 
 ### 🚀 **Level 3: Advanced Wizardry**
-7. [🤖 AI Audio Generation](examples/rave.py) - RAVE and MAGNet integration
+7. [🤖 AI Audio Generation](examples/audio_playback/rave.py) - RAVE and MAGNet integration
 8. [🎪 Live Coding](examples/livecode/) - Update visuals without restarting
-9. [🎨 Complex Compositions](examples/amplitude_stacked_effects.py) - Multi-layer masterpieces
+9. [🎨 Complex Compositions](examples/shaders_and_effects/amplitude_stacked_effects.py) - Multi-layer masterpieces
 
 ---
 

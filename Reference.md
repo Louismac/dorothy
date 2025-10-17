@@ -365,7 +365,7 @@ value = dot.lfo_value(lfo_id)
 
 ### Examples
 
-See [Examples](examples/lfos.py)
+See [Examples](examples/shapes/lfos.py)
 
 ### Tips
 
@@ -540,7 +540,7 @@ dot.release_layer(layer)
 
 #### Scale Layer with Transparency
 
-See [Examples](examples/scale_layer_with_transparency.py)
+See [Examples](examples/transforms/scale_layer_with_transparency.py)
 
 ## Image Functions
 
@@ -560,11 +560,11 @@ Paste a NumPy array (image) onto the canvas.
 
 **Respects transforms!** Use push/pop/translate/scale for positioning and effects.
 
-See [Examples](examples/image.py)
+See [Examples](examples/video_and_images/image.py)
 
 ### Working with OpenCV
 
-See [Examples](examples/webcam.py)
+See [Examples](examples/video_and_images/webcam.py)
 
 ---
 
@@ -599,7 +599,7 @@ Set 3D camera position and look-at target.
 - `eye` (Tuple[float, float, float]): Camera position (x, y, z)
 - `target` (Tuple[float, float, float]): Look-at point (default: origin)
 
-See [Examples](examples/camera_orbit.py)
+See [Examples](examples/3d/camera_orbit.py)
 
 
 ---
@@ -1023,7 +1023,7 @@ dot.on_mouse_press = mouse_pressed
 * dot.modifiers.ctrl
 * dot.modifiers.alt
 
-See [Examples](examples/key_press.py)
+See [Examples](examples/interaction/key_press.py)
 
 ---
 
@@ -1494,7 +1494,7 @@ dot.music.resume()
 
 You can have multiple audio sources running simultaneously:
 
-See [Examples](examples/multi_audio_outputs.py)
+See [Examples](examples/audio_playback/multi_audio_outputs.py)
 
 ### Advanced Features
 
