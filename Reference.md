@@ -479,7 +479,9 @@ with dot.transform():
 
 ## Layer System
 
-Layers are offscreen framebuffers for advanced compositing and effects.
+Layers are offscreen framebuffers for advanced compositing and effects. There is always an active layer, and if you are not currently drawing to a specific offscreen layer, you are drawing to the main canvas. 
+
+If you are drawing to an offscreen layer, you will not see the outcomes on the main canvas until you `draw_layer()` 
 
 ### get_layer()
 
@@ -601,7 +603,7 @@ See [Examples](examples/camera_orbit.py)
 
 
 ---
-### Video Effects
+## Video Effects
 
 Apply visual effects to your canvas with these built-in shader methods.
 
