@@ -18,7 +18,7 @@ class Particle3D:
         self.vy = np.sin(angle_y) * speed
         self.vz = np.sin(angle_xz) * np.cos(angle_y) * speed
         
-        self.size = 1 +np.random.random() * 10
+        self.size = 1 +np.random.random() * 20
         self.life = 1
         self.decay = np.random.random() * 0.01 + 0.003
     
@@ -61,7 +61,7 @@ class MySketch:
         self.camera_angle = 0
     
     def draw(self):
-        dot.background(dot.black)
+        dot.background((0,0,0,10))
         z_pos = 1 + dot.lfo_value(self.scale_lfo)
         x_pos = dot.lfo_value(self.spin_lfo)
         # Rotating camera
@@ -72,7 +72,7 @@ class MySketch:
         dot.set_camera((x_pos,y_pos,z_pos),(0,0,0))
         
         # Emit particles continuously
-        for _ in range(1):
+        for _ in range(2):
             px = 10-(dot.mouse_x/dot.width)*20
             py = 10-(dot.mouse_y/dot.height)*20
             pz = self.emit_position[2]
@@ -86,5 +86,7 @@ class MySketch:
                 p.draw()
                 alive_particles.append(p)
         self.particles = alive_particles
+
+        # dot.feedback(zoom=0.9, accumulate=True)
 
 MySketch()
