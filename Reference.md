@@ -7,6 +7,7 @@ Complete reference for Dorothy - A Creative Computing Python Library with Modern
 - [Getting Started](#getting-started)
 - [Main Classes](#main-classes)
 - [Drawing Functions](#drawing-functions)
+- [LFO Controls](#oscillators-reference)
 - [Transform Functions](#transform-functions)
 - [Layer System](#layer-system)
 - [Image Functions](#image-functions)
@@ -322,7 +323,7 @@ Clear the screen with a color.
 dot.background((30, 30, 40))  # Dark gray
 ```
 
-## LFO (Low Frequency Oscillator) Reference
+## Oscillators Reference
 
 Modulate parameters with cyclical oscillators for animation.
 
@@ -362,6 +363,10 @@ value = dot.lfo_value(lfo_id)
 - **`'square'`**: Alternates between min/max
 - **`'triangle'`**: Linear ramp up and down
 
+### Examples
+
+See [Examples](examples/lfos.py)
+
 ### Tips
 
 - **Frequency**: `0.5` = slow (2 seconds per cycle), `2.0` = fast (0.5 seconds per cycle)
@@ -373,7 +378,7 @@ value = dot.lfo_value(lfo_id)
 
 ## Transform Functions
 
-Transforms apply to all subsequent drawing until reset or popped.
+Transforms apply to all subsequent drawing within a given block.
 
 ### with dot.transform():
 
@@ -533,76 +538,7 @@ dot.release_layer(layer)
 
 #### Scale Layer with Transparency
 
-```python
-class MySketch:
-    
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
-    def setup(self):
-        print("setup")
-        #Play file from your computer
-        file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
-        dot.background(dot.beige)
-        
-        self.base_pattern()
-        
-    def draw(self):
-        
-        if dot.frames %100==0:
-            dot.background(dot.beige)
-            self.base_pattern()
-
-        factor = dot.music.amplitude() * 15 
-        centre = np.array([dot.width//2, dot.height//2])
-        with dot.transform():
-            dot.translate(centre[0], centre[1])
-            dot.scale(factor)
-            dot.translate(-centre[0], -centre[1])
-            dot.draw_layer(self.pattern_layer)
-    
-    #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
-    def base_pattern(self):
-        self.pattern_layer = dot.get_layer()
-        with dot.layer(self.pattern_layer):
-            dot.stroke((255, 37, 21))
-            dot.set_stroke_weight(4)
-            size = 30
-            for i in range(dot.width//size):
-                for j in range(dot.height//size):
-                    y1 = j*size
-                    if np.random.random()<0.5:
-                        y1 = (j+1)*size
-                    y2 = j*size
-                    if np.random.random()<0.5:
-                        y2 = (j+1)*size
-                    dot.line((i*size,y1), ((i+1)*size,y2)) 
-```
-
-#### Draw ontop of layers
-
-```python
-def setup(self):
-    self.bg_layer = dot.get_layer()
-    
-    # Draw static background once
-    with dot.layer(self.bg_layer):
-        dot.background(dot.black)
-        for i in range(100):
-            dot.fill((100, 100, 200))
-            dot.circle((random() * 800, random() * 600), 5)
-
-def draw(self):        
-    # Draw background layer
-    dot.draw_layer(self.bg_layer)
-    
-    # Draw foreground
-    dot.fill((255, 255, 0))
-    dot.circle((dot.mouse_x, dot.mouse_y), 50)
-```
-
----
+See [Examples](examples/scale_layer_with_transparency.py)
 
 ## Image Functions
 
@@ -622,52 +558,11 @@ Paste a NumPy array (image) onto the canvas.
 
 **Respects transforms!** Use push/pop/translate/scale for positioning and effects.
 
-**Example:**
-```python
-import cv2
-
-# Load image
-img = cv2.imread('photo.jpg')
-img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-# Paste at position
-dot.paste(img, (100, 100))
-
-# Paste with resize
-dot.paste(img, (200, 200), size=(400, 300))
-
-# Paste with transparency
-dot.paste(img, (0, 0), alpha=0.5)
-
-# Paste with transform (scale from center)
-with dot.transform():
-    dot.translate(400, 300)
-    dot.scale(2.0)
-    dot.translate(-img.shape[1]//2, -img.shape[0]//2)
-    dot.paste(img, (0, 0))
-```
+See [Examples](examples/image.py)
 
 ### Working with OpenCV
 
-```python
-import cv2
-
-# Load image
-img = cv2.imread('image.jpg')
-img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-# Load PNG with alpha
-logo = cv2.imread('logo.png', cv2.IMREAD_UNCHANGED)
-
-# Resize
-img_small = cv2.resize(img, (320, 240))
-
-# Webcam
-cap = cv2.VideoCapture(0)
-ret, frame = cap.read()
-frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-dot.paste(frame, (0, 0))
-```
+See [Examples](examples/webcam.py)
 
 ---
 
@@ -702,17 +597,7 @@ Set 3D camera position and look-at target.
 - `eye` (Tuple[float, float, float]): Camera position (x, y, z)
 - `target` (Tuple[float, float, float]): Look-at point (default: origin)
 
-**Example:**
-```python
-# Camera at (5, 3, 5) looking at origin
-dot.set_camera((5, 3, 5), (0, 0, 0))
-
-# Orbit camera
-angle = dot.frames * 0.01
-x = 5 * math.cos(angle)
-z = 5 * math.sin(angle)
-dot.set_camera((x, 2, z), (0, 0, 0))
-```
+See [Examples](examples/camera_orbit.py)
 
 
 ---
@@ -910,8 +795,6 @@ def draw(self):
 ---
 
 
-
-
 ## Custom Shaders Reference
 
 Apply custom GLSL fragment shaders to create visual effects and post-processing.
@@ -1006,110 +889,6 @@ def draw():
     dot.background((0, 0, 0))  # Can clear freely
     dot.circle((dot.mouse_x, dot.mouse_y), 50)
     dot.apply_shader(blur_shader, accumulate=False)
-```
-
-## Example Effects
-
-### Color Inversion
-```python
-invert = '''
-#version 330
-uniform sampler2D texture0;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    vec4 color = texture(texture0, v_texcoord);
-    color.rgb = 1.0 - color.rgb;
-    fragColor = color;
-}
-'''
-
-dot.apply_shader(invert, accumulate=False)
-```
-
-### RGB Split
-```python
-rgb_split = '''
-#version 330
-uniform sampler2D texture0;
-uniform float offset;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    float r = texture(texture0, v_texcoord + vec2(offset, 0.0)).r;
-    float g = texture(texture0, v_texcoord).g;
-    float b = texture(texture0, v_texcoord - vec2(offset, 0.0)).b;
-    fragColor = vec4(r, g, b, 1.0);
-}
-'''
-
-dot.apply_shader(rgb_split, accumulate=False, offset=0.01)
-```
-
-### Feedback Zoom
-```python
-zoom = '''
-#version 330
-uniform sampler2D texture0;
-uniform float amount;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    vec2 uv = (v_texcoord - 0.5) * amount + 0.5;
-    vec4 color = texture(texture0, uv);
-    color.rgb *= 0.99;  // Fade slightly
-    fragColor = color;
-}
-'''
-
-dot.apply_shader(zoom, accumulate=True, amount=0.99)
-```
-
-### Pixelation
-```python
-pixelate = '''
-#version 330
-uniform sampler2D texture0;
-uniform vec2 resolution;
-uniform float pixelSize;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    vec2 pixels = resolution / pixelSize;
-    vec2 uv = floor(v_texcoord * pixels) / pixels;
-    fragColor = texture(texture0, uv);
-}
-'''
-
-dot.apply_shader(pixelate, accumulate=False, pixelSize=8.0)
-```
-
-### Kaleidoscope
-```python
-kaleidoscope = '''
-#version 330
-uniform sampler2D texture0;
-uniform float segments;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    vec2 uv = v_texcoord - 0.5;
-    float angle = atan(uv.y, uv.x);
-    float radius = length(uv);
-    
-    angle = mod(angle, 6.28318 / segments);
-    uv = vec2(cos(angle), sin(angle)) * radius + 0.5;
-    
-    fragColor = texture(texture0, uv);
-}
-'''
-
-dot.apply_shader(kaleidoscope, accumulate=False, segments=6.0)
 ```
 
 ## Tips
@@ -1242,30 +1021,7 @@ dot.on_mouse_press = mouse_pressed
 * dot.modifiers.ctrl
 * dot.modifiers.alt
 
-**Example:**
-```python
-self.color = dot.red
-
-def key_press(key, action, modifiers):
-    if action == dot.keys.ACTION_PRESS:
-        if key == dot.keys.SPACE:
-            print("SPACE key was pressed")
-        if key == dot.keys.Z and modifiers.shift:
-            print("Shift + Z was pressed")
-
-        if key == dot.keys.Z and modifiers.ctrl:
-            print("ctrl + Z was pressed")
-    elif action == dot.keys.ACTION_RELEASE:
-        if key == dot.keys.SPACE:
-            print("SPACE key was released")
-
-    if self.color == dot.red:
-        self.color = dot.blue
-    else:
-        self.color = dot.red
-
-dot.on_key_press = key_press
-```
+See [Examples](examples/key_press.py)
 
 ---
 
@@ -1586,7 +1342,7 @@ self.clock.set_tpb(4)
 sequence_length = 12   # 3 beats × 4 ticks
 ```
 
-### Stream Samples (Synthesis / DSP)
+### Stream Samples 
 
 ```python
 # Play pre-loaded samples
@@ -1736,41 +1492,7 @@ dot.music.resume()
 
 You can have multiple audio sources running simultaneously:
 
-```python
-class MultiAudioSketch:
-    def setup(self):
-        # Background music
-        self.music_id = dot.music.start_file_stream("background.wav")
-        
-        # Microphone input for visualization
-        self.mic_id = dot.music.start_device_stream(device=0)
-        
-        # Synth for interaction
-        def synth(size):
-            freq = 440 + dot.mouse_x
-            return 0.1 * np.sin(2 * np.pi * freq * np.arange(size) / 44100)
-        self.synth_id = dot.music.start_dsp_stream(synth)
-        
-        dot.music.play(self.music_id)
-        dot.music.play(self.mic_id)
-        dot.music.play(self.synth_id)
-    
-    def draw(self):
-        dot.background((20, 20, 30))
-        
-        # Visualize mic input
-        mic_fft = dot.music.fft(self.mic_id)
-        for i, val in enumerate(mic_fft[::4]):
-            x = i * 20
-            h = val * 300
-            dot.fill((100, 200, 255))
-            dot.rectangle((x, 600), (x + 18, 600 - h))
-        
-        # Music amplitude affects size
-        music_amp = dot.music.amplitude(self.music_id)
-        dot.fill((255, 100, 100))
-        dot.circle((400, 300), 50 + music_amp * 150)
-```
+See Examples
 
 ### Advanced Features
 
@@ -1866,115 +1588,7 @@ fft = dot.music.fft()[::4]  # Every 4th value
 
 ### Complete Audio Examples
 
-#### Example 1: FFT Visualizer
-
-```python
-def setup(self):
-    self.file_id = dot.music.start_file_stream(
-        "song.wav",
-        fft_size=2048,
-        buffer_size=2048
-    )
-    dot.music.play()
-
-def draw(self):
-    dot.background((10, 10, 15))
-    
-    # Get FFT data
-    fft = dot.music.fft()
-    
-    # Draw frequency bars
-    bar_width = dot.width / len(fft[::4])
-    for i, magnitude in enumerate(fft[::4]):
-        x = i * bar_width
-        height = magnitude * 500
-        
-        # Color based on frequency
-        hue = i / len(fft[::4])
-        r = int(255 * (1 - hue))
-        g = int(255 * hue)
-        
-        dot.fill((r, g, 200))
-        dot.no_stroke()
-        dot.rectangle((x, 600), (x + bar_width - 2, 600 - height))
-```
-
-#### Example 2: Beat Detection
-
-```python
-def setup(self):
-    dot.music.start_file_stream("song.wav")
-    dot.music.play()
-    self.beat_time = 0
-    self.beat_intensity = 0
-
-def draw(self):
-    dot.background((20, 20, 30))
-    
-    # Detect beats
-    if dot.music.is_beat():
-        self.beat_time = dot.frames
-        self.beat_intensity = 1.0
-    
-    # Fade beat intensity
-    self.beat_intensity *= 0.95
-    
-    # Draw pulsing circle on beat
-    radius = 100 + self.beat_intensity * 200
-    alpha = int(self.beat_intensity * 255)
-    dot.fill((255, 100, 100, alpha))
-    dot.circle((400, 300), radius)
-    
-    # Amplitude meter
-    amp = dot.music.amplitude()
-    dot.fill((100, 255, 100))
-    dot.rectangle((50, 550), (50 + amp * 700, 570))
-```
-
-#### Example 3: Microphone Reactive
-
-```python
-def setup(self):
-    # Find microphone device
-    import sounddevice as sd
-    devices = sd.query_devices()
-    for i, device in enumerate(devices):
-        if 'microphone' in device['name'].lower():
-            print(f"Using device {i}: {device['name']}")
-            self.mic_id = dot.music.start_device_stream(
-                device=i,
-                fft_size=1024,
-                buffer_size=1024
-            )
-            break
-
-def draw(self):
-    dot.background((15, 15, 20))
-    
-    # Get microphone FFT
-    fft = dot.music.fft(self.mic_id)
-    amp = dot.music.amplitude(self.mic_id)
-    
-    # Radial frequency visualization
-    for i, magnitude in enumerate(fft[::2]):
-        angle = (i / len(fft[::2])) * 2 * np.pi
-        length = 100 + magnitude * 200
-        
-        x1 = 400 + 100 * np.cos(angle)
-        y1 = 300 + 100 * np.sin(angle)
-        x2 = 400 + length * np.cos(angle)
-        y2 = 300 + length * np.sin(angle)
-        
-        dot.stroke((100, 200, 255))
-        dot.set_stroke_weight(2)
-        dot.line((x1, y1), (x2, y2))
-    
-    # Center amplitude circle
-    dot.fill((255, 100, 100))
-    dot.no_stroke()
-    dot.circle((400, 300), 30 + amp * 70)
-```
-
+Are in the examples folder
 
 ### Troubleshooting Audio
 
@@ -2076,172 +1690,7 @@ def run_once(self):
 
 ## Complete Examples
 
-### Example 1: Basic Sketch
-
-```python
-from dorothy import Dorothy
-import math
-
-dot = Dorothy(800, 600, "Basic Sketch")
-
-class MySketch:
-    def __init__(self):
-        self.angle = 0
-        dot.start_loop(self.setup, self.draw)
-    
-    def setup(self):
-        print("Setup complete!")
-    
-    def draw(self):
-        dot.background((30, 30, 40))
-        
-        # Rotating circle
-        x = 400 + 200 * math.cos(self.angle)
-        y = 300 + 200 * math.sin(self.angle)
-        
-        dot.fill((255, 100, 100))
-        dot.no_stroke()
-        dot.circle((x, y), 30)
-        
-        self.angle += 0.05
-
-MySketch()
-```
-
-### Example 2: Audio Reactive
-
-```python
-from dorothy import Dorothy
-
-dot = Dorothy()
-dot.music = YourMusicPlayer()
-
-class AudioSketch:
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)
-    
-    def setup(self):
-        dot.music.start_file_stream("song.wav")
-        dot.music.play()
-    
-    def draw(self):
-        dot.background((20, 20, 30))
-        
-        # FFT bars
-        fft = dot.music.fft_vals
-        for i, val in enumerate(fft[::4]):  # Every 4th value
-            x = i * 20
-            h = val * 400
-            
-            # Color based on frequency
-            r = int(i / len(fft) * 255)
-            dot.fill((r, 100, 255 - r))
-            dot.no_stroke()
-            dot.rectangle((x, 600), (x + 18, 600 - h))
-        
-        # Center circle pulses with amplitude
-        amp = dot.music.amplitude
-        dot.fill((255, 255, 255))
-        dot.circle((400, 300), 50 + amp * 200)
-
-AudioSketch()
-```
-
-### Example 3: Webcam with Effects
-
-```python
-import cv2
-from dorothy import Dorothy
-
-dot = Dorothy()
-
-class WebcamSketch:
-    def __init__(self):
-        self.camera = cv2.VideoCapture(0)
-        dot.start_loop(self.setup, self.draw)
-    
-class MySketch:
-
-    def __init__(self):
-        self.camera = cv2.VideoCapture(0)
-        dot.start_loop(self.setup, self.draw)  
-
-    def setup(self):
-        #Play file from your computer
-        file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
-            
-    def draw(self):
-        success, camera_feed = self.camera.read()
-        if success:
-
-            target_size = (640, 480)
-            camera_feed = cv2.resize(camera_feed, target_size)
-            camera_feed = cv2.cvtColor(camera_feed, cv2.COLOR_BGR2RGB)
-            
-            w, h = target_size
-            crop_x1 = w // 4
-            crop_y1 = h // 4
-            crop_x2 = w // 4 * 3
-            crop_y2 = h // 4 * 3
-            cropped = camera_feed[crop_y1:crop_y2, crop_x1:crop_x2]
-            
-            crop_w = crop_x2 - crop_x1
-            crop_h = crop_y2 - crop_y1
-
-            with dot.transform():
-                dot.translate(dot.width//2, dot.height//2, 0)
-                factor = (dot.music.amplitude() * 5) + 1
-                dot.scale(factor)
-                dot.translate(-crop_w//2, -crop_h//2, 0)
-                dot.paste(cropped, (0, 0))
-
-WebcamSketch()
-```
-
-### Example 4: 3D Scene
-
-```python
-from dorothy import Dorothy
-import math
-
-dot = Dorothy()
-
-class Scene3D:
-    def __init__(self):
-        self.angle = 0
-        dot.start_loop(self.setup, self.draw)
-    
-    def setup(self):
-        dot.camera_3d()
-    
-    def draw(self):
-        dot.background((20, 20, 30))
-        
-        # Orbit camera
-        x = 5 * math.cos(self.angle)
-        z = 5 * math.sin(self.angle)
-        dot.set_camera((x, 2, z), (0, 0, 0))
-        
-        # Draw multiple objects
-        for i in range(-2, 3):
-            for j in range(-2, 3):
-                with dot.transform():
-                    dot.translate(i * 2, 0, j * 2)
-                    
-                    # Alternate between spheres and boxes
-                    if (i + j) % 2 == 0:
-                        dot.fill((255, 100, 100))
-                        dot.sphere(0.4)
-                    else:
-                        dot.fill((100, 100, 255))
-                        dot.box(0.6, 0.6, 0.6)        
-        self.angle += 0.01
-
-Scene3D()
-```
-
----
+Are in the Examples Folder
 
 ## Tips & Best Practices
 
@@ -2254,9 +1703,8 @@ Scene3D()
 
 ### Transforms
 
-1. **Always use push/pop** - wrap transforms to avoid side effects
-2. **Order matters** - translate → rotate → scale is typical
-3. **Scale from center** - translate to center, scale, translate back
+1. **Order matters** - translate → rotate → scale is typical
+2. **Scale from center** - translate to center, scale, translate back
 
 ### Debugging
 
@@ -2288,7 +1736,8 @@ Scene3D()
 
 ### Transforms Not Working
 
-- Use `push_matrix()` / `pop_matrix()`
+- Use `with dot.transforms:`
+- Is your drawing code within the block?
 - Set transforms BEFORE drawing
 - Remember transforms accumulate
 
@@ -2315,9 +1764,9 @@ Scene3D()
 - Transform-aware image pasting
 - Layer system with alpha blending
 
----
+
 
 ## Credits
 
-Original Dorothy by Louis McCallum  
+Dorothy by Louis McCallum  
 ModernGL refactor maintains API compatibility while adding GPU acceleration and 3D support.

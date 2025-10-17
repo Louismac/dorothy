@@ -121,7 +121,7 @@ def draw(self):
 ### 🚀 **Level 3: Advanced Wizardry**
 7. [🤖 AI Audio Generation](examples/rave.py) - RAVE and MAGNet integration
 8. [🎪 Live Coding](examples/livecode/) - Update visuals without restarting
-9. [🎨 Complex Compositions](examples/contours.py) - Multi-layer masterpieces
+9. [🎨 Complex Compositions](examples/3d_sphere_grid.py) - Multi-layer masterpieces
 
 ---
 
