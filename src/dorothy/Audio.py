@@ -43,7 +43,7 @@ class AudioConfig:
     DEFAULT_SAMPLE_RATE: int = 44100
     MAGNET_FRAME_SIZE: int = 1024 * 75
     RAVE_FRAME_SIZE: int = 2048
-    MAX_RECORDING_DURATION: int = 600  # seconds
+    MAX_RECORDING_DURATION: int = 600000  # milliseconds
     THREAD_JOIN_TIMEOUT: float = 2.0
 
 
@@ -446,7 +446,7 @@ class AudioDevice:
         
         # Recording
         self.recording_buffer: List[npt.NDArray[np.float32]] = []
-        self._recording_start_time = 0.0
+        self._recording_start_time = time.time()
         
         # Analysis buffers
         self._init_analysis_buffers()
@@ -902,6 +902,7 @@ class AudioCapture(AudioDevice):
     def _handle_recording_input(self, audio_data: npt.NDArray[np.float32]) -> None:
         """Handle recording for input streams."""
         elapsed = time.time() - self._recording_start_time
+        # print("handle recording", elapsed, self._recording_start_time)
         if elapsed > AudioConfig.MAX_RECORDING_DURATION:
             self.stop_recording()
             print("Maximum recording duration reached")

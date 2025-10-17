@@ -26,6 +26,7 @@ class MySketch:
         '''
         dot.camera_3d()
         self.theta = 0
+        dot.start_record(end = 10000)
 
     def draw(self):
         dot.background(dot.white)
