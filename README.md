@@ -2,6 +2,10 @@
 
 **Create audio-reactive visuals in Python with just a few lines of code**
 
+***Now with OpenGL***
+
+[PreGL Archived Version](https://github.com/lmccallum/)
+
 Dorothy is a creative computing library that makes it incredibly easy to build interactive visual art that responds to music, beats, and audio in real-time. Think Processing meets Python, with superpowers for audio visualisation.
 
 <img src="images/output2.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output4.gif" alt="drawing" width="200"/>
@@ -46,7 +50,7 @@ class MySketch:
         dot.background((0, 0, 0))  # Black background
         
         # Circle that pulses with the music
-        size = 50 + dot.music.amplitude * 200
+        size = 50 + dot.music.amplitude() * 200
         dot.fill((255, 100, 150))  # Pink
         dot.circle((dot.width//2, dot.height//2), size)
 

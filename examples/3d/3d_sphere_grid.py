@@ -10,23 +10,8 @@ class MySketch:
     def setup(self):
         #Listen to mic or internal loop back (e.g. blackhole)
         dot.music.start_device_stream(2)
-        self.rgb_split = '''
-        #version 330
-        uniform sampler2D texture0;
-        uniform float offset;
-        in vec2 v_texcoord;
-        out vec4 fragColor;
-
-        void main() {
-            float r = texture(texture0, v_texcoord + vec2(offset, 0.0)).r;
-            float g = texture(texture0, v_texcoord).g;
-            float b = texture(texture0, v_texcoord - vec2(offset, 0.0)).b;
-            fragColor = vec4(r, g, b, 1.0);
-        }
-        '''
         dot.camera_3d()
         self.theta = 0
-        dot.start_record(end = 10000)
 
     def draw(self):
         dot.background(dot.white)
@@ -48,7 +33,7 @@ class MySketch:
                     dot.translate(x, y, z)
                     dot.sphere(amp * 20)
                 # print(x,y)
-        dot.apply_shader(self.rgb_split, accumulate=False, offset=amp*0.5)
+        dot.rgb_split(accumulate=False, offset=amp*0.5)
 
 MySketch()   
     
