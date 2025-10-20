@@ -57,58 +57,14 @@ class MySketch:
         self.particles = []
         self.emit_position = [0, 0, 0]
         self.scale_lfo = dot.get_lfo(freq = 0.1, range = (50,90))
-        self.spin_lfo = dot.get_lfo(freq = 0.1, range = (0, 1))
-        self.camera_angle = 0
-
-        self.emit_shader = '''
-        #version 330
-        uniform sampler2D texture0;
-        uniform float glow_boost;
-        in vec2 v_texcoord;
-        out vec4 fragColor;
-        
-        void main() {
-            vec4 color = texture(texture0, v_texcoord);
-            
-            // Boost bright colors
-            float brightness = length(color.rgb);
-            if (brightness > 0.5) {
-                color.rgb *= (1.0 + glow_boost);
-            }
-            
-            fragColor = color;
-        }
-        '''
-        
-        self.fast_blur = '''
-        #version 330
-        uniform sampler2D texture0;
-        uniform vec2 resolution;
-        in vec2 v_texcoord;
-        out vec4 fragColor;
-        
-        void main() {
-            vec2 pixel = 1.0 / resolution;
-            vec4 color = vec4(0.0);
-            
-            // 3x3 blur
-            for(int x = -1; x <= 1; x++) {
-                for(int y = -1; y <= 1; y++) {
-                    color += texture(texture0, v_texcoord + vec2(x, y) * pixel);
-                }
-            }
-            
-            fragColor = color / 9.0;
-        }
-        '''
+        self.spin_lfo = dot.get_lfo(freq = 0.3, range = (0, np.pi))
     
     def draw(self):
         dot.background((0,0,0,255))
         radius = 100
-        # dot.lfos[self.spin_lfo]["freq"] = dot.music.amplitude()*1
         z_pos = 1 + dot.lfo_value(self.scale_lfo)
-        x_pos = dot.lfo_value(self.spin_lfo)*radius
-        y_pos = 0
+        x_pos = np.cos(dot.lfo_value(self.spin_lfo))*radius
+        y_pos = np.sin(1-dot.lfo_value(self.spin_lfo))*radius
         dot.set_camera((x_pos,y_pos,z_pos),(0,0,0))
         
         # Emit particles continuously
@@ -126,12 +82,5 @@ class MySketch:
                 p.draw()
                 alive_particles.append(p)
         self.particles = alive_particles
-
-        # Boost emission
-        # dot.apply_shader(self.emit_shader, accumulate=True, glow_boost=0.1)
-        # dot.background((0,0,0,4))
-        # # Blur multiple times for softer glow
-        # for _ in range(3):
-        #     dot.apply_shader(self.fast_blur, accumulate=True)
 
 MySketch()
