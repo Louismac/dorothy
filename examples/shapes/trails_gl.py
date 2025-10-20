@@ -8,15 +8,18 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)
     
     def setup(self):
-        dot.background((200,120,0))
-    
-    def draw(self):
+        self.layer = dot.get_layer()
         
-        dot.fill((200, 120, 0, 5))
-        dot.rectangle((0, 0), (dot.width, dot.height))
-                
-        dot.fill(dot.cyan)
-        dot.circle((dot.frames % dot.width, 300), 100)
+    def draw(self):
+        #redo background on main canvas
+        dot.background((255,0,255))
+        #draw trails to layer
+        with dot.layer(self.layer):
+            dot.background((255,0,255,10))
+            dot.fill(dot.yellow)
+            dot.circle((dot.mouse_x, dot.mouse_y), 100)
+
+        dot.draw_layer(self.layer)
 
         
 

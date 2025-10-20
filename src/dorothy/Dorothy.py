@@ -87,10 +87,23 @@ class Dorothy:
     
     def background(self, color: Tuple):
         """Clear the active layer with a color"""
-        color = self._parse_color(color)
         layer_id = self.renderer.active_layer
-        # print(f"clearing layer:{layer_id}")
-        self.renderer.clear_layer(layer_id, color)
+        # print(f"clearing layer:{layer_id} with {color}" )
+        if layer_id is None:
+            # Not in a layer - shouldn't happen in normal use
+            return
+        if len(color) == 3:
+            color = (*color, 255)
+            
+        if color[3] >= 255:  # Fully opaque - use fast clear
+            color = self._parse_color(color)
+            self.renderer.clear_layer(layer_id, color)
+        else:  # Semi-transparent - draw rectangle
+            camera = self.renderer.camera.mode
+            self.camera_2d()
+            self.fill(color)
+            self.rectangle((0, 0), (self.width, self.height))
+            self.renderer.camera.mode = camera
 
     def __getattr__(self, name):
         """Dynamically retrieve color attributes"""
