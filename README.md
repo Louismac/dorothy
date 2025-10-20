@@ -24,7 +24,7 @@ Dorothy in action
 
 ### Installation
 ```bash
-pip install dorothy-cci
+pip install dorothy-cci==0.057
 ```
 
 ### Your First Audio-Reactive Visual
