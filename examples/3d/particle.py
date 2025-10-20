@@ -37,7 +37,7 @@ class Particle3D:
     def draw(self):
   
         # Set color with life-based alpha
-        dot.fill((255*self.life,0,255,255*self.life))
+        dot.fill((255*(self.life*2),0,255,255*(self.life*2)))
         
         # Position and draw sphere
         with dot.transform():
@@ -58,10 +58,11 @@ class MySketch:
         self.emit_position = [0, 0, 0]
         self.scale_lfo = dot.get_lfo(freq = 0.1, range = (50,90))
         self.spin_lfo = dot.get_lfo(freq = 0.3, range = (0, np.pi))
+        dot.start_record(end=10000)
     
     def draw(self):
         dot.background((0,0,0,255))
-        radius = 100
+        radius = 50
         z_pos = 1 + dot.lfo_value(self.scale_lfo)
         x_pos = np.cos(dot.lfo_value(self.spin_lfo))*radius
         y_pos = np.sin(1-dot.lfo_value(self.spin_lfo))*radius

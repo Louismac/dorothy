@@ -4,11 +4,11 @@
 
 ***Now with OpenGL***
 
-[PreGL Archived Version](https://github.com/lmccallum/)
+[PreGL Archived Version](https://github.com/Louismac/dorothy/tree/archive/pre-gl-0.057)
 
 Dorothy is a creative computing library that makes it incredibly easy to build interactive visual art that responds to music, beats, and audio in real-time. Think Processing meets Python, with superpowers for audio visualisation.
 
-<img src="images/output2.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output4.gif" alt="drawing" width="200"/>
+<img src="images/output5.gif" alt="drawing" width="200"/><img src="images/output3.gif" alt="drawing" width="200"/><img src="images/output7.gif" alt="drawing" width="200"/>
 
 Dorothy in action
 
