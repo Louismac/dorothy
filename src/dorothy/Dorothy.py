@@ -16,6 +16,7 @@ import sys
 import traceback
 from contextlib import contextmanager
 from .DorothyShaders import DOTSHADERS
+import signal
 
 
 class Dorothy:
@@ -146,6 +147,24 @@ class Dorothy:
         # Configure and run the window
         DorothyWindow.window_size = self.window_size
         DorothyWindow.title = self.window_title
+
+        # Signal handler function
+        def signal_handler(sig, frame):
+            print('You pressed Ctrl+C! Closing the window.')
+            self.exit()
+            
+        #only for unix like systems
+        if hasattr(signal, 'SIGTSTP'):
+            try:
+                # Link the signal handler to SIGINT
+                signal.signal(signal.SIGTSTP, signal_handler)
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
+        else:
+            print("SIGTSTP not available on this platform")
+
+        
         
         # Run the window (this will call setup_fn when ready)
         try:

@@ -2,7 +2,6 @@ import numpy as np
 import moderngl_window as mglw
 import time
 import traceback
-import signal
 
 class DorothyWindow(mglw.WindowConfig):
     """Internal window configuration for moderngl-window"""
@@ -109,18 +108,7 @@ class DorothyWindow(mglw.WindowConfig):
             self.dorothy.exit()  
 
     def end_render(self):
-       # Signal handler function
-        def signal_handler(sig, frame):
-            print('You pressed Ctrl+C! Closing the window.')
-            self.dorothy.exit()
-
-        try:
-            # Link the signal handler to SIGINT
-            signal.signal(signal.SIGTSTP, signal_handler)
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            self.dorothy.exit()  
+        
             
         self.dorothy.frames += 1
         self.dorothy.update_lfos()
