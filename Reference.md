@@ -1455,6 +1455,34 @@ if dot.music.is_beat():
     dot.circle((400, 300), 200)
 ```
 
+### Smoothing Signals
+
+#### get_window(window_size, method = "average", dims = 1)
+
+Make a window for smoothing signals 
+
+#### add(val or List)
+
+Add new value, returns current smoothed value 
+
+#### Example
+
+```python
+w = dot.get_window(10)
+mean = w.add(new_val)
+mean = w.add(new_val)
+mean = w.add(new_val)
+...
+```
+
+```python
+w = dot.get_window(10, dims = 3)
+mean = w.add([x,y,z])
+mean = w.add([x,y,z])
+mean = w.add([x,y,z])
+...
+```
+
 ### Playback Control
 
 #### play(output=0)

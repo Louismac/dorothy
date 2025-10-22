@@ -514,6 +514,30 @@ class Dorothy:
                 else:
                     print("no audio to write to file")
 
+    def get_window(self, window_size=10, method='average', dims = 1):
+        """Create a signal smoother
+        
+        Args:
+            window_size: Number of samples to smooth over
+            method: 'average' (simple moving average)
+                   'exponential' (exponential moving average - recent values weighted more)
+                   'gaussian' (gaussian-weighted average - center weighted most)
+        
+        Returns:
+            Windower instance
+        
+        Example:
+            # In setup
+            self.amp_smoother = dot.smoother(window_size=20, method='average')
+            
+            # In draw
+            smoothed_amp = self.amp_smoother.add(dot.music.amplitude())
+        """
+        if dims == 1:
+            return Windower(window_size, method)
+        else:   
+            return VectorWindower(window_size, method, dims)
+
     def get_lfo(self, osc='sine', freq=1.0, range=(0, 1)):
         """Create a Low Frequency Oscillator for parameter modulation
         
@@ -948,3 +972,81 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.paste(image, position, size, alpha)
+
+
+from collections import deque
+
+class VectorWindower:
+    """Smooth 2D or 3D vectors"""
+    
+    def __init__(self, window_size=10, method='average', dimensions=2):
+        self.windows = [Windower(window_size, method) for _ in range(dimensions)]
+    
+    def add(self, vector):
+        """Add vector and return smoothed result"""
+        return tuple(s.add(v) for s, v in zip(self.windows, vector))
+    
+    def get(self):
+        return tuple(s.get() for s in self.windows)
+
+class Windower:
+    """Smooths a signal over a time window"""
+    
+    def __init__(self, window_size=10, method='average'):
+        """Create a signal smoother
+        
+        Args:
+            window_size: Number of samples to smooth over
+            method: 'average', 'exponential', or 'gaussian'
+        """
+        self.window_size = window_size
+        self.method = method
+        self.values = deque(maxlen=window_size)
+        self.alpha = 2.0 / (window_size + 1)  # For exponential smoothing
+        self.smoothed = 0.0
+    
+    def add(self, value):
+        """Add a new value and return the smoothed result
+        
+        Args:
+            value: New value to add
+        
+        Returns:
+            Smoothed value
+        """
+        if self.method == 'average':
+            self.values.append(value)
+            self.smoothed = sum(self.values) / len(self.values)
+        
+        elif self.method == 'exponential':
+            if len(self.values) == 0:
+                self.smoothed = value
+            else:
+                # EMA: S_t = α * x_t + (1 - α) * S_{t-1}
+                self.smoothed = self.alpha * value + (1 - self.alpha) * self.smoothed
+            self.values.append(value)
+        
+        elif self.method == 'gaussian':
+            self.values.append(value)
+            if len(self.values) < 3:
+                self.smoothed = sum(self.values) / len(self.values)
+            else:
+                # Gaussian weights (center has more weight)
+                weights = np.exp(-np.linspace(-2, 2, len(self.values))**2)
+                weights /= weights.sum()
+                self.smoothed = sum(v * w for v, w in zip(self.values, weights))
+        
+        return self.smoothed
+    
+    def get(self):
+        """Get current smoothed value without adding new data
+        
+        Returns:
+            Current smoothed value
+        """
+        return self.smoothed
+    
+    def reset(self):
+        """Clear all values and reset smoother"""
+        self.values.clear()
+        self.smoothed = 0.0

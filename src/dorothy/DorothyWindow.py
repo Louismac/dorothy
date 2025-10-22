@@ -109,7 +109,6 @@ class DorothyWindow(mglw.WindowConfig):
 
     def end_render(self):
         
-            
         self.dorothy.frames += 1
         self.dorothy.update_lfos()
         

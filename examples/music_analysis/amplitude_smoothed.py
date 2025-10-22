@@ -9,12 +9,16 @@ class MySketch:
         
     def setup(self):
         file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
+        dot.music.start_file_stream(file_path)
+        #get object for running average
+        self.mean_amp = dot.get_window(20)
         
     def draw(self):
+        # add new value, get smoothed value
+        r = self.mean_amp.add(dot.music.amplitude())
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
+        dot.circle((dot.width//2,dot.height//2),int(r*dot.height))
 
 MySketch()   
     
