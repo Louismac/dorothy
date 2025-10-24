@@ -89,7 +89,7 @@ class DorothyRenderer:
         # State
         self.fill_color = (255, 255, 255, 255)
         self.stroke_color = (0, 0, 0, 255)
-        self._stroke_weight = 1
+        self._stroke_weight = 10
         self.use_fill = True
         self.use_stroke = False
         
@@ -684,7 +684,7 @@ class DorothyRenderer:
         # Draw cross
         self.use_stroke = True
         self.stroke_color = (255, 255, 0, 255)  # Yellow
-        self._stroke_weight = 1
+        # self._stroke_weight = 1
         
         # Vertical line
         vertices = np.array([x, y - offset, x, y + offset], dtype='f4')
@@ -723,8 +723,63 @@ class DorothyRenderer:
             vertices.extend([x, y])
         return np.array(vertices, dtype='f4')
     
-    # ====== 2D Drawing Methods (Processing-like API) ======
-    
+    def _draw_thick_stroke(self, vertices, closed=False):
+        """Draw thick lines as quads instead of using line_width
+        
+        Args:
+            vertices: np.array of [x1, y1, x2, y2, ...] coordinates
+            closed: If True, connect last point to first
+        """
+        if self._stroke_weight <= 1.0:
+            # Use regular lines for weight 1
+            return None  # Signal to use regular line rendering
+        
+        thickness = self._stroke_weight
+        points = vertices.reshape(-1, 2)
+        
+        if len(points) < 2:
+            return None
+        
+        # If closed, add first point at end
+        if closed:
+            points = np.vstack([points, points[0:1]])
+        
+        # Build quad strip for thick line
+        quad_vertices = []
+        
+        for i in range(len(points) - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            
+            # Calculate perpendicular direction
+            dx = x2 - x1
+            dy = y2 - y1
+            length = np.sqrt(dx*dx + dy*dy)
+            
+            if length < 0.001:
+                continue
+            
+            # Normalize and get perpendicular
+            dx /= length
+            dy /= length
+            px = -dy * thickness / 2
+            py = dx * thickness / 2
+            
+            # Add quad for this segment
+            quad_vertices.extend([
+                x1 + px, y1 + py,
+                x1 - px, y1 - py,
+                x2 + px, y2 + py,
+                x2 - px, y2 - py,
+            ])
+        
+        if not quad_vertices:
+            return None
+        
+        return np.array(quad_vertices, dtype='f4')
+
+    # Now update each drawing method:
+
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
         """Draw a circle in 2D mode"""
         vertices = self._create_circle_vertices(center, radius)
@@ -744,9 +799,9 @@ class DorothyRenderer:
             self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
             vao.render(moderngl.TRIANGLE_FAN)
         
-        # Draw stroke (use LINE_STRIP for circle outline)
+        # Draw stroke
         if self.use_stroke:
-            # Create separate vertices for stroke (without center point)
+            # Create stroke vertices (without center point)
             stroke_vertices = []
             segments = 32
             for i in range(segments + 1):
@@ -755,23 +810,39 @@ class DorothyRenderer:
                 y = center[1] + radius * np.sin(angle)
                 stroke_vertices.extend([x, y])
             
-            stroke_vbo = self.ctx.buffer(np.array(stroke_vertices, dtype='f4'))
-            stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+            stroke_array = np.array(stroke_vertices, dtype='f4')
             
-            self.ctx.line_width = self._stroke_weight
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            stroke_vao.render(moderngl.LINE_STRIP)
+            # Try thick stroke first
+            thick_verts = self._draw_thick_stroke(stroke_array, closed=True)
             
-            stroke_vao.release()
-            stroke_vbo.release()
+            if thick_verts is not None:
+                # Draw as quads
+                thick_vbo = self.ctx.buffer(thick_verts)
+                thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
+                
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+                thick_vao.render(moderngl.TRIANGLE_STRIP)
+                
+                thick_vao.release()
+                thick_vbo.release()
+            else:
+                # Fall back to thin line
+                stroke_vbo = self.ctx.buffer(stroke_array)
+                stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+                
+                self.ctx.line_width = 1.0
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+                stroke_vao.render(moderngl.LINE_STRIP)
+                
+                stroke_vao.release()
+                stroke_vbo.release()
         
         vao.release()
         vbo.release()
         
-        # Draw annotation if requested
         if annotate:
             self._draw_annotation(center, f"({int(center[0])}, {int(center[1])})\nr={int(radius)}")
-    
+
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
         """Draw a rectangle"""
         x1, y1 = pos1
@@ -799,20 +870,32 @@ class DorothyRenderer:
             vao.render(moderngl.TRIANGLE_FAN)
         
         if self.use_stroke:
-            self.ctx.line_width = self._stroke_weight
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            vao.render(moderngl.LINE_LOOP)
+            # Try thick stroke
+            thick_verts = self._draw_thick_stroke(vertices, closed=True)
+            
+            if thick_verts is not None:
+                thick_vbo = self.ctx.buffer(thick_verts)
+                thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
+                
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+                thick_vao.render(moderngl.TRIANGLE_STRIP)
+                
+                thick_vao.release()
+                thick_vbo.release()
+            else:
+                self.ctx.line_width = 1.0
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+                vao.render(moderngl.LINE_LOOP)
         
         vao.release()
         vbo.release()
         
-        # Draw annotation if requested
         if annotate:
             center_x = (x1 + x2) / 2
             center_y = (y1 + y2) / 2
             self._draw_annotation((center_x, center_y), 
                                 f"({int(x1)}, {int(y1)})\n({int(x2)}, {int(y2)})")
-    
+
     def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
         """Draw a line"""
         vertices = np.array([
@@ -820,55 +903,53 @@ class DorothyRenderer:
             pos2[0], pos2[1]
         ], dtype='f4')
         
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-
         # Enable blending for transparency
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(self.transform.matrix)
-        self.ctx.line_width = self._stroke_weight
         self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
         
-        vao.render(moderngl.LINES)
+        # Try thick line
+        thick_verts = self._draw_thick_stroke(vertices, closed=False)
         
-        vao.release()
-        vbo.release()
+        if thick_verts is not None:
+            thick_vbo = self.ctx.buffer(thick_verts)
+            thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
+            thick_vao.render(moderngl.TRIANGLE_STRIP)
+            thick_vao.release()
+            thick_vbo.release()
+        else:
+            vbo = self.ctx.buffer(vertices)
+            vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
+            self.ctx.line_width = 1.0
+            vao.render(moderngl.LINES)
+            vao.release()
+            vbo.release()
         
-        # Draw annotation if requested
         if annotate:
             center_x = (pos1[0] + pos2[0]) / 2
             center_y = (pos1[1] + pos2[1]) / 2
             self._draw_annotation((center_x, center_y), 
                                 f"({int(pos1[0])}, {int(pos1[1])})\n({int(pos2[0])}, {int(pos2[1])})")
-            
+
     def polyline(self, points, closed: bool = False):
-        """Draw a polyline (connected line segments)
-        
-        Args:
-            points: List of (x, y) coordinates
-            closed: If True, connect last point back to first point
-        """
+        """Draw a polyline (connected line segments)"""
         if len(points) < 2:
-            return  # Need at least 2 points for a line
+            return
         
-        # Create vertices for the line strip
+        # Create vertices
         vertices = []
         for x, y in points:
             vertices.extend([x, y])
         
-        # If closed, add the first point again at the end
         if closed:
             vertices.extend([points[0][0], points[0][1]])
         
         vertices = np.array(vertices, dtype='f4')
         
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Enable blending for transparency
+        # Enable blending
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         
@@ -876,141 +957,25 @@ class DorothyRenderer:
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(self.transform.matrix)
         
-        # Draw stroke
         if self.use_stroke:
-            self.ctx.line_width = self._stroke_weight
             self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            vao.render(moderngl.LINE_STRIP)
-        
-        vao.release()
-        vbo.release()
-
-    def polygon(self, points):
-        """Draw a filled polygon with proper triangulation
-        
-        Args:
-            points: List of (x, y) coordinates defining the polygon vertices
-        """
-        if len(points) < 3:
-            return  # Need at least 3 points for a polygon
-        
-        # Triangulate the polygon using ear clipping algorithm
-        def triangulate(vertices):
-            """Simple ear clipping triangulation for polygons"""
-            if len(vertices) < 3:
-                return []
             
-            # Make a copy to work with
-            verts = list(vertices)
-            triangles = []
+            # Try thick stroke
+            thick_verts = self._draw_thick_stroke(vertices, closed=closed)
             
-            while len(verts) > 3:
-                # Find an ear (a triangle that doesn't contain other vertices)
-                ear_found = False
-                for i in range(len(verts)):
-                    prev = verts[i - 1]
-                    curr = verts[i]
-                    next_v = verts[(i + 1) % len(verts)]
-                    
-                    # Check if this is a valid ear
-                    if is_ear(prev, curr, next_v, verts):
-                        triangles.extend([prev, curr, next_v])
-                        verts.pop(i)
-                        ear_found = True
-                        break
-                
-                if not ear_found:
-                    # Fallback: just use remaining vertices as one triangle
-                    if len(verts) >= 3:
-                        triangles.extend(verts[:3])
-                    break
-            
-            # Add the last triangle
-            if len(verts) == 3:
-                triangles.extend(verts)
-            
-            return triangles
-        
-        def is_ear(prev, curr, next_v, all_verts):
-            """Check if the triangle (prev, curr, next) is an ear"""
-            # Check if angle at curr is convex
-            cross = (curr[0] - prev[0]) * (next_v[1] - prev[1]) - (curr[1] - prev[1]) * (next_v[0] - prev[0])
-            if cross <= 0:  # Reflex angle
-                return False
-            
-            # Check if any other vertex is inside this triangle
-            for v in all_verts:
-                if v == prev or v == curr or v == next_v:
-                    continue
-                if point_in_triangle(v, prev, curr, next_v):
-                    return False
-            
-            return True
-        
-        def point_in_triangle(p, a, b, c):
-            """Check if point p is inside triangle abc"""
-            def sign(p1, p2, p3):
-                return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
-            
-            d1 = sign(p, a, b)
-            d2 = sign(p, b, c)
-            d3 = sign(p, c, a)
-            
-            has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
-            has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
-            
-            return not (has_neg and has_pos)
-        
-        # Triangulate the polygon
-        triangulated = triangulate(points)
-        
-        if not triangulated:
-            return
-        
-        # Create vertices array from triangulated points
-        vertices = []
-        for x, y in triangulated:
-            vertices.extend([x, y])
-        
-        vertices = np.array(vertices, dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        # Set uniforms
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        
-        # Draw fill
-        if self.use_fill:
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            vao.render(moderngl.TRIANGLES)
-        
-        # Draw stroke
-        if self.use_stroke:
-            # Create separate vertices for stroke outline
-            stroke_vertices = []
-            for x, y in points:
-                stroke_vertices.extend([x, y])
-            # Close the loop
-            stroke_vertices.extend([points[0][0], points[0][1]])
-            
-            stroke_vbo = self.ctx.buffer(np.array(stroke_vertices, dtype='f4'))
-            stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
-            
-            self.ctx.line_width = self._stroke_weight
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-            stroke_vao.render(moderngl.LINE_STRIP)
-            
-            stroke_vao.release()
-            stroke_vbo.release()
-        
-        vao.release()
-        vbo.release()
+            if thick_verts is not None:
+                thick_vbo = self.ctx.buffer(thick_verts)
+                thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
+                thick_vao.render(moderngl.TRIANGLE_STRIP)
+                thick_vao.release()
+                thick_vbo.release()
+            else:
+                vbo = self.ctx.buffer(vertices)
+                vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
+                self.ctx.line_width = 1.0
+                vao.render(moderngl.LINE_STRIP)
+                vao.release()
+                vbo.release()
     # ====== 3D Drawing Methods ======
     
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
