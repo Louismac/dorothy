@@ -496,27 +496,57 @@ class DorothyRenderer:
             
             return temp_layer_id
 
-    def get_pixels(self) -> np.ndarray:
-        """Get current screen pixels as numpy array
+    def get_pixels(self, layer_id=None, components=3, flip=True, bgr=True) -> np.ndarray:
+        """Get pixels from a framebuffer as numpy array
+        
+        Args:
+            layer_id: Layer ID to read from, None for active layer/screen
+            components: 3 for RGB, 4 for RGBA
+            flip: If True, flip vertically (OpenGL coords to screen coords)
+            bgr: If True, convert RGB to BGR for OpenCV
         
         Returns:
-            np.ndarray: RGB image array (height, width, 3) in uint8 format
+            np.ndarray: Image array (height, width, components) in uint8 format
         """
-        # Read pixels from the screen framebuffer
-        pixels = self.ctx.screen.read(components=3)
+        # Determine which framebuffer to read from
+        if layer_id is not None:
+            # Read from specific layer
+            if layer_id not in self.layers:
+                raise ValueError(f"Layer {layer_id} does not exist")
+            fbo = self.layers[layer_id]['fbo']
+            pixels = fbo.read(components=components)
+            # Get actual FBO dimensions
+            w, h = fbo.size
+        # elif self.active_layer is not None:
+        #     # Read from currently active layer
+        #     fbo = self.layers[self.active_layer]['fbo']
+        #     pixels = fbo.read(components=components)
+        else:
+            # Read from screen
+            # print("Reading screen")
+            pixels = self.ctx.screen.read(components=components)
+            w, h = self.ctx.screen.size
+        # Convert to numpy array
+        img = np.frombuffer(pixels, dtype=np.uint8)
+        
         
         # Convert to numpy array
         img = np.frombuffer(pixels, dtype=np.uint8)
-        img = img.reshape((self.height, self.width, 3))
         
-        # Flip vertically (OpenGL origin is bottom-left)
-        img = np.flipud(img)
+        # Reshape using FBO dimensions (not self.width/height which might be swapped)
+        img = img.reshape((h, w, components))
+        # Flip vertically if requested
+        if flip:
+            img = np.flipud(img)
         
-        # Convert RGB to BGR for OpenCV compatibility
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        # Convert to BGR if requested (for OpenCV)
+        if bgr and components == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        elif bgr and components == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
         
         return img
-    
+        
     def paste(self, image: np.ndarray, position: Tuple[int, int], 
               size: Optional[Tuple[int, int]] = None, alpha: float = 1.0):
         """Paste a numpy array (image) onto the canvas

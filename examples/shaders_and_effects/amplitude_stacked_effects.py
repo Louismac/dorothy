@@ -41,8 +41,8 @@ class MySketch:
                 dot.scale(1+amp*3)
                 dot.rotate(np.pi*(dot.frames/1000))
                 dot.translate(-dot.centre[0], -dot.centre[1])
-                dot.background((0,0,0,10))
-                dot.draw_layer(self.mask)
+                dot.background((0,0,0,5))
+                dot.draw_layer(self.mask,0.8)
 
         with dot.layer(self.space_layer):
             dot.paste(self.rgb_image, (0, 0),(dot.width, dot.height))

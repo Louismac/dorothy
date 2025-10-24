@@ -113,7 +113,7 @@ class DorothyWindow(mglw.WindowConfig):
         self.dorothy.update_lfos()
         
         if self.dorothy.recording:
-            canvas_rgb = self.dorothy.get_pixels()
+            canvas_rgb = self.dorothy.renderer.get_pixels()
             self.dorothy.video_recording_buffer.append({
                 "frame": canvas_rgb,
                 "timestamp": self.dorothy.millis
