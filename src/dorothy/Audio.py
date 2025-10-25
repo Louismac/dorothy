@@ -334,6 +334,20 @@ class Audio:
             ptr = (device.audio_buffer_write_ptr + 1) % device.audio_latency
             return device.amplitude[ptr]
         return 0.0
+    
+        # NEW METHOD
+    def is_onset(self,output: int = 0) -> bool:
+        """
+        Check if there has been an onset since the last time this was called.
+        This is a "consume" operation - it clears the flag after reading.
+        
+        Returns:
+            bool: True if onset occurred since last check, False otherwise
+        """
+        if self.audio_outputs[output]._onset_flag:
+            self.audio_outputs[output]._onset_flag = False
+            return True
+        return False
 
     def is_beat(self, output: int = 0) -> bool:
         """
@@ -434,6 +448,7 @@ class AudioDevice:
         self.recording = False
         self.audio_latency = AudioConfig.DEFAULT_AUDIO_LATENCY
         self.audio_buffer_write_ptr = 0
+        self._onset_flag = False
         
         # Threading
         self.pause_event = threading.Event()
@@ -451,6 +466,14 @@ class AudioDevice:
         # Analysis buffers
         self._init_analysis_buffers()
         self._fft_window = np.hanning(self.fft_size)
+
+        # ADD ONSET DETECTOR
+        self.onset_detector = StreamingOnsetDetector(
+            sample_rate=self.sr,
+            fft_size=fft_size,
+            hop_length=self.hop_length,
+            threshold=0.3,  
+        )
         
         # Warn about potential issues
         if self.fft_size > self.buffer_size:
@@ -534,7 +557,21 @@ class AudioDevice:
                     fft_accum += np.abs(fft_result)
                 
                 # Average across frames
+                averaged_magnitude = fft_accum / num_frames
                 self.fft_vals[self.audio_buffer_write_ptr] = fft_accum / num_frames
+
+                # ===== ONSET DETECTION INTEGRATION =====
+                # Process the averaged FFT magnitude for onset detection
+                onset_detected = self.onset_detector.process_fft_frame(
+                    averaged_magnitude, 
+                    num_frames=num_frames
+                )
+                
+                if onset_detected:
+                    # print(f"Onset detected at {self.onset_detector.total_samples_processed} samples")
+                    self._onset_flag = True
+
+                # ===== END ONSET DETECTION =====
                 
                 # Update overlap buffer with remaining samples
                 consumed = num_frames * self.hop_length
@@ -1189,3 +1226,238 @@ class Clock:
         
         self.ticks_per_beat = ticks_per_beat
         self.tick_length = 60000.0 / (self.bpm * self.ticks_per_beat)
+
+from collections import deque
+
+class StreamingOnsetDetector:
+    """
+    Real-time onset detection using spectral flux with adaptive thresholding.
+    Integrates with existing FFT analysis for efficiency.
+    """
+    
+    def __init__(
+        self,
+        sample_rate=44100,
+        fft_size=2048,
+        hop_length=512,
+        n_bands=6,
+        threshold=0.3,
+        pre_max=3,
+        post_max=3,
+        pre_avg=10,
+        post_avg=7,
+        delta=0.07,
+        wait=10
+    ):
+        """
+        Args:
+            sample_rate: Audio sample rate
+            fft_size: FFT size (must match your existing analysis)
+            hop_length: Hop size for analysis (must match your existing analysis)
+            n_bands: Number of frequency bands for multi-band analysis
+            threshold: Base threshold multiplier for onset detection
+            pre_max: Frames before peak that must be lower (peak picking)
+            post_max: Frames after peak that must be lower
+            pre_avg: Frames for pre-average in adaptive threshold
+            post_avg: Frames for post-average in adaptive threshold
+            delta: Constant added to adaptive threshold
+            wait: Minimum frames between consecutive onsets
+        """
+        self.sample_rate = sample_rate
+        self.fft_size = fft_size
+        self.hop_length = hop_length
+        self.n_bands = n_bands
+        self.threshold = threshold
+        self.pre_max = pre_max
+        self.post_max = post_max
+        self.pre_avg = pre_avg
+        self.post_avg = post_avg
+        self.delta = delta
+        self.wait = wait
+        
+        # State for onset detection
+        self.prev_magnitude = None
+        
+        # Onset detection function (ODF) history
+        max_history = max(pre_max + post_max, pre_avg + post_avg) + 10
+        self.odf_history = deque(maxlen=max_history)
+        
+        # Onset timestamps (in samples)
+        self.onset_positions = deque(maxlen=1000)
+        self.total_samples_processed = 0
+        self.frames_since_onset = wait  # Start ready to detect
+        
+        # Create filterbank for multi-band analysis
+        self._create_filterbank()
+        
+    def _create_filterbank(self):
+        """Create triangular filterbank for multi-band analysis."""
+        # Frequency bands (Hz): exponentially spaced
+        self.band_edges = np.logspace(
+            np.log10(50),  # Start at 50 Hz
+            np.log10(self.sample_rate / 2),  # Up to Nyquist
+            self.n_bands + 1
+        )
+        
+        # Convert to FFT bins
+        self.band_bins = (self.band_edges * self.fft_size / self.sample_rate).astype(int)
+        
+    def _compute_spectral_flux(self, magnitude_spectrum):
+        """
+        Compute multi-band spectral flux with half-wave rectification.
+        This is the core onset detection function (ODF).
+        
+        Args:
+            magnitude_spectrum: FFT magnitude (from your do_analysis function)
+        """
+        if self.prev_magnitude is None:
+            self.prev_magnitude = magnitude_spectrum.copy()
+            return 0.0
+        
+        # Half-wave rectified spectral difference (only increases matter)
+        diff = magnitude_spectrum - self.prev_magnitude
+        diff = np.maximum(diff, 0)  # Half-wave rectification
+        
+        # Multi-band processing (emphasizes different frequency regions)
+        band_fluxes = []
+        for i in range(self.n_bands):
+            start_bin = self.band_bins[i]
+            end_bin = self.band_bins[i + 1]
+            band_flux = np.sum(diff[start_bin:end_bin])
+            band_fluxes.append(band_flux)
+        
+        # Weight higher frequencies more (transients often have high-freq content)
+        weights = np.linspace(1.0, 2.0, self.n_bands)
+        flux = np.sum(np.array(band_fluxes) * weights)
+        
+        self.prev_magnitude = magnitude_spectrum.copy()
+        return flux
+    
+    def _adaptive_threshold(self, odf_value):
+        """
+        Adaptive threshold based on local average.
+        Returns True if odf_value exceeds the adaptive threshold.
+        """
+        if len(self.odf_history) < self.pre_avg + self.post_avg:
+            return False
+        
+        # Get local neighborhood
+        history_list = list(self.odf_history)
+        pre_window = history_list[-self.pre_avg:]
+        post_window = history_list[-(self.pre_avg + self.post_avg):-self.pre_avg]
+        
+        # Adaptive threshold: mean of surrounding values + delta
+        threshold_value = (
+            self.threshold * (np.mean(pre_window) + np.mean(post_window)) / 2 + self.delta
+        )
+        
+        return odf_value > threshold_value
+    
+    def _is_local_maximum(self):
+        """Peak picking: check if current position is a local maximum."""
+        if len(self.odf_history) < self.pre_max + self.post_max + 1:
+            return False
+        
+        history_list = list(self.odf_history)
+        current = history_list[-self.post_max - 1]
+        
+        # Check pre-max window
+        pre_window = history_list[-(self.pre_max + self.post_max + 1):-self.post_max - 1]
+        if any(v >= current for v in pre_window):
+            return False
+        
+        # Check post-max window
+        post_window = history_list[-self.post_max:]
+        if any(v >= current for v in post_window):
+            return False
+        
+        return True
+    
+    def process_fft_frame(self, magnitude_spectrum, num_frames=1):
+        """
+        Process FFT magnitude for onset detection.
+        Call this from within your do_analysis function.
+        
+        Args:
+            magnitude_spectrum: FFT magnitude array from your analysis
+            num_frames: Number of FFT frames represented (for accumulated FFTs)
+        
+        Returns:
+            bool: True if onset detected in this frame
+        """
+        # Compute onset detection function
+        odf_value = self._compute_spectral_flux(magnitude_spectrum)
+        self.odf_history.append(odf_value)
+        
+        # Increment frame counter
+        self.frames_since_onset += 1
+        
+        # Detect onset (with all conditions)
+        onset_detected = False
+        if (self.frames_since_onset >= self.wait and
+            self._adaptive_threshold(odf_value) and
+            self._is_local_maximum()):
+            
+            # Record onset position (in samples)
+            onset_sample = self.total_samples_processed
+            self.onset_positions.append(onset_sample)
+            self.frames_since_onset = 0
+            onset_detected = True
+        
+        # Update sample counter (account for multiple frames if averaged)
+        self.total_samples_processed += self.hop_length * num_frames
+        
+        return onset_detected
+    
+    def has_onset_in_range(self, n_samples):
+        """
+        Check if there was an onset in the last n_samples.
+        
+        Args:
+            n_samples: Look back this many samples
+            
+        Returns:
+            bool: True if onset detected in range
+        """
+        if not self.onset_positions:
+            return False
+        
+        cutoff = self.total_samples_processed - n_samples
+        return self.onset_positions[-1] >= cutoff
+    
+    def get_onsets_in_range(self, n_samples):
+        """
+        Get all onset positions within the last n_samples.
+        
+        Args:
+            n_samples: Look back this many samples
+            
+        Returns:
+            list: Sample positions of onsets (relative to start of stream)
+        """
+        if not self.onset_positions:
+            return []
+        
+        cutoff = self.total_samples_processed - n_samples
+        return [pos for pos in self.onset_positions if pos >= cutoff]
+    
+    def get_time_since_last_onset(self):
+        """
+        Get time in seconds since last onset.
+        
+        Returns:
+            float: Seconds since last onset, or None if no onsets yet
+        """
+        if not self.onset_positions:
+            return None
+        
+        samples_since = self.total_samples_processed - self.onset_positions[-1]
+        return samples_since / self.sample_rate
+    
+    def reset(self):
+        """Reset detector state."""
+        self.prev_magnitude = None
+        self.odf_history.clear()
+        self.onset_positions.clear()
+        self.total_samples_processed = 0
+        self.frames_since_onset = self.wait
