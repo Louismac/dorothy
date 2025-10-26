@@ -11,8 +11,9 @@ class MySketch:
         file_path = "../audio/disco.wav"
         o = dot.music.start_file_stream(file_path, fft_size=512)
         #adjust threshold if you want (0.3 default)
-        dot.music.audio_outputs[o].onset_detector.threshold = 0.3
-        self.prev_millis = dot.millis
+        # dot.music.audio_outputs[o].onset_detector.threshold = 0.3
+        # self.prev_millis = dot.millis
+        # dot.music.start_device_stream(1)
         
     def draw(self):
         dot.background(dot.white)
