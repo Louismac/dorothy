@@ -1813,9 +1813,6 @@ class StreamingBeatTracker:
             # Increment beats without onset support
             self.beats_since_onset += 1
             
-            # Update confidence with decay
-            self.update(current_time_seconds)
-            
             return True
         
         return False
