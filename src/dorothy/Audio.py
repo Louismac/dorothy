@@ -1029,7 +1029,7 @@ class AudioCapture(AudioDevice):
 
 
 class SamplePlayer(AudioDevice):
-    """Play back audio samples with beat tracking."""
+    """Play back audio samples"""
     
     def __init__(
         self,

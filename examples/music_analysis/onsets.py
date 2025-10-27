@@ -10,6 +10,8 @@ class MySketch:
     def setup(self):
         file_path = "../audio/disco.wav"
         o = dot.music.start_file_stream(file_path, fft_size=512)
+        
+        # works with streaming as well
         #adjust threshold if you want (0.3 default)
         # dot.music.audio_outputs[o].onset_detector.threshold = 0.3
         # self.prev_millis = dot.millis
