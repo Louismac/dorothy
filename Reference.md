@@ -232,7 +232,7 @@ dot.fill((255, 100, 100))
 dot.sphere(1.0)
 ```
 
-#### box(width=1.0, height=1.0, depth=1.0)
+#### box(width=1.0, height=1.0, depth=1.0, texture_layers= int or {} )
 
 Draw a 3D box (requires 3D camera mode).
 
@@ -240,12 +240,94 @@ Draw a 3D box (requires 3D camera mode).
 - `width` (float): Box width (default: 1.0)
 - `height` (float): Box height (default: 1.0)
 - `depth` (float): Box depth (default: 1.0)
+- `texture_layers` (dict or layer): A pointer to a layer for all 6 sides (stretched to fit), or a dictionary of layers for each side 
 
 **Example:**
 ```python
 dot.camera_3d()
 dot.fill((100, 100, 255))
 dot.box(2.0, 1.0, 1.5)
+```
+
+**Example:**
+```python
+dot.camera_3d()
+dot.fill((100, 100, 255))
+dot.box(2.0, 1.0, 1.5)
+```
+
+```python
+dot.box(20, 20, 20,self.front_layer)
+```
+
+```python
+dot.box(20, 20, 20, 
+    texture_layers={
+    'front': self.front_layer,
+    'back': self.back_layer,
+    'right': self.right_layer,
+    'left': self.left_layer,
+    'top': self.top_layer,
+    'bottom': self.bottom_layer
+})
+```
+
+
+#### line_3d(pos1, pos2)
+
+Draw a 3D line (requires 3D camera mode).
+
+**Parameters:**
+- `pos1` ([x, y, z]): start point
+- `pos2` ([x, y, z]): end point
+
+**Example:**
+```python
+dot.camera_3d()
+dot.stroke((100, 100, 255))
+dot.line_3d((0, 0,0), (2, 2,2))
+```
+
+#### polyline_3d([pos1...n], closed = True)
+
+Draw a 3D polyline (requires 3D camera mode).
+
+**Parameters:**
+- `pos` ([(x, y, z),(x, y, z),....]): Array of 3d coordinates
+- `closed` (bool): Is shaped closed? Defaults to True
+
+**Example:**
+```python
+dot.camera_3d()
+dot.stroke((100, 100, 255))
+dot.line_3d((0, 0,0), (2, 2,2))
+```
+
+#### .obj files
+
+Load and texture a `.obj` file
+
+##### load_obj(filepath)
+
+##### draw_mesh(obj, texture)
+
+##### Example
+
+```python
+def setup(self):
+    self.tree = dot.load_obj("model/Tree1.obj")
+    self.texture_layer = dot.get_layer()
+
+def draw(self):
+    dot.background(dot.black)
+    with dot.layer(self.texture_layer):
+        dot.camera_2d()
+        x = (dot.frames * 5) % dot.width
+        dot.circle((x, dot.height//2), 50)
+    
+    # Draw mesh
+    dot.camera_3d()
+    dot.draw_mesh(self.tree, self.texture_layer)
 ```
 
 ### Style Functions
@@ -1116,14 +1198,13 @@ from dorothy.Audio import Sampler
 
 def setup(self):
     self.sampler = Sampler(dot)
-Loading Samples
-python# Load multiple samples
-paths = [
-    "../audio/kick.wav",
-    "../audio/snare.wav",
-    "../audio/hihat.wav"
-]
-self.sampler.load(paths)
+    # Load multiple samples
+    paths = [
+        "../audio/kick.wav",
+        "../audio/snare.wav",
+        "../audio/hihat.wav"
+    ]
+    self.sampler.load(paths)
 # Samples are indexed 0, 1, 2, etc.
 ```
 
@@ -1201,120 +1282,7 @@ self.clock.set_tpb(1)   # Quarter notes
 ```
 
 Note: Call set_tpb() AFTER set_bpm() to ensure tick length is calculated correctly.
-#### Sequencing Example
-Create a step sequencer with samples:
-```python
-def setup(self):
-    # Load samples
-    paths = [
-        "../audio/kick.wav",
-        "../audio/snare.wav",
-        "../audio/hihat.wav",
-    ]
-    self.sampler = Sampler(dot)
-    self.sampler.load(paths)
-    
-    # Setup clock
-    self.clock = dot.music.get_clock()
-    self.clock.set_bpm(120)
-    self.clock.on_tick = self.on_tick
-    
-    # Define sequence (0 = rest, 1+ = sample index + 1)
-    self.sequence = [
-        1, 0, 0, 0,  # Kick on 1
-        2, 0, 0, 0,  # Snare on 5
-        1, 0, 3, 0,  # Kick + hihat
-        2, 0, 3, 0,  # Snare + hihat
-    ]
-    
-    self.clock.play()
 
-def on_tick(self):
-    # Get current step in sequence
-    step = self.clock.tick_ctr % len(self.sequence)
-    note = self.sequence[step]
-    
-    # Trigger sample if not a rest
-    if note > 0:
-        self.sampler.trigger(note - 1)
-```
-
-#### Visual Sequencer Example
-Draw a step sequencer with playhead:
-```python
-def setup(self):
-    # Load samples
-    paths = [
-        "../audio/snare.wav",
-        "../audio/snare2.wav",
-        "../audio/meow.wav",
-    ]
-    self.sampler = Sampler(dot)
-    self.sampler.load(paths)
-    
-    # Setup clock
-    self.clock = dot.music.get_clock()
-    self.clock.set_bpm(80)
-    self.clock.on_tick = self.on_tick
-    
-    # Sequence (0 = rest, 1-3 = sample indices)
-    self.sequence = [1, 0, 2, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1, 2, 2, 2]
-    
-    # Create grid positions
-    self.grid = np.linspace(0, dot.width, len(self.sequence))
-    
-    self.clock.play()
-
-def on_tick(self):
-    n = len(self.sequence)
-    note = self.sequence[self.clock.tick_ctr % n]
-    
-    if note > 0:
-        self.sampler.trigger(note - 1)
-
-def draw(self):
-    dot.background(dot.darkblue)
-    
-    # Draw all steps
-    y = dot.height / 2
-    for x in self.grid:
-        dot.fill(dot.white)
-        dot.circle((x, y), 10)
-    
-    # Draw playhead
-    n = len(self.sequence)
-    x = self.grid[self.clock.tick_ctr % n]
-    dot.fill(dot.red)
-    dot.circle((x, y), 10)
-```
-
-#### Multiple Tracks
-```python
-def setup(self):
-    self.sampler = Sampler(dot)
-    self.sampler.load(["kick.wav", "snare.wav", "hat.wav"])
-    
-    self.clock = dot.music.get_clock()
-    self.clock.set_bpm(120)
-    self.clock.on_tick = self.on_tick
-    
-    # Separate patterns for each sample
-    self.kick_pattern  = [1, 0, 0, 0, 1, 0, 0, 0]
-    self.snare_pattern = [0, 0, 1, 0, 0, 0, 1, 0]
-    self.hat_pattern   = [1, 1, 1, 1, 1, 1, 1, 1]
-    
-    self.clock.play()
-
-def on_tick(self):
-    step = self.clock.tick_ctr % 8
-    
-    if self.kick_pattern[step]:
-        self.sampler.trigger(0)
-    if self.snare_pattern[step]:
-        self.sampler.trigger(1)
-    if self.hat_pattern[step]:
-        self.sampler.trigger(2)
-```
 
 #### Tips
 
@@ -1437,10 +1405,38 @@ for i, magnitude in enumerate(fft[::4]):  # Every 4th bin
     height = magnitude * 300
     dot.rectangle((x, 600), (x + 18, 600 - height))
 ```
+#### is_onset(output=0)
+
+Detect if an onset occurred since last call. This works offline (if playing back audio loaded in at the beginning), or online in a streaming fashion (although this is less accurate)
+
+```python
+o = dot.music.start_device_stream(1)
+dot.music.audio_outputs[o].onset_detector.threshold = 0.5 
+dot.music.audio_outputs[o].analyse_onsets = True
+```
+
+**Parameters:**
+- `output` (int): Audio output index (default: 0)
+
+**Returns:**
+- `bool`: True if onset detected
+
+**Example:**
+```python
+if dot.music.is_onset():
+    dot.fill((255, 0, 0))
+```
 
 #### is_beat(output=0)
 
-Detect if a beat occurred since last call.
+Detect if a beat occurred since last call. This works offline (if playing back audio loaded in at the beginning), or online in a streaming fashion (although this is less accurate)
+
+```python
+o = dot.music.start_device_stream(1)
+dot.music.audio_outputs[o].onset_detector.threshold = 0.5 
+dot.music.audio_outputs[o].analyse_onsets = True
+dot.music.audio_outputs[o].analyse_beats = True
+```
 
 **Parameters:**
 - `output` (int): Audio output index (default: 0)

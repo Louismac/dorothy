@@ -24,6 +24,7 @@ class MySketch:
         self.show_beat = 0
         
     def draw(self):
+        
         col = dot.black
         if dot.music.is_beat():
             self.show_beat = 10

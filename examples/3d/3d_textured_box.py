@@ -1,5 +1,6 @@
 from dorothy import Dorothy 
 import numpy as np
+from PIL import Image
 
 dot = Dorothy(640,480)
 class Example3D:
@@ -16,15 +17,15 @@ class Example3D:
         self.top_layer = dot.get_layer()
         self.bottom_layer = dot.get_layer()
         dot.camera_3d()
-        dot.set_camera((20, 20, 20), (0, 0, 0))
+        dot.set_camera((40, 40, 40), (0, 0, 0))
+        self.mario = Image.open('../images/space.jpg')
 
     def draw(self):
         
         dot.camera_2d()
         # Draw different content to each layer
         with dot.layer(self.front_layer):
-            dot.fill(dot.green)
-            dot.circle((dot.frames%dot.width, dot.frames%dot.height), 1)
+            dot.paste(self.mario, (0,0))
             
         with dot.layer(self.back_layer):
             dot.fill(dot.blue)
@@ -61,7 +62,11 @@ class Example3D:
                 'top': self.top_layer,
                 'bottom': self.bottom_layer
             })
-    
-    
+        with dot.transform():
+            angle = dot.frames * 0.05
+            x = 30 * np.cos(angle)
+            z = 30 * np.sin(angle)
+            dot.translate(x,1,z)
+            dot.box(10, 10, 10, texture_layers=self.front_layer)
         
 Example3D()

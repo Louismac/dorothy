@@ -28,6 +28,7 @@ class MySketch:
         
         dot.background(col)
         self.show_beat -= 1
+        
         # dot.draw_waveform(0, with_playhead=True)
         # pixels_per_sample = dot.width/len(dot.music.audio_outputs[0].y[0])
         # # print(pixels_per_sample)

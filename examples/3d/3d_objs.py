@@ -8,7 +8,7 @@ class Example3D:
 
     def setup(self):
         dot.camera_3d()
-        dot.set_camera((10, 10, 10), (0, 0, 0))
+        dot.set_camera((20, 20, 20), (0, 0, 0))
         # Load mesh
         self.tree = dot.load_obj("model/Tree1.obj")
         self.texture_layer = dot.get_layer()
