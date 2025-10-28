@@ -733,16 +733,15 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.sphere(radius, position)
     
-    def box(self, size: Tuple[float, float, float] = (1.0, 1.0, 1.0), 
-            position: Tuple[float, float, float] = (0, 0, 0)):
-        """Draw a 3D box
+    def box(self, width=1.0, height=1.0, depth=1.0, texture_layers=None):
+        """Draw a 3D box with optional texture
         
         Args:
-            size: (width, height, depth) tuple
-            position: (x, y, z) center position
+            width, height, depth: Box dimensions
+            texture_layer: Layer ID to use as texture
         """
         self._ensure_renderer()
-        self.renderer.box(size, position)
+        self.renderer.box(width, height, depth, texture_layers)
 
     def line_3d(self, pos1, pos2):
         """Draw a 3D line

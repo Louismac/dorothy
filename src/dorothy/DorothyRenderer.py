@@ -122,6 +122,11 @@ class DorothyRenderer:
             vertex_shader=DOTSHADERS.VERT_3D,
             fragment_shader=DOTSHADERS.FRAG_3D
         )
+
+        self.shader_3d_textured = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_3D_TEXTURED,
+            fragment_shader=DOTSHADERS.FRAG_3D_TEXTURED
+        )
         
         # Simple 2D shader
         self.shader_2d = self.ctx.program(
@@ -1124,27 +1129,149 @@ class DorothyRenderer:
         
         self.transform.pop()
     
-    def box(self, size: Tuple[float, float, float] = (1.0, 1.0, 1.0), 
-            position: Tuple[float, float, float] = (0, 0, 0)):
-        """Draw a 3D box
+    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0, 
+        texture_layers=None):
+        """Draw a box with optional textures (same on all faces or different per face)
         
         Args:
-            size: (width, height, depth) tuple
-            position: (x, y, z) center position
+            width, height, depth: Box dimensions
+            texture_layers: Layer ID (int) for all faces, or dict like:
+                        {'front': layer1, 'back': layer2, 'right': layer3,
+                            'left': layer4, 'top': layer5, 'bottom': layer6}
+                        None for solid color
         """
-        width, height, depth = size
+        w, h, d = width/2, height/2, depth/2
         
-        if not self.box_geometry:
-            self.box_geometry = geometry.cube(size=(1.0, 1.0, 1.0))
+        # Normalize texture_layers to dict format
+        if isinstance(texture_layers, int):
+            # Single texture for all faces
+            tex_dict = {
+                'front': texture_layers,
+                'back': texture_layers,
+                'right': texture_layers,
+                'left': texture_layers,
+                'top': texture_layers,
+                'bottom': texture_layers
+            }
+        elif isinstance(texture_layers, dict):
+            # Use provided dict, fill in missing faces with None
+            tex_dict = {
+                'front': texture_layers.get('front'),
+                'back': texture_layers.get('back'),
+                'right': texture_layers.get('right'),
+                'left': texture_layers.get('left'),
+                'top': texture_layers.get('top'),
+                'bottom': texture_layers.get('bottom')
+            }
+        else:
+            # No texture, all None
+            tex_dict = {face: None for face in ['front', 'back', 'right', 'left', 'top', 'bottom']}
         
-        # Apply position and scale
-        self.transform.push()
-        self.transform.translate(position[0], position[1], position[2])
-        self.transform.scale(width, height, depth)
+        # Define each face with its vertices
+        # Format: x, y, z, nx, ny, nz, u, v
+        faces_data = {
+            'front': np.array([
+                -w, -h,  d,  0, 0, 1,  0, 0,
+                w, -h,  d,  0, 0, 1,  1, 0,
+                w,  h,  d,  0, 0, 1,  1, 1,
+                -w, -h,  d,  0, 0, 1,  0, 0,
+                w,  h,  d,  0, 0, 1,  1, 1,
+                -w,  h,  d,  0, 0, 1,  0, 1,
+            ], dtype='f4'),
+            
+            'back': np.array([
+                w, -h, -d,  0, 0, -1,  0, 0,
+                -w, -h, -d,  0, 0, -1,  1, 0,
+                -w,  h, -d,  0, 0, -1,  1, 1,
+                w, -h, -d,  0, 0, -1,  0, 0,
+                -w,  h, -d,  0, 0, -1,  1, 1,
+                w,  h, -d,  0, 0, -1,  0, 1,
+            ], dtype='f4'),
+            
+            'right': np.array([
+                w, -h,  d,  1, 0, 0,  0, 0,
+                w, -h, -d,  1, 0, 0,  1, 0,
+                w,  h, -d,  1, 0, 0,  1, 1,
+                w, -h,  d,  1, 0, 0,  0, 0,
+                w,  h, -d,  1, 0, 0,  1, 1,
+                w,  h,  d,  1, 0, 0,  0, 1,
+            ], dtype='f4'),
+            
+            'left': np.array([
+                -w, -h, -d, -1, 0, 0,  0, 0,
+                -w, -h,  d, -1, 0, 0,  1, 0,
+                -w,  h,  d, -1, 0, 0,  1, 1,
+                -w, -h, -d, -1, 0, 0,  0, 0,
+                -w,  h,  d, -1, 0, 0,  1, 1,
+                -w,  h, -d, -1, 0, 0,  0, 1,
+            ], dtype='f4'),
+            
+            'top': np.array([
+                -w,  h,  d,  0, 1, 0,  0, 0,
+                w,  h,  d,  0, 1, 0,  1, 0,
+                w,  h, -d,  0, 1, 0,  1, 1,
+                -w,  h,  d,  0, 1, 0,  0, 0,
+                w,  h, -d,  0, 1, 0,  1, 1,
+                -w,  h, -d,  0, 1, 0,  0, 1,
+            ], dtype='f4'),
+            
+            'bottom': np.array([
+                -w, -h, -d,  0, -1, 0,  0, 0,
+                w, -h, -d,  0, -1, 0,  1, 0,
+                w, -h,  d,  0, -1, 0,  1, 1,
+                -w, -h, -d,  0, -1, 0,  0, 0,
+                w, -h,  d,  0, -1, 0,  1, 1,
+                -w, -h,  d,  0, -1, 0,  0, 1,
+            ], dtype='f4'),
+        }
         
-        self._draw_3d_geometry(self.box_geometry)
+        # Enable blending and depth
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
         
-        self.transform.pop()
+        # Draw each face
+        for face_name, vertices in faces_data.items():
+            layer_id = tex_dict[face_name]
+            
+            vbo = self.ctx.buffer(vertices)
+            
+            # Choose shader based on texture
+            if layer_id is not None and layer_id in self.layers:
+                shader = self.shader_3d_textured
+            else:
+                shader = self.shader_3d
+            
+            vao = self.ctx.vertex_array(
+                shader,
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+            )
+            
+            # Set uniforms
+            shader['projection'].write(self.camera.get_projection_matrix())
+            shader['view'].write(self.camera.get_view_matrix())
+            shader['model'].write(self.transform.matrix)
+            
+            # Texture or solid color
+            if layer_id is not None and layer_id in self.layers:
+                texture = self.layers[layer_id]['fbo'].color_attachments[0]
+                texture.use(0)
+                shader['texture0'] = 0
+                shader['use_texture'] = True
+            else:
+                if hasattr(shader, 'get') and 'use_texture' in shader:
+                    shader['use_texture'] = False
+                shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
+            
+            # Lighting
+            shader['lighting_enabled'] = False
+            shader['camera_position'] = tuple(self.camera.position)
+            
+            # Render this face
+            vao.render(moderngl.TRIANGLES)
+            
+            vao.release()
+            vbo.release()
 
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
         """Draw a line in 3D space
