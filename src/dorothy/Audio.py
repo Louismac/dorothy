@@ -343,9 +343,10 @@ class Audio:
         """
         if output >= len(self.audio_outputs):
             return False
-        
-        if self.audio_outputs[output]._onset_flag:
-            self.audio_outputs[output]._onset_flag = False
+        device = self.audio_outputs[output]
+        ptr = 0
+        if device._onset_flag[ptr]:
+            device._onset_flag[ptr] = False
             return True
         return False
 
@@ -361,10 +362,10 @@ class Audio:
         """
         if output >= len(self.audio_outputs):
             return False
-            
         device = self.audio_outputs[output]
-        if device._beat_flag:
-            device._beat_flag = False
+        ptr =0  
+        if device._beat_flag[ptr]:
+            device._beat_flag[ptr] = False
             return True
         else:
             return False
@@ -440,6 +441,11 @@ class AudioDevice:
         self.fft_size = fft_size
         self.buffer_size = buffer_size
         self.analyse = analyse
+        self.analyse_fft = analyse
+        #requires fft
+        self.analyse_onsets = False
+        #frequires onsets
+        self.analyse_beats = False
         self.output_device = output_device
         self.channels = 1
         self.gain = 1.0
@@ -467,9 +473,6 @@ class AudioDevice:
         # Analysis buffers
         self._init_analysis_buffers()
         self._fft_window = np.hanning(self.fft_size)
-
-        self._beat_flag = False
-        self._onset_flag = False
 
         #if SamplePlayer then using offline detection
         if not isinstance(self,SamplePlayer):
@@ -507,6 +510,8 @@ class AudioDevice:
             for _ in range(self.audio_latency)
         ]
         self.amplitude = np.zeros(self.audio_latency, dtype=np.float32)
+        self._beat_flag = [False for _ in range(self.audio_latency)]
+        self._onset_flag = [False for _ in range(self.audio_latency)]
         
         # For streaming FFT with overlap
         self.hop_length = self.fft_size // 2
@@ -546,55 +551,56 @@ class AudioDevice:
             # Calculate amplitude (RMS)
             self.amplitude[self.audio_buffer_write_ptr] = np.sqrt(np.mean(audio_buffer ** 2))
             
-            # Streaming FFT with overlap-add
-            # Concatenate overlap buffer with new audio
-            full_buffer = np.concatenate([self.overlap_buffer, audio_buffer])
-            
-            # Calculate how many FFT frames we can extract
-            num_frames = (len(full_buffer) - self.fft_size) // self.hop_length + 1
-            
-            if num_frames > 0:
-                fft_accum = np.zeros((self.fft_size // 2) + 1, dtype=np.float32)
-                
-                # Process each frame with hop
-                for i in range(num_frames):
-                    frame_start = i * self.hop_length
-                    frame_end = frame_start + self.fft_size
-                    frame = full_buffer[frame_start:frame_end]
-                    
-                    # Apply window and FFT
-                    windowed = frame * self._fft_window
-                    fft_result = np.fft.rfft(windowed)
-                    fft_accum += np.abs(fft_result)
-                
-                # Average across frames
-                averaged_magnitude = fft_accum / num_frames
-                self.fft_vals[self.audio_buffer_write_ptr] = fft_accum / num_frames
-
+            if self.analyse_fft:
+                full_buffer = np.concatenate([self.overlap_buffer, audio_buffer])
+                num_frames = (len(full_buffer) - self.fft_size) // self.hop_length + 1
+                averaged_magnitude = self.fft(full_buffer, num_frames)
                 # Check for onset
-                if self.check_onset(averaged_magnitude, num_frames):
-                    # print(f"Onset detected at {self.onset_detector.total_samples_processed} samples")
-                    self._onset_flag = True
-                    # NEW: Feed onset to beat tracker
-                    if hasattr(self, "beat_tracker"):
-                        self.beat_tracker.add_onset()
+                if self.analyse_onsets:
+                    if self.check_onset(averaged_magnitude, num_frames):
+                        self._onset_flag[0] = True
+                        if self.analyse_beats:
+                            if hasattr(self, "beat_tracker"):
+                                self.beat_tracker.add_onset()
                 
                 # Check for beat
                 if self.check_beat():
-                    self._beat_flag = True
+                    self._beat_flag[0] = True
 
                 # ===== END ONSET DETECTION =====
                 
-                # Update overlap buffer with remaining samples
-                consumed = num_frames * self.hop_length
-                self.overlap_buffer = full_buffer[consumed:consumed + (self.fft_size - self.hop_length)]
-            
+                
             self.audio_buffer_write_ptr = (self.audio_buffer_write_ptr + 1) % self.audio_latency
             
         except Exception as e:
             import traceback
             traceback.print_exc()
             warnings.warn(f"Analysis error: {e}")
+
+    def fft(self, full_buffer, num_frames):
+        # Calculate how many FFT frames we can extract
+        
+        if num_frames > 0:
+            fft_accum = np.zeros((self.fft_size // 2) + 1, dtype=np.float32)
+            
+            # Process each frame with hop
+            for i in range(num_frames):
+                frame_start = i * self.hop_length
+                frame_end = frame_start + self.fft_size
+                frame = full_buffer[frame_start:frame_end]
+                
+                # Apply window and FFT
+                windowed = frame * self._fft_window
+                fft_result = np.fft.rfft(windowed)
+                fft_accum += np.abs(fft_result)
+            
+            # Average across frames
+            averaged_magnitude = fft_accum / num_frames
+            self.fft_vals[self.audio_buffer_write_ptr] = averaged_magnitude
+            # Update overlap buffer with remaining samples
+            consumed = num_frames * self.hop_length
+            self.overlap_buffer = full_buffer[consumed:consumed + (self.fft_size - self.hop_length)]
+            return averaged_magnitude
 
     def check_beat(self):
         if hasattr(self, "beat_tracker"):
@@ -1044,8 +1050,14 @@ class SamplePlayer(AudioDevice):
         if self.y is not None:
             # Calculate beat information
             to_track = self.y if self.y.ndim == 1 else self.y[0, :]
-            self.tempo, self.beats = librosa.beat.beat_track(y=to_track, sr=self.sr, units='samples')   
-            self.onsets = librosa.onset.onset_detect(y=to_track, sr = self.sr, units = "samples") 
+            self.tempo, self.beats = librosa.beat.beat_track(y=to_track, sr=self.sr, units='samples') 
+            # Compute the onset strength envelope
+            onset_env = librosa.onset.onset_strength(y=to_track, sr=self.sr)  
+            self.onsets = librosa.onset.onset_detect(
+                onset_envelope=onset_env, 
+                y=to_track, 
+                sr = self.sr, 
+                units = "samples", delta = 0.2) 
             print(f"found {len(self.beats)} beats and {len(self.onsets)} onsets")  
         self.current_sample = 0
         self.beat_ptr = 0
@@ -1278,14 +1290,9 @@ class StreamingOnsetDetector:
         sample_rate=44100,
         fft_size=2048,
         hop_length=512,
-        n_bands=6,
         threshold=0.3,
-        pre_max=3,
-        post_max=3,
-        pre_avg=10,
-        post_avg=7,
-        delta=0.07,
-        wait=10
+        n_bands=6,
+        wait=20
     ):
         """
         Args:
@@ -1306,18 +1313,18 @@ class StreamingOnsetDetector:
         self.hop_length = hop_length
         self.n_bands = n_bands
         self.threshold = threshold
-        self.pre_max = pre_max
-        self.post_max = post_max
-        self.pre_avg = pre_avg
-        self.post_avg = post_avg
-        self.delta = delta
-        self.wait = wait
-        
+        self.pre_max =  int(0.03 * self.sample_rate // self.hop_length)  # 30ms
+        self.post_max = int(0.00 * self.sample_rate // self.hop_length + 1) # 0ms
+        self.pre_avg = int(0.10 * self.sample_rate // self.hop_length)  # 100ms
+        self.post_avg = int(0.10 * self.sample_rate // self.hop_length + 1)  # 100ms
+        self.wait = int(0.03 * self.sample_rate // self.hop_length)  # 30ms
+        self.delta = 0.07
+
         # State for onset detection
         self.prev_magnitude = None
         
         # Onset detection function (ODF) history
-        max_history = max(pre_max + post_max, pre_avg + post_avg) + 10
+        max_history = max(self.pre_max + self.post_max, self.pre_avg + self.post_avg) + 10
         self.odf_history = deque(maxlen=max_history)
         
         # Onset timestamps (in samples)
@@ -1444,7 +1451,8 @@ class StreamingOnsetDetector:
         
         # Update sample counter (account for multiple frames if averaged)
         self.total_samples_processed += self.hop_length * num_frames
-        
+        if onset_detected:
+            print("onset")
         return onset_detected
     
     def has_onset_in_range(self, n_samples):

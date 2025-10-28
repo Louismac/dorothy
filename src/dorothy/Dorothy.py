@@ -365,7 +365,7 @@ class Dorothy:
                 self.set_stroke_weight(5)
                 self.line((playhead , 0), (playhead, self.height))
 
-    def draw_waveform(self, audio_output = 0, col=None, with_playhead = False):
+    def draw_waveform(self, audio_output = 0, col=(255,255,255), with_playhead = False):
         """
         Draw current waveform loaded into given audio output to layer
 
