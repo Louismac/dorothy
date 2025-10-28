@@ -762,6 +762,36 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.polyline_3d(points, closed)
+
+    def load_obj(self, filepath):
+        """Load a 3D mesh from an OBJ file
+        
+        Args:
+            filepath: Path to .obj file
+        
+        Returns:
+            Mesh data that can be passed to draw_mesh()
+        
+        Example:
+            self.bunny = dot.load_obj("models/bunny.obj")
+        """
+        self._ensure_renderer()
+        return self.renderer.load_obj(filepath)
+
+    def draw_mesh(self, mesh_data, texture_layer=None):
+        """Draw a loaded 3D mesh
+        
+        Args:
+            mesh_data: Data from load_obj()
+            texture_layer: Optional layer ID to texture the mesh
+        
+        Example:
+            dot.draw_mesh(self.bunny)
+            # or with texture:
+            dot.draw_mesh(self.bunny, texture_layer=self.tex_layer)
+        """
+        self._ensure_renderer()
+        self.renderer.draw_mesh(mesh_data, texture_layer)
     
     # Transforms
     @contextmanager

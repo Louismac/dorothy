@@ -1352,6 +1352,136 @@ class DorothyRenderer:
         
         vao.release()
         vbo.release()
+
+    def load_obj(self, filepath):
+        """Load a Wavefront OBJ file
+        
+        Args:
+            filepath: Path to .obj file
+        
+        Returns:
+            Dictionary with vertex data that can be passed to draw_mesh()
+        """
+        vertices = []
+        normals = []
+        texcoords = []
+        
+        final_vertices = []
+        final_normals = []
+        final_texcoords = []
+        
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                parts = line.split()
+                if not parts:
+                    continue
+                
+                # Vertex positions
+                if parts[0] == 'v':
+                    vertices.append([float(parts[1]), float(parts[2]), float(parts[3])])
+                
+                # Texture coordinates
+                elif parts[0] == 'vt':
+                    texcoords.append([float(parts[1]), float(parts[2])])
+                
+                # Normals
+                elif parts[0] == 'vn':
+                    normals.append([float(parts[1]), float(parts[2]), float(parts[3])])
+                
+                # Faces
+                elif parts[0] == 'f':
+                    # Parse face indices (can be v, v/vt, v/vt/vn, or v//vn)
+                    face_vertices = []
+                    for i in range(1, len(parts)):
+                        indices = parts[i].split('/')
+                        v_idx = int(indices[0]) - 1  # OBJ indices are 1-based
+                        
+                        # Get vertex position
+                        v = vertices[v_idx]
+                        
+                        # Get texture coordinate if present
+                        if len(indices) > 1 and indices[1]:
+                            vt_idx = int(indices[1]) - 1
+                            vt = texcoords[vt_idx] if vt_idx < len(texcoords) else [0, 0]
+                        else:
+                            vt = [0, 0]
+                        
+                        # Get normal if present
+                        if len(indices) > 2 and indices[2]:
+                            vn_idx = int(indices[2]) - 1
+                            vn = normals[vn_idx] if vn_idx < len(normals) else [0, 1, 0]
+                        else:
+                            vn = [0, 1, 0]
+                        
+                        face_vertices.append((v, vn, vt))
+                    
+                    # Triangulate face (assumes convex polygon)
+                    for i in range(1, len(face_vertices) - 1):
+                        for vertex_data in [face_vertices[0], face_vertices[i], face_vertices[i + 1]]:
+                            v, vn, vt = vertex_data
+                            final_vertices.extend(v)
+                            final_normals.extend(vn)
+                            final_texcoords.extend(vt)
+        
+        # Combine into interleaved vertex data: x,y,z, nx,ny,nz, u,v
+        mesh_data = []
+        for i in range(len(final_vertices) // 3):
+            mesh_data.extend(final_vertices[i*3:i*3+3])      # position
+            mesh_data.extend(final_normals[i*3:i*3+3])       # normal
+            mesh_data.extend(final_texcoords[i*2:i*2+2])     # texcoord
+        
+        return {
+            'vertices': np.array(mesh_data, dtype='f4'),
+            'vertex_count': len(final_vertices) // 3
+        }
+
+    def draw_mesh(self, mesh_data, texture_layer=None):
+        """Draw a loaded mesh"""
+        vertices = mesh_data['vertices']
+        vertex_count = mesh_data['vertex_count']
+        
+        vbo = self.ctx.buffer(vertices)
+        
+        # Always use textured shader for OBJ meshes (they have UVs)
+        shader = self.shader_3d_textured
+        
+        vao = self.ctx.vertex_array(
+            shader,
+            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+        )
+        
+        # Enable blending and depth
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        # Set uniforms
+        shader['projection'].write(self.camera.get_projection_matrix())
+        shader['view'].write(self.camera.get_view_matrix())
+        shader['model'].write(self.transform.matrix)
+        
+        # Texture or solid color
+        if texture_layer is not None and texture_layer in self.layers:
+            texture = self.layers[texture_layer]['fbo'].color_attachments[0]
+            texture.use(0)
+            shader['texture0'] = 0
+            shader['use_texture'] = True
+        else:
+            shader['use_texture'] = False
+            shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
+        
+        # Lighting
+        shader['camera_position'] = tuple(self.camera.position)
+        
+        # Render
+        vao.render(moderngl.TRIANGLES)
+        
+        vao.release()
+        vbo.release()
         
     def _draw_3d_geometry(self, geom):
         """Internal method to render 3D geometry"""
