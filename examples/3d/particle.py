@@ -58,7 +58,7 @@ class MySketch:
         self.emit_position = [0, 0, 0]
         self.scale_lfo = dot.get_lfo(freq = 0.1, range = (50,90))
         self.spin_lfo = dot.get_lfo(freq = 0.3, range = (0, np.pi))
-        dot.start_record(end=10000)
+        # dot.start_record(end=10000)
     
     def draw(self):
         dot.background((0,0,0,255))

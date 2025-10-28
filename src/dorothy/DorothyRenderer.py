@@ -1145,7 +1145,87 @@ class DorothyRenderer:
         self._draw_3d_geometry(self.box_geometry)
         
         self.transform.pop()
-    
+
+    def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
+        """Draw a line in 3D space
+        
+        Args:
+            pos1: (x, y, z) start point
+            pos2: (x, y, z) end point
+        """
+        vertices = np.array([
+            pos1[0], pos1[1], pos1[2],
+            pos2[0], pos2[1], pos2[2]
+        ], dtype='f4')
+        
+        vbo = self.ctx.buffer(vertices)
+        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
+        
+        # Enable blending and depth
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        # Use shared 3D geometry setup
+        self._draw_3d_geometry(None)  # Sets uniforms
+        
+        # Override color to use stroke color instead of fill
+        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+        
+        # Disable lighting for lines (just use flat color)
+        self.shader_3d['use_lighting'] = False
+        
+        # Draw line
+        self.ctx.line_width = self._stroke_weight
+        vao.render(moderngl.LINES)
+        
+        vao.release()
+        vbo.release()
+
+    def polyline_3d(self, points, closed: bool = False):
+        """Draw a 3D polyline (connected line segments)
+        
+        Args:
+            points: List of (x, y, z) coordinates
+            closed: If True, connect last point back to first
+        """
+        if len(points) < 2:
+            return
+        
+        # Create vertices
+        vertices = []
+        for x, y, z in points:
+            vertices.extend([x, y, z])
+        
+        if closed:
+            vertices.extend([points[0][0], points[0][1], points[0][2]])
+        
+        vertices = np.array(vertices, dtype='f4')
+        
+        vbo = self.ctx.buffer(vertices)
+        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
+        
+        # Enable blending and depth
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        # Use shared 3D geometry setup
+        self._draw_3d_geometry(None)
+        
+        # Override color to use stroke color
+        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+        
+        # Disable lighting for lines
+        self.shader_3d['use_lighting'] = False
+        
+        # Draw polyline
+        self.ctx.line_width = self._stroke_weight
+        vao.render(moderngl.LINE_STRIP)
+        
+        vao.release()
+        vbo.release()
+        
     def _draw_3d_geometry(self, geom):
         """Internal method to render 3D geometry"""
         self.shader_3d['model'].write(self.transform.matrix)
@@ -1155,8 +1235,8 @@ class DorothyRenderer:
         self.shader_3d['light_pos'].write(glm.vec3(5, 5, 5))
         self.shader_3d['camera_pos'].write(self.camera.position)
         self.shader_3d['use_lighting'] = True
-        
-        geom.render(self.shader_3d)
+        if geom is not None:
+            geom.render(self.shader_3d)
     
     # ====== State Methods ======
     

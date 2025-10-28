@@ -743,6 +743,26 @@ class Dorothy:
         """
         self._ensure_renderer()
         self.renderer.box(size, position)
+
+    def line_3d(self, pos1, pos2):
+        """Draw a 3D line
+        
+        Args:
+            pos1: (x, y, z) start point
+            pos2: (x, y, z) end point
+        """
+        self._ensure_renderer()
+        self.renderer.line_3d(pos1, pos2)
+
+    def polyline_3d(self, points, closed=False):
+        """Draw a 3D polyline
+        
+        Args:
+            points: List of (x, y, z) tuples
+            closed: If True, connect last to first
+        """
+        self._ensure_renderer()
+        self.renderer.polyline_3d(points, closed)
     
     # Transforms
     @contextmanager

@@ -1798,7 +1798,7 @@ class StreamingBeatTracker:
             self.last_beat_time = phase_at_anchor + (np.floor(beats_since_phase) * beat_period)
         
         # Debug output
-        print(f"predicted phase:{best_phase_offset}")
+        # print(f"predicted phase:{best_phase_offset}")
     
     def check_beat(self) -> bool:
         current_time_seconds = time.time()-self.start_time

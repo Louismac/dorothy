@@ -21,7 +21,17 @@ class Example3D:
         x = 5 * math.cos(angle)
         z = 5 * math.sin(angle)
         dot.set_camera((x, 2, z), (0, 0, 0))
+
+        # Switch to 2D for rectangle
+        dot.camera_2d()
+
+        # Animate rectangle in 2D (screen coordinates)
+        with dot.transform():
+            x_offset = 100 * np.sin(np.pi * dot.frames * 0.01)  # Scale to pixels
+            dot.translate(x_offset, 0, 0)
+            dot.rectangle((0, 0), (300, 300))
         
+        dot.camera_3d()
         # 3D box (animated)
         with dot.transform():
             dot.translate(np.sin(np.pi * dot.frames * 0.01)*5, 0, 0)
