@@ -28,6 +28,7 @@ class Example3D:
         # Draw mesh
         with dot.transform():
             dot.camera_3d()
+            dot.translate(0,-10,0)
             dot.rotate(dot.frames * 0.005, 0, 1, 0)
             # fill with colour
             dot.fill((0,0,255,50))
