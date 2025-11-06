@@ -17,6 +17,7 @@ import traceback
 from contextlib import contextmanager
 from .DorothyShaders import DOTSHADERS
 import signal
+from .Button import Button, ButtonManager
 
 
 class Dorothy:
@@ -69,6 +70,9 @@ class Dorothy:
         self.mouse_x = 0
         self.mouse_y = 0
         self.mouse_down = False
+        self.mouse_pressed = False
+        self.mouse_button = None
+        self.buttons = ButtonManager()
         self.frames = 0
         self.start_time = time.time()
         self.lfos = []
@@ -354,6 +358,37 @@ class Dorothy:
             observer.join()
             print(f"🔍 DEBUG: Observer stopped")
     
+    def create_button(self, x, y, width, height, text="", id=None,
+                     on_press=None, on_hover=None, on_release=None):
+        """Create a button
+        
+        Args:
+            x, y: Position (top-left)
+            width, height: Button size
+            text: Button label
+            id: Optional identifier
+            on_press: Callback(button) when pressed
+            on_hover: Callback(button) when mouse enters
+            on_release: Callback(button) when released
+        
+        Returns:
+            Button instance
+        """
+        return self.buttons.create(x, y, width, height, text, id,
+                                  on_press, on_hover, on_release)
+    
+    def update_buttons(self):
+        """Update all buttons (call in draw loop)
+        
+        Returns:
+            List of buttons clicked this frame
+        """
+        return self.buttons.update(self.mouse_x, self.mouse_y, self.mouse_pressed)
+    
+    def draw_buttons(self):
+        """Draw all buttons (call in draw loop)"""
+        self.buttons.draw(self)
+
     def draw_playhead(self, audio_output=0):
         if audio_output < len(self.music.audio_outputs):
             output = self.music.audio_outputs[audio_output]
@@ -695,6 +730,50 @@ class Dorothy:
         """Set stroke weight"""
         self._ensure_renderer()
         self.renderer.set_stroke_weight(weight)
+
+    def text(self, text_str, position, font_size=24, font='HERSHEY_SIMPLEX', 
+            align='left', color=None):
+        """Draw text
+        
+        Args:
+            text_str: Text to draw
+            position: (x, y) position
+            font_size: Font size in pixels (default: 24)
+            font: Font name - options:
+                'HERSHEY_SIMPLEX' (default, clean sans-serif)
+                'HERSHEY_PLAIN' (small, simple)
+                'HERSHEY_DUPLEX' (more complex serif)
+                'HERSHEY_COMPLEX' (complex serif)
+                'HERSHEY_TRIPLEX' (bold serif)
+                'HERSHEY_SCRIPT_SIMPLEX' (handwriting)
+                'HERSHEY_SCRIPT_COMPLEX' (fancy handwriting)
+            align: 'left', 'center', or 'right'
+            color: Text color (uses current fill color if None)
+        
+        Example:
+            dot.fill((255, 255, 255))
+            dot.text("Hello World", (400, 300), font_size=32, align='center')
+        """
+        self._ensure_renderer()
+        self.renderer.text(text_str, position, font_size, font, align, color)
+
+    def text_size(self, text_str, font_size=24, font='HERSHEY_SIMPLEX'):
+        """Get text dimensions without rendering
+        
+        Args:
+            text_str: Text to measure
+            font_size: Font size in pixels
+            font: Font name
+        
+        Returns:
+            (width, height) tuple
+        
+        Example:
+            width, height = dot.text_size("Hello", font_size=32)
+            dot.text("Hello", (400 - width//2, 300))  # Manual centering
+        """
+        self._ensure_renderer()
+        return self.renderer.text_size(text_str, font_size, font)
     
     # 2D shapes
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):

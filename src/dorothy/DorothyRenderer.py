@@ -1526,6 +1526,145 @@ class DorothyRenderer:
     def set_stroke_weight(self, weight: float):
         """Set stroke weight"""
         self._stroke_weight = weight
+
+
+    def text(self, text_str, position, font_size=24, font='HERSHEY_SIMPLEX', 
+         align='left', color=None):
+        """Draw text at position
+        
+        Args:
+            text_str: Text to draw
+            position: (x, y) position
+            font_size: Font size in pixels
+            font: OpenCV font constant name (string) or int
+            align: 'left', 'center', 'right'
+            color: Text color (uses current fill color if None)
+        """
+        if color is None:
+            color = self.fill_color
+        
+        # Map font names to OpenCV constants
+        font_map = {
+            'HERSHEY_SIMPLEX': cv2.FONT_HERSHEY_SIMPLEX,
+            'HERSHEY_PLAIN': cv2.FONT_HERSHEY_PLAIN,
+            'HERSHEY_DUPLEX': cv2.FONT_HERSHEY_DUPLEX,
+            'HERSHEY_COMPLEX': cv2.FONT_HERSHEY_COMPLEX,
+            'HERSHEY_TRIPLEX': cv2.FONT_HERSHEY_TRIPLEX,
+            'HERSHEY_COMPLEX_SMALL': cv2.FONT_HERSHEY_COMPLEX_SMALL,
+            'HERSHEY_SCRIPT_SIMPLEX': cv2.FONT_HERSHEY_SCRIPT_SIMPLEX,
+            'HERSHEY_SCRIPT_COMPLEX': cv2.FONT_HERSHEY_SCRIPT_COMPLEX,
+        }
+        
+        if isinstance(font, str):
+            font = font_map.get(font, cv2.FONT_HERSHEY_SIMPLEX)
+        
+        # Calculate scale from font_size
+        font_scale = font_size / 30.0  # Rough conversion
+        thickness = max(1, int(font_size / 15))
+        
+        # Get text size for alignment
+        (text_width, text_height), baseline = cv2.getTextSize(
+            text_str, font, font_scale, thickness
+        )
+        
+        x, y = position
+        
+        # Adjust position based on alignment
+        if align == 'center':
+            x = x - text_width // 2
+        elif align == 'right':
+            x = x - text_width
+        # 'left' needs no adjustment
+        
+        # Adjust y to be baseline (OpenCV draws from baseline)
+        y = y + text_height
+        
+        # Get current framebuffer
+        if self.active_layer is not None:
+            fbo = self.layers[self.active_layer]['fbo']
+        else:
+            fbo = self.ctx.screen
+        
+        # Get texture format
+        texture = fbo.color_attachments[0]
+        components = texture.components  # Should be 4 for RGBA
+        
+        # Read pixels with correct number of components
+        pixels = fbo.read(components=components)
+        img = np.frombuffer(pixels, dtype=np.uint8)
+        img = img.reshape((self.height, self.width, components))
+        img = np.flipud(img)  # Flip to correct orientation
+        
+        # Convert to BGR for OpenCV (handle RGBA or RGB)
+        if components == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        
+        # Prepare color
+        if len(color) == 4:
+            # RGBA color
+            color_bgr = (
+                int(color[2] * 255) if color[2] <= 1 else int(color[2]),
+                int(color[1] * 255) if color[1] <= 1 else int(color[1]),
+                int(color[0] * 255) if color[0] <= 1 else int(color[0])
+            )
+        else:
+            # RGB color
+            color_bgr = (
+                int(color[2] * 255) if color[2] <= 1 else int(color[2]),
+                int(color[1] * 255) if color[1] <= 1 else int(color[1]),
+                int(color[0] * 255) if color[0] <= 1 else int(color[0])
+            )
+        
+        # Draw text on image
+        cv2.putText(img, text_str, (int(x), int(y)), font, font_scale,
+                    color_bgr, thickness, cv2.LINE_AA)
+        
+        # Convert back to original format
+        if components == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        img = np.flipud(img)  # Flip back
+        
+        # Write back to texture with correct size
+        texture.write(img.tobytes())
+
+    def text_size(self, text_str, font_size=24, font='HERSHEY_SIMPLEX'):
+        """Get the size of text without rendering it
+        
+        Args:
+            text_str: Text to measure
+            font_size: Font size in pixels
+            font: OpenCV font constant name
+        
+        Returns:
+            (width, height) tuple
+        """
+        font_map = {
+            'HERSHEY_SIMPLEX': cv2.FONT_HERSHEY_SIMPLEX,
+            'HERSHEY_PLAIN': cv2.FONT_HERSHEY_PLAIN,
+            'HERSHEY_DUPLEX': cv2.FONT_HERSHEY_DUPLEX,
+            'HERSHEY_COMPLEX': cv2.FONT_HERSHEY_COMPLEX,
+            'HERSHEY_TRIPLEX': cv2.FONT_HERSHEY_TRIPLEX,
+            'HERSHEY_COMPLEX_SMALL': cv2.FONT_HERSHEY_COMPLEX_SMALL,
+            'HERSHEY_SCRIPT_SIMPLEX': cv2.FONT_HERSHEY_SCRIPT_SIMPLEX,
+            'HERSHEY_SCRIPT_COMPLEX': cv2.FONT_HERSHEY_SCRIPT_COMPLEX,
+        }
+        
+        if isinstance(font, str):
+            font = font_map.get(font, cv2.FONT_HERSHEY_SIMPLEX)
+        
+        font_scale = font_size / 30.0
+        thickness = max(1, int(font_size / 15))
+        
+        (width, height), baseline = cv2.getTextSize(
+            text_str, font, font_scale, thickness
+        )
+        
+        return (width, height + baseline)
     
     # ====== Transform Methods ======
     

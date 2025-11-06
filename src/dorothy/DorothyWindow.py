@@ -144,11 +144,17 @@ class DorothyWindow(mglw.WindowConfig):
             print("Mouse wheel:", x_offset, y_offset)
 
     def on_mouse_press_event(self, x, y, button):
+        # Update buttons immediately on press
+        self.dorothy.mouse_pressed = True
+        self.dorothy.mouse_button = button
+        self.dorothy.update_buttons()
         if self.dorothy.on_mouse_press is not None:
             self.dorothy.on_mouse_press(x,y,button)
             print("Mouse button {} pressed at {}, {}".format(button, x, y))
 
     def on_mouse_release_event(self, x: int, y: int, button: int):
+        self.dorothy.mouse_pressed = False
+        self.dorothy.update_buttons()
         if self.dorothy.on_mouse_release is not None:
             self.dorothy.on_mouse_release(x,y,button)
             print("Mouse button {} released at {}, {}".format(button, x, y))
