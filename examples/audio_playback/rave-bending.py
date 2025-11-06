@@ -16,17 +16,17 @@ class MySketch:
         #Output RAVE from speakers
         latent_dim = 128
         
-        # rave_id = dot.music.start_rave_stream(
-        #     "/Users/lmccallum/Documents/checkpoints/RAVE/taylor_vocals_mono_e18d54798e/", 
-        #     latent_dim=latent_dim, output_device=5)
-        
         rave_id = dot.music.start_rave_stream(
-            "models/taylor_vocals.ts",
-            buffer_size = 4096, 
-            latent_dim=latent_dim,output_device=5)
+            "/Users/lmccallum/Documents/checkpoints/RAVE/taylor_vocals_mono_e18d54798e/", 
+            latent_dim=latent_dim, output_device=5, buffer_size = 4096)
+        
+        # rave_id = dot.music.start_rave_stream(
+        #     "models/taylor_vocals.ts",
+        #     buffer_size = 4096, 
+        #     latent_dim=latent_dim,output_device=5)
         dot.music.audio_outputs[rave_id].load_cluster_results("audio_playback/")
         layer_names = list(dot.music.audio_outputs[rave_id].cluster_results.keys())
-        device_id = dot.music.start_device_stream(3)        
+        device_id = dot.music.start_device_stream(3, buffer_size = 4096)        
         #device_id = dot.music.start_file_stream("../audio/Wiley.wav",buffer_size=2048)
         dot.music.update_rave_from_stream(device_id)
         n_layers = len(layer_names)

@@ -914,6 +914,7 @@ class RAVEPlayer(AudioDevice):
         self.frame_size = AudioConfig.RAVE_FRAME_SIZE #This is the RAVE buffer size 
         self.current_sample = 0
         self.latent_dim = latent_dim
+        self.cluster_results = {}
 
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
         # self.z_bias = torch.zeros(1,latent_dim,1)
@@ -932,30 +933,23 @@ class RAVEPlayer(AudioDevice):
                 ckpt_file,
                 strict=False
             ).eval().to(self.device)
+            self.overlap_add = True
         else:
             self.model = torch.jit.load(model_path).to(self.device)
+            self.overlap_add = False
 
+        if self.overlap_add:
+            self.overlap = self.frame_size//4
+            self.first_frame = True
+            self.hop_size = self.frame_size - self.overlap
+            self.input_buffer = np.zeros(self.overlap, dtype=np.float32)
+            self.output_overlap = np.zeros(self.overlap, dtype=np.float32)
+            self.window = np.hanning(self.frame_size).astype(np.float32)
 
-        #function -> layer -> cluster
-        self.overlap = self.frame_size//16
-        self.first_frame = True
-        self.hop_size = self.frame_size - self.overlap
-        # Crossfade window
-        # Input context buffer
-        self.input_buffer = np.zeros(self.overlap, dtype=np.float32)
-        # Output overlap buffer (stores tail of previous frame)
-        self.output_overlap = np.zeros(self.overlap, dtype=np.float32)
-        # Hanning window for overlap-add
-        self.window = np.hanning(self.frame_size).astype(np.float32)
         self.current_buffer = self.get_frame()
         self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
-        self.cluster_results = {}
         
-        
-        # Start generation thread
         self._start_generator()
-
-    
 
     def toggle_bend(self,
         function:str,
@@ -1085,24 +1079,20 @@ class RAVEPlayer(AudioDevice):
         self.next_buffer = self.get_frame()
 
     def update_z(self, input_audio):
-        """Encode audio with input overlap for context"""
-        # Concatenate with previous samples for context
-        full_input = np.concatenate([self.input_buffer, input_audio])
+        if self.overlap_add:
+            full_input = np.concatenate([self.input_buffer, input_audio])
+        else:
+            full_input = input_audio
         
         # Encode
         with torch.no_grad():
             x = torch.from_numpy(full_input).reshape(1, 1, -1).to(self.device)
             z = self.model.encode(x)
-            
-            # Handle variational encoding
             if z.shape[1] == 256:
                 z = z[:, :128, :]
-        
-        # Store latent
         self.current_latent = z
-        
-        # Update input buffer (keep last overlap samples)
-        self.input_buffer = input_audio[-self.overlap:].copy()
+        if self.overlap_add:
+            self.input_buffer = input_audio[-self.overlap:].copy()
     
     def get_frame(self):
         """Decode and overlap-add with windowing"""
@@ -1114,28 +1104,16 @@ class RAVEPlayer(AudioDevice):
             y = self.model.decode(self.current_latent)
             y = y.cpu().numpy().squeeze()
         
-        # The output corresponds to [input_overlap + new_frame]
-        # Extract only the new part (discard the context region)
-        y_new = y[:self.frame_size] if len(y) >= self.frame_size else np.pad(y, (0, self.frame_size - len(y)))
-        # y_new = y[self.overlap:][:self.frame_size]
-        
-        # Apply Hanning window to the entire frame
-        y_windowed = y_new * self.window
-        
-        # Overlap-add with previous frame's tail
-        output = np.zeros(self.frame_size, dtype=np.float32)
-        
-        # Add the overlap region from previous frame
-        output[:self.overlap] = self.output_overlap
-        
-        # Add the current windowed frame
-        output += y_windowed
-        
-        # Save the tail for next frame
-        self.output_overlap = output[self.hop_size:].copy()
-        
-        # Return only the hop_size samples (the non-overlapping part)
-        return output[:self.hop_size]
+        if self.overlap_add:
+            y_new = y[:self.frame_size] if len(y) >= self.frame_size else np.pad(y, (0, self.frame_size - len(y)))
+            y_windowed = y_new * self.window
+            output = np.zeros(self.frame_size, dtype=np.float32)
+            output[:self.overlap] = self.output_overlap
+            output += y_windowed
+            self.output_overlap = output[self.hop_size:].copy()        
+            return output[:self.hop_size]
+        else:
+            return y
 
     def audio_callback(self):
         """Generate audio samples."""
