@@ -2,6 +2,7 @@ LICENSE
 README.md
 pyproject.toml
 dorothy/Audio.py
+dorothy/Button.py
 dorothy/Dorothy.py
 dorothy/DorothyRenderer.py
 dorothy/DorothyShaders.py

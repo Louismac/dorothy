@@ -144,10 +144,10 @@ class Audio:
         
         def internal_callback():
             with torch.no_grad():
-                input_audio = torch.Tensor(input_device.audio_buffer).reshape(1, 1, -1)
+                input_audio = input_device.audio_buffer
                 for device in self.audio_outputs:
                     if isinstance(device, RAVEPlayer):
-                        device.current_latent = device.model.encode(input_audio)
+                        device.update_z(input_audio)
         
         input_device.gain = 0
         input_device.analyse = False
@@ -882,6 +882,23 @@ class CustomPlayer(AudioDevice):
             return audio_buffer * self.gain
 
 
+import torch.nn as nn
+from pathlib import Path
+import json
+import gin
+from rave import RAVE
+
+@dataclass
+class ClusterResult:
+    """Store clustering results"""
+    cluster_labels: np.ndarray
+    n_clusters: int
+    silhouette_score: float
+    cluster_centers: Optional[np.ndarray] = None
+    method: Optional[str] = None
+    pca_components: Optional[np.ndarray] = None
+    explained_variance: Optional[np.ndarray] = None
+
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
     def __init__(self, model_path, latent_dim=128, **kwargs):
@@ -899,18 +916,165 @@ class RAVEPlayer(AudioDevice):
         self.latent_dim = latent_dim
 
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
-        self.z_bias = torch.zeros(1,latent_dim,1)
+        # self.z_bias = torch.zeros(1,latent_dim,1)
 
         # Load model
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
-        self.model = torch.jit.load(model_path).to(self.device)
+        
+        #if its a dir, check for .ckpt and .gin
+        if os.path.isdir(model_path):
+            model_path = Path(model_path)
+            ckpt_file = list(model_path.glob('*.ckpt'))[0]
+            gin_file = list(model_path.glob('*.gin'))[0]
+            gin.parse_config_file(gin_file)
+            self.model = RAVE.load_from_checkpoint(
+                ckpt_file,
+                strict=False
+            ).eval().to(self.device)
+        else:
+            self.model = torch.jit.load(model_path).to(self.device)
 
+
+        #function -> layer -> cluster
+        self.overlap = self.frame_size//16
+        self.first_frame = True
+        self.hop_size = self.frame_size - self.overlap
+        # Crossfade window
+        # Input context buffer
+        self.input_buffer = np.zeros(self.overlap, dtype=np.float32)
+        # Output overlap buffer (stores tail of previous frame)
+        self.output_overlap = np.zeros(self.overlap, dtype=np.float32)
+        # Hanning window for overlap-add
+        self.window = np.hanning(self.frame_size).astype(np.float32)
         self.current_buffer = self.get_frame()
         self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.cluster_results = {}
+        
         
         # Start generation thread
         self._start_generator()
+
+    
+
+    def toggle_bend(self,
+        function:str,
+        layer_name: str,
+        cluster_id: int=0):
+        if self.hooks[function][layer_name][cluster_id] is not None:
+            self.hooks[function][layer_name][cluster_id].remove()
+            self.hooks[function][layer_name][cluster_id] = None
+            print(f"remove {function} for cluster {cluster_id} in layer {layer_name}")
+            return False
+        else:
+            if function == "ablation":
+                self.add_ablate_hook(layer_name, cluster_id)
+            elif function == "noise":
+                self.add_noise_hook(layer_name, cluster_id)
+            print(f"adding {function} for cluster {cluster_id} in layer {layer_name}")
+            return True
+
+    def add_ablate_hook(
+        self,
+        layer_name: str,
+        cluster_id: int = 0,
+        ablation_value: float = 0.0
+    ):
+        """
+        Ablate (zero out or set to constant) specific neurons
+        
+        Args:
+            layer_name: Name of layer
+            cluster_neurons: Indices of neurons to ablate
+            ablation_value: Value to set neurons to (default 0)
+        """
+        layer = self._get_layer(layer_name)
+        layer_clusters = self.cluster_results[layer_name]
+        neuron_indices = np.where(np.array(layer_clusters.cluster_labels) == cluster_id)[0].tolist()
+
+        def ablation_hook(module, input, output):
+            if isinstance(output, torch.Tensor):
+                
+                if len(output.shape) == 3:  # (batch, channels, time)
+                    output[:, neuron_indices, :] = ablation_value
+            
+            return output
+        handle = layer.register_forward_hook(ablation_hook)
+        self.hooks["ablation"][layer_name][cluster_id] = handle
+    
+    def remove_hook(
+        self,function,layer_name,cluster_id        
+    ): 
+        hook = self.hooks[function][layer_name][cluster_id]
+        if hook is not None:
+            hook.remove()
+            self.hooks[function][layer_name][cluster_id] = None
+
+    def add_noise_hook(
+        self,
+        layer_name: str,
+        cluster_id: int = 0,
+        noise_std: float = 0.1,
+        noise_type: str = 'gaussian'
+    ):
+        """
+        Add noise to neuron activations
+        
+        Args:
+            layer_name: Layer name
+            cluster_neurons: Neurons to add noise to
+            noise_std: Standard deviation of noise
+            noise_type: 'gaussian' or 'uniform'
+        """
+        layer = self._get_layer(layer_name)
+        layer_clusters = self.cluster_results[layer_name]
+        neuron_indices = np.where(np.array(layer_clusters.cluster_labels) == cluster_id)[0].tolist()
+        
+        def noise_hook(module, input, output):
+            if isinstance(output, torch.Tensor):
+                noise_shape = list(output.shape)
+                
+                if noise_type == 'gaussian':
+                    noise = torch.randn(noise_shape, device=output.device) * noise_std
+                elif noise_type == 'uniform':
+                    noise = (torch.rand(noise_shape, device=output.device) - 0.5) * 2 * noise_std
+                else:
+                    raise ValueError(f"Unknown noise type: {noise_type}")
+                
+                # Apply noise to cluster neurons only
+                if len(output.shape) == 3:  # (batch, channels, time)
+                    output[:, neuron_indices, :] += noise[:, neuron_indices, :]
+            
+            return output
+        
+        handle = layer.register_forward_hook(noise_hook)
+        self.hooks["noise"][layer_name][cluster_id] = handle
+
+    def load_cluster_results(self, output_dir):
+        self.hooks = {"noise":{},"ablation":{}}            
+        # Check if we have any cluster results
+        if not self.cluster_results:
+            results_path = Path(output_dir) / "clustering_results.json"
+            with open(results_path, 'r') as f:
+                from_file = json.load(f)
+                for layer_name in from_file.keys():
+                    res_dict = from_file[layer_name]
+                    result = ClusterResult(
+                        silhouette_score=res_dict["silhouette_score"],
+                        cluster_labels=res_dict["cluster_labels"],
+                        n_clusters=res_dict["n_clusters"],
+                        explained_variance=res_dict["explained_variance"]
+                    )
+                    self.hooks["noise"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
+                    self.hooks["ablation"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
+                    self.cluster_results[layer_name] = result
+    
+    def _get_layer(self, layer_name: str) -> nn.Module:
+        """Get layer module by name"""
+        decoder = self.model.decoder
+        for name, module in decoder.named_modules():
+            if name == layer_name:
+                return module
 
     def _start_generator(self) -> None:
         """Start background generation thread."""
@@ -920,14 +1084,58 @@ class RAVEPlayer(AudioDevice):
     def _fill_next_buffer(self):
         self.next_buffer = self.get_frame()
 
-    def get_frame(self):
-        y = 0
+    def update_z(self, input_audio):
+        """Encode audio with input overlap for context"""
+        # Concatenate with previous samples for context
+        full_input = np.concatenate([self.input_buffer, input_audio])
+        
+        # Encode
         with torch.no_grad():
-            z = self.current_latent
-            y = self.model.decode(z + self.z_bias)
-            y = y.reshape(-1).to(self.device).numpy()
-        #Drop second half (RAVE gives us stereo end to end)
-        return y[:self.frame_size]
+            x = torch.from_numpy(full_input).reshape(1, 1, -1).to(self.device)
+            z = self.model.encode(x)
+            
+            # Handle variational encoding
+            if z.shape[1] == 256:
+                z = z[:, :128, :]
+        
+        # Store latent
+        self.current_latent = z
+        
+        # Update input buffer (keep last overlap samples)
+        self.input_buffer = input_audio[-self.overlap:].copy()
+    
+    def get_frame(self):
+        """Decode and overlap-add with windowing"""
+        if self.current_latent is None:
+            return np.zeros(self.hop_size, dtype=np.float32)
+        
+        with torch.no_grad():
+            # Decode
+            y = self.model.decode(self.current_latent)
+            y = y.cpu().numpy().squeeze()
+        
+        # The output corresponds to [input_overlap + new_frame]
+        # Extract only the new part (discard the context region)
+        y_new = y[:self.frame_size] if len(y) >= self.frame_size else np.pad(y, (0, self.frame_size - len(y)))
+        # y_new = y[self.overlap:][:self.frame_size]
+        
+        # Apply Hanning window to the entire frame
+        y_windowed = y_new * self.window
+        
+        # Overlap-add with previous frame's tail
+        output = np.zeros(self.frame_size, dtype=np.float32)
+        
+        # Add the overlap region from previous frame
+        output[:self.overlap] = self.output_overlap
+        
+        # Add the current windowed frame
+        output += y_windowed
+        
+        # Save the tail for next frame
+        self.output_overlap = output[self.hop_size:].copy()
+        
+        # Return only the hop_size samples (the non-overlapping part)
+        return output[:self.hop_size]
 
     def audio_callback(self):
         """Generate audio samples."""
@@ -981,6 +1189,8 @@ class AudioCapture(AudioDevice):
                 self._handle_recording_input(indata)
                 
         except Exception as e:
+            import traceback
+            traceback.print_exception(e)
             warnings.warn(f"Audio capture error: {e}")
 
     def _handle_recording_input(self, audio_data: npt.NDArray[np.float32]) -> None:

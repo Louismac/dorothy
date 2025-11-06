@@ -15,7 +15,6 @@ class MySketch:
     def setup(self):
         #Output RAVE from speakers
         latent_dim = 8
-        print(sd.query_devices())
         
         rave_id = dot.music.start_rave_stream("models/taylor_vocals.ts", latent_dim=latent_dim)
         #Explicitly set output device if you are using blackhole to direct audio as
@@ -23,18 +22,18 @@ class MySketch:
         # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
 
         ########## RANDOM ########## 
-        z = torch.randn((1,latent_dim,1))
-        dot.music.audio_outputs[rave_id].current_latent = z 
+        #z = torch.randn((1,latent_dim,1))
+        #dot.music.audio_outputs[rave_id].current_latent = z 
         
         ########## RUN FROM INPUT DEVICE ########## 
         #pass in the number of the device you want to input to RAVE e.g. blackhole or mic
-        # device_id = dot.music.start_device_stream(2)
-        # dot.music.update_rave_from_stream(device_id)
+        device_id = dot.music.start_device_stream(3)
+        dot.music.update_rave_from_stream(device_id)
 
         ########## RUN FROM FILE ########## 
-        device_id = dot.music.start_file_stream("../audio/Wiley.wav")
+        # device_id = dot.music.start_file_stream("../audio/Wiley.wav")
         # set as input to rave (this mutes the source stream, use .gain to hear both)
-        dot.music.update_rave_from_stream(device_id)
+        # dot.music.update_rave_from_stream(device_id)
 
         ########## CONSTANT Z BIAS ########## 
         # d0 = 1.09  # change in latent dimension 0
