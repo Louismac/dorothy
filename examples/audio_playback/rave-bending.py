@@ -26,7 +26,7 @@ class MySketch:
         #     latent_dim=latent_dim,output_device=5)
         dot.music.audio_outputs[rave_id].load_cluster_results("audio_playback/")
         layer_names = list(dot.music.audio_outputs[rave_id].cluster_results.keys())
-        device_id = dot.music.start_device_stream(2, buffer_size = 4096)        
+        device_id = dot.music.start_device_stream(2, buffer_size = 44100)        
         #device_id = dot.music.start_file_stream("../audio/Wiley.wav",buffer_size=2048)
         dot.music.update_rave_from_stream(device_id)
         n_layers = len(layer_names)
@@ -51,7 +51,7 @@ class MySketch:
                         id=f"{i}_{j}_noise", on_release=on_release)
                 btn.set_style(idle_color = dot.white)
                 btn = dot.create_button(i*w, j*h + h//2, w, h//2, 
-                        id=f"{i}_{j}_ablation", on_release=on_release)
+                        id=f"{i}_{j}_lfo", on_release=on_release)
                 btn.set_style(idle_color = dot.black)
         self.prev = dot.millis
 

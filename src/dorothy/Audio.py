@@ -1077,6 +1077,8 @@ class RAVEPlayer(AudioDevice):
                 self.add_ablate_hook(layer_name, cluster_id)
             elif function == "noise":
                 self.add_noise_hook(layer_name, cluster_id)
+            elif function == "lfo":
+                self.add_lfo_hook(layer_name, cluster_id)
             print(f"adding {function} for cluster {cluster_id} in layer {layer_name}")
             return True
 
@@ -1161,41 +1163,73 @@ class RAVEPlayer(AudioDevice):
         self,
         layer_name: str,
         cluster_id: int = 0,
-        freq = 10, amp = 0.5
+        freq: float = 10,  # Hz
+        amp: float = 1.0
     ):
         """
-        Add noise to neuron activations
+        Add LFO modulation to cluster neuron activations
         
         Args:
             layer_name: Layer name
-            cluster_neurons: Neurons to add noise to
-            noise_std: Standard deviation of noise
-            noise_type: 'gaussian' or 'uniform'
+            cluster_id: Which cluster to modulate
+            freq: LFO frequency in Hz
+            amp: Modulation depth (0-1 range recommended)
+            phase_offset: Starting phase in radians
         """
         layer = self._get_layer(layer_name)
         layer_clusters = self.cluster_results[layer_name]
         neuron_indices = np.where(np.array(layer_clusters.cluster_labels) == cluster_id)[0].tolist()
+        if not hasattr(self, 'latent_sample_rate'):
+            test_audio = torch.randn(1, 1, 48000)  # Should be 1 second
+            print(f"Audio duration: {test_audio.shape[-1] / 48000:.2f} seconds")
+
+            test_z = self.model.encode(test_audio)[:, :128, :]
+            print(f"Latent timesteps: {test_z.shape[-1]}")
+            print(f"Expected latent rate: {test_z.shape[-1] / 1.0:.1f} Hz")
+            self.latent_sample_rate = test_z.shape[-1] / 1.0
+        
+        # Initialize LFO state dict if needed
+        if not hasattr(self, 'lfo_states'):
+            self.lfo_states = {}
+        
+        # Create unique key for this layer+cluster
+        lfo_key = f"{layer_name}_cluster{cluster_id}"
+        self.lfo_states[lfo_key] = {
+            'phase': 0,  
+            'freq': freq,
+            'amp': amp
+        }
         
         def lfo_hook(module, input, output):
-            if isinstance(output, torch.Tensor):
-                pass
-                # # Get current time/sample (this is simplified)
-                # t = torch.arange(output.shape[-1], device=output.device).float()
-                # oscillation = amp * torch.sin(
-                #     2 * np.pi * freq * t / 48000 + phase_offset
-                # )
+            if isinstance(output, torch.Tensor) and len(output.shape) == 3:
+                batch, channels, time_steps = output.shape
                 
-                # if isinstance(output, torch.Tensor):
-                #     if len(output.shape) == 3:  # (batch, channels, time)
-                #         output[:, neuron_indices, :] *= (1 + oscillation)
-            
-            return output
+                state = self.lfo_states[lfo_key]
+                current_phase = state['phase']
+                
+                # Generate time vector
+                t = torch.arange(time_steps, device=output.device).float()
+                
+                # Calculate phase progression for this chunk
+                phase_per_sample = 2 * np.pi * state['freq'] / self.latent_sample_rate
+                
+                # Generate oscillation starting from current_phase
+                oscillation = state['amp'] * torch.sin(current_phase + phase_per_sample * t)
+                oscillation = oscillation.view(1, 1, -1)
+                
+                # Modulate cluster neurons
+                output[:, neuron_indices, :] *= (1 + oscillation)
+                
+                # Update phase for next call (wrap to 0-2π)
+                state['phase'] = (current_phase + phase_per_sample * time_steps) % (2 * np.pi)
+                
+                return output
         
         handle = layer.register_forward_hook(lfo_hook)
         self.hooks["lfo"][layer_name][cluster_id] = handle
-
+        
     def load_cluster_results(self, output_dir):
-        self.hooks = {"noise":{},"ablation":{}}            
+        self.hooks = {"noise":{},"ablation":{},"lfo":{}}            
         # Check if we have any cluster results
         if not self.cluster_results:
             results_path = Path(output_dir) / "clustering_results.json"
@@ -1211,6 +1245,7 @@ class RAVEPlayer(AudioDevice):
                     )
                     self.hooks["noise"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
                     self.hooks["ablation"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
+                    self.hooks["lfo"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
                     self.cluster_results[layer_name] = result
     
     def _get_layer(self, layer_name: str) -> nn.Module:
