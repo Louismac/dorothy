@@ -33,6 +33,7 @@ class DrawCommand:
     transform: np.ndarray = None
     layer_id: Optional[int] = None
     draw_order: int = 0 
+    stroke_as_geometry: bool = False 
 
 class Transform:
     """Manages transformation matrices""" 
@@ -741,13 +742,37 @@ class DorothyRenderer:
         else:
             raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
+    def _create_rectangle_stroke_geometry(self, x1, y1, x2, y2, thickness):
+        """Create thick stroke geometry for rectangle outline"""
+        # Create 4 thick lines for each edge
+        all_verts = []
+        
+        # Top edge
+        top = self._create_thick_line_geometry(x1, y1, x2, y1, thickness)
+        all_verts.append(top)
+        
+        # Right edge
+        right = self._create_thick_line_geometry(x2, y1, x2, y2, thickness)
+        all_verts.append(right)
+        
+        # Bottom edge
+        bottom = self._create_thick_line_geometry(x2, y2, x1, y2, thickness)
+        all_verts.append(bottom)
+        
+        # Left edge
+        left = self._create_thick_line_geometry(x1, y2, x1, y1, thickness)
+        all_verts.append(left)
+        
+        return np.concatenate(all_verts)
+
+
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a rectangle (queued for batching)"""
+        """Draw a rectangle"""
         x1, y1 = pos1
         x2, y2 = pos2
         
         if self.enable_batching:
-            # Fill vertices (2 triangles)
+            # Fill vertices (always same)
             fill_verts = np.array([
                 x1, y1,
                 x2, y1,
@@ -757,13 +782,22 @@ class DorothyRenderer:
                 x1, y2
             ], dtype='f4')
             
-            # Stroke vertices (line loop - pairs of vertices for LINES mode)
-            stroke_verts = np.array([
-                x1, y1, x2, y1,  # Top edge
-                x2, y1, x2, y2,  # Right edge
-                x2, y2, x1, y2,  # Bottom edge
-                x1, y2, x1, y1,  # Left edge
-            ], dtype='f4')
+            # Stroke vertices - thick or thin
+            if self.use_stroke and self._stroke_weight > 1.0:
+                # Thick stroke - use geometry
+                stroke_verts = self._create_rectangle_stroke_geometry(
+                    x1, y1, x2, y2, self._stroke_weight
+                )
+                stroke_as_fill = True  # Render stroke as filled triangles
+            else:
+                # Thin stroke - use lines
+                stroke_verts = np.array([
+                    x1, y1, x2, y1,
+                    x2, y1, x2, y2,
+                    x2, y2, x1, y2,
+                    x1, y2, x1, y1,
+                ], dtype='f4')
+                stroke_as_fill = False
             
             cmd = DrawCommand(
                 type=DrawCommandType.RECTANGLE,
@@ -776,17 +810,36 @@ class DorothyRenderer:
                 stroke_color=self.stroke_color if self.use_stroke else None,
                 transform=self.transform.matrix,
                 layer_id=self.active_layer,
-                draw_order=self.draw_order_counter
+                draw_order=self.draw_order_counter,
+                stroke_as_geometry=stroke_as_fill  # ← Add this flag
             )
+            
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
     
-    def _create_circle_vertices(self, center, radius, segments=32):
-        """Create circle fill and stroke vertices
+    def _create_circle_stroke_geometry(self, center, radius, thickness, segments=32):
+        """Create thick stroke geometry for circle outline"""
+        cx, cy = center
+        all_verts = []
         
-        Returns:
-            (fill_vertices, stroke_vertices)
-        """
+        for i in range(segments):
+            angle1 = 2 * np.pi * i / segments
+            angle2 = 2 * np.pi * (i + 1) / segments
+            
+            x1 = cx + radius * np.cos(angle1)
+            y1 = cy + radius * np.sin(angle1)
+            x2 = cx + radius * np.cos(angle2)
+            y2 = cy + radius * np.sin(angle2)
+            
+            # Create thick line segment
+            segment = self._create_thick_line_geometry(x1, y1, x2, y2, thickness)
+            all_verts.append(segment)
+        
+        return np.concatenate(all_verts) if all_verts else np.array([], dtype='f4')
+
+
+    def _create_circle_vertices(self, center, radius, segments=32):
+        """Create circle fill and stroke vertices"""
         cx, cy = center
         
         # Fill vertices (triangles)
@@ -800,24 +853,31 @@ class DorothyRenderer:
             x2 = cx + radius * np.cos(angle2)
             y2 = cy + radius * np.sin(angle2)
             
-            # Triangle: center -> point1 -> point2
             fill_verts.extend([cx, cy, x1, y1, x2, y2])
         
-        # Stroke vertices (line segments around perimeter)
-        stroke_verts = []
-        for i in range(segments):
-            angle1 = 2 * np.pi * i / segments
-            angle2 = 2 * np.pi * (i + 1) / segments
+        # Stroke vertices - check weight
+        if self._stroke_weight > 1.0:
+            # Thick stroke - use geometry
+            stroke_verts = self._create_circle_stroke_geometry(center, radius, self._stroke_weight, segments)
+            stroke_as_fill = True
+        else:
+            # Thin stroke - use lines
+            stroke_verts = []
+            for i in range(segments):
+                angle1 = 2 * np.pi * i / segments
+                angle2 = 2 * np.pi * (i + 1) / segments
+                
+                x1 = cx + radius * np.cos(angle1)
+                y1 = cy + radius * np.sin(angle1)
+                x2 = cx + radius * np.cos(angle2)
+                y2 = cy + radius * np.sin(angle2)
+                
+                stroke_verts.extend([x1, y1, x2, y2])
             
-            x1 = cx + radius * np.cos(angle1)
-            y1 = cy + radius * np.sin(angle1)
-            x2 = cx + radius * np.cos(angle2)
-            y2 = cy + radius * np.sin(angle2)
-            
-            # Line segment (pair of vertices for LINES mode)
-            stroke_verts.extend([x1, y1, x2, y2])
+            stroke_verts = np.array(stroke_verts, dtype='f4')
+            stroke_as_fill = False
         
-        return np.array(fill_verts, dtype='f4'), np.array(stroke_verts, dtype='f4')
+        return np.array(fill_verts, dtype='f4'), stroke_verts, stroke_as_fill
 
 
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
@@ -841,26 +901,87 @@ class DorothyRenderer:
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
             
-    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a line (queued for batching)"""
-        if self.enable_batching:
-            vertices = np.array([pos1[0], pos1[1], pos2[0], pos2[1]], dtype='f4')
+    def _create_thick_line_geometry(self, x1, y1, x2, y2, thickness):
+        """Create rectangle geometry for a thick line
+        
+        Returns vertices for 2 triangles forming a thick line
+        """
+        # Direction vector
+        dx = x2 - x1
+        dy = y2 - y1
+        length = np.sqrt(dx*dx + dy*dy)
+        
+        if length < 0.001:
+            # Degenerate line - return empty
+            return np.array([], dtype='f4')
+        
+        # Normalize direction
+        dx /= length
+        dy /= length
+        
+        # Perpendicular vector (for thickness)
+        px = -dy * thickness / 2
+        py = dx * thickness / 2
+        
+        # Four corners of the rectangle
+        vertices = np.array([
+            x1 - px, y1 - py,  # Bottom-left
+            x1 + px, y1 + py,  # Top-left
+            x2 + px, y2 + py,  # Top-right
             
-            cmd = DrawCommand(
-                type=DrawCommandType.LINE,
-                stroke_vertices=vertices,
-                fill_vertices=None,
-                color=self.stroke_color,
-                use_fill=False,
-                use_stroke=True,
-                stroke_weight=self._stroke_weight,
-                stroke_color=self.stroke_color,
-                transform=self.transform.matrix,
-                layer_id=self.active_layer,
-                draw_order=self.draw_order_counter
-            )
+            x1 - px, y1 - py,  # Bottom-left
+            x2 + px, y2 + py,  # Top-right
+            x2 - px, y2 - py,  # Bottom-right
+        ], dtype='f4')
+        
+        return vertices
+
+
+    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
+        """Draw a line (batched)"""
+        if self.enable_batching:
+            x1, y1 = pos1
+            x2, y2 = pos2
+            
+            if self._stroke_weight > 1.0:
+                # Thick line - draw as geometry
+                line_verts = self._create_thick_line_geometry(x1, y1, x2, y2, self._stroke_weight)
+                
+                cmd = DrawCommand(
+                    type=DrawCommandType.LINE,
+                    fill_vertices=line_verts,  # Draw as filled rectangle
+                    stroke_vertices=np.array([], dtype='f4'),  # No stroke
+                    color=self.stroke_color,  # Line uses stroke color as fill
+                    use_fill=True,
+                    use_stroke=False,
+                    stroke_weight=1.0,
+                    stroke_color=None,
+                    transform=self.transform.matrix,
+                    layer_id=self.active_layer,
+                    draw_order=self.draw_order_counter
+                )
+            else:
+                # Thin line (weight=1) - use regular line rendering
+                vertices = np.array([x1, y1, x2, y2], dtype='f4')
+                
+                cmd = DrawCommand(
+                    type=DrawCommandType.LINE,
+                    fill_vertices=np.array([], dtype='f4'),
+                    stroke_vertices=vertices,
+                    color=None,
+                    use_fill=False,
+                    use_stroke=True,
+                    stroke_weight=1.0,  # Always 1 for OpenGL lines
+                    stroke_color=self.stroke_color,
+                    transform=self.transform.matrix,
+                    layer_id=self.active_layer,
+                    draw_order=self.draw_order_counter
+                )
+            
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
+        else:
+            self._draw_line_immediate(pos1, pos2)
     
     def flush_batch(self):
         """Execute all queued draw commands in batches"""
@@ -942,7 +1063,7 @@ class DorothyRenderer:
         return np.allclose(a1, a2, atol=epsilon)
 
     def _render_batch(self, commands: List[DrawCommand]):
-        """Render batch - all commands have same transform"""
+        """Render batch with thick stroke support"""
         if not commands:
             return
         
@@ -952,39 +1073,58 @@ class DorothyRenderer:
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        
-        # All commands in batch have same transform - use first one
         self.shader_2d['model'].write(first_cmd.transform)
         
-        # FILL PASS - can batch all vertices together!
+        # FILL PASS
         if first_cmd.use_fill and first_cmd.color is not None:
-            all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands])
+            all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands 
+                                            if len(cmd.fill_vertices) > 0])
             
-            fill_vbo = self.ctx.buffer(all_fill_verts)
-            fill_vao = self.ctx.simple_vertex_array(self.shader_2d, fill_vbo, 'in_position')
-            
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
-            fill_vao.render(moderngl.TRIANGLES)
-            
-            fill_vao.release()
-            fill_vbo.release()
+            if len(all_fill_verts) > 0:
+                fill_vbo = self.ctx.buffer(all_fill_verts)
+                fill_vao = self.ctx.simple_vertex_array(self.shader_2d, fill_vbo, 'in_position')
+                
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
+                fill_vao.render(moderngl.TRIANGLES)
+                
+                fill_vao.release()
+                fill_vbo.release()
         
         # STROKE PASS
         if first_cmd.use_stroke and first_cmd.stroke_color is not None:
-            stroke_verts_list = [cmd.stroke_vertices for cmd in commands if cmd.stroke_vertices is not None]
-            
-            if stroke_verts_list:
-                all_stroke_verts = np.concatenate(stroke_verts_list)
+            if first_cmd.stroke_as_geometry:
+                # Thick stroke - render as filled triangles
+                stroke_verts_list = [cmd.stroke_vertices for cmd in commands 
+                                    if cmd.stroke_vertices is not None and len(cmd.stroke_vertices) > 0]
                 
-                stroke_vbo = self.ctx.buffer(all_stroke_verts)
-                stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+                if stroke_verts_list:
+                    all_stroke_verts = np.concatenate(stroke_verts_list)
+                    
+                    stroke_vbo = self.ctx.buffer(all_stroke_verts)
+                    stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+                    
+                    self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+                    stroke_vao.render(moderngl.TRIANGLES)  # Render as filled geometry
+                    
+                    stroke_vao.release()
+                    stroke_vbo.release()
+            else:
+                # Thin stroke - render as lines
+                stroke_verts_list = [cmd.stroke_vertices for cmd in commands 
+                                    if cmd.stroke_vertices is not None and len(cmd.stroke_vertices) > 0]
                 
-                self.ctx.line_width = first_cmd.stroke_weight
-                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
-                stroke_vao.render(moderngl.LINES)
-                
-                stroke_vao.release()
-                stroke_vbo.release()
+                if stroke_verts_list:
+                    all_stroke_verts = np.concatenate(stroke_verts_list)
+                    
+                    stroke_vbo = self.ctx.buffer(all_stroke_verts)
+                    stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+                    
+                    self.ctx.line_width = 1.0  # Always 1 for OpenGL lines
+                    self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+                    stroke_vao.render(moderngl.LINES)
+                    
+                    stroke_vao.release()
+                    stroke_vbo.release()
                 
     def polyline(self, points, closed: bool = False):
         """Draw a polyline (connected line segments)"""
