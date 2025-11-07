@@ -21,7 +21,7 @@ class MySketch:
     def draw(self):        
         # Draw background layer
         dot.draw_layer(self.bg_layer)
-        
+        dot.stroke(dot.blue)
         # Draw foreground
         dot.fill((255, 255, 0))
         dot.circle((dot.mouse_x, dot.mouse_y), 50)

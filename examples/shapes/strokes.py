@@ -13,7 +13,6 @@ class MySketch:
     def draw(self):
         dot.stroke((255, 0, 0))
         dot.no_fill()
-        dot.paste()
         # Try different weights
         for i in range(1, 11):
             dot.set_stroke_weight(i)

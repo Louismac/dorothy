@@ -1,5 +1,4 @@
 from dorothy import Dorothy 
-import moderngl
 
 dot = Dorothy()
 
@@ -14,12 +13,12 @@ class MySketch:
         #redo background on main canvas
         dot.background((255,0,255))
         #draw trails to layer
-        with dot.layer(self.layer):
-            dot.background((255,0,255,10))
-            dot.fill(dot.yellow)
-            dot.circle((dot.mouse_x, dot.mouse_y), 100)
+        #with dot.layer(self.layer):
+        # dot.background((255,0,255,10))
+        dot.fill(dot.yellow)
+        dot.circle((dot.mouse_x, dot.mouse_y), 100)
 
-        dot.draw_layer(self.layer)
+        #dot.draw_layer(self.layer)
 
         
 
