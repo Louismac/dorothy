@@ -901,23 +901,21 @@ class ClusterResult:
 
 #Generating audio from RAVE models https://github.com/acids-ircam/RAVE
 class RAVEPlayer(AudioDevice):
-    def __init__(self, model_path, latent_dim=128, **kwargs):
+    def __init__(self, model_path, latent_dim=128, sr = 48000, **kwargs):
         """Initialize RAVE player."""
         if not TORCH_AVAILABLE:
             raise RuntimeError("PyTorch is required for RAVE")
-        
-        super().__init__(**kwargs)
+        super().__init__(sr = sr, **kwargs)
         
         torch.set_grad_enabled(False)
         torch.set_float32_matmul_precision('high')
         self.device = torch.device('cpu')
-        self.frame_size = AudioConfig.RAVE_FRAME_SIZE #This is the RAVE buffer size 
         self.current_sample = 0
         self.latent_dim = latent_dim
         self.cluster_results = {}
 
         self.current_latent = torch.randn(1, self.latent_dim, 1).to(self.device)
-        # self.z_bias = torch.zeros(1,latent_dim,1)
+        self.z_bias = torch.zeros(1,latent_dim,1).to(self.device)
 
         # Load model
         if not os.path.exists(model_path):
@@ -933,24 +931,98 @@ class RAVEPlayer(AudioDevice):
                 ckpt_file,
                 strict=False
             ).eval().to(self.device)
-            self.overlap_add = True
+            self.overlap_add = False
         else:
             self.model = torch.jit.load(model_path).to(self.device)
             self.overlap_add = False
 
+        #default to this, however, it is updated based on how much audio is input 
+        #if RAVE is driven by input audio (not just manual z navigation)
+        self.frame_size = AudioConfig.RAVE_FRAME_SIZE
         if self.overlap_add:
-            self.overlap = self.frame_size//4
             self.first_frame = True
-            self.hop_size = self.frame_size - self.overlap
-            self.input_buffer = np.zeros(self.overlap, dtype=np.float32)
-            self.output_overlap = np.zeros(self.overlap, dtype=np.float32)
+            self.hop_size = self.frame_size//2
+            self.input_buffer = np.zeros(self.hop_size, dtype=np.float32)
+            self.output_overlap = np.zeros(self.hop_size, dtype=np.float32)
             self.window = np.hanning(self.frame_size).astype(np.float32)
 
         self.current_buffer = self.get_frame()
-        self.next_buffer = np.zeros(self.frame_size, dtype = np.float32)
+        self.next_buffer = np.zeros(len(self.current_buffer), dtype = np.float32)
         
         self._start_generator()
 
+    def _start_generator(self) -> None:
+        """Start background generation thread."""
+        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
+        self.generate_thread.start()
+        
+    def _fill_next_buffer(self):
+        self.next_buffer = self.get_frame()
+        print(f"_fill_next_buffer {self.next_buffer.shape}")
+
+    def update_z(self, input_audio):
+
+        if self.overlap_add:
+            full_input = np.concatenate([self.input_buffer, input_audio])
+        else:
+            full_input = input_audio
+        
+        # Encode
+        with torch.no_grad():
+            x = torch.from_numpy(full_input).reshape(1, 1, -1).to(self.device)
+            z = self.model.encode(x)
+            #just take mean (drop std)
+            if z.shape[1] == self.latent_dim*2:
+                z = z[:, :self.latent_dim, :]
+        self.current_latent = z
+        #How much audio this will be decoded into
+        self.frame_size = self.current_latent.shape[2]*AudioConfig.RAVE_FRAME_SIZE
+        print(f"updating z with {full_input.shape} audio, making {self.current_latent.shape} zs decoding to {self.frame_size}")
+        if self.overlap_add:
+            self.input_buffer = input_audio[-self.overlap:].copy()
+    
+    def get_frame(self):
+        
+        if self.current_latent is None:
+            return np.zeros(self.buffer_size, dtype=np.float32)
+        
+        with torch.no_grad():
+            # Decode
+            y = self.model.decode(self.current_latent)
+            y = y.cpu().numpy().squeeze()
+        
+        if self.overlap_add:
+            y_new = y[:self.frame_size] if len(y) >= self.frame_size else np.pad(y, (0, self.frame_size - len(y)))
+            y_windowed = y_new * self.window
+            output = np.zeros(self.frame_size, dtype=np.float32)
+            output[:self.hop_size] = self.output_overlap
+            output += y_windowed
+            self.output_overlap = output[self.hop_size:].copy()        
+            return output[:self.hop_size]
+        else:
+            return y
+
+    def audio_callback(self):
+        """Generate audio samples."""
+        if self.pause_event.is_set():
+            return self._get_silence()
+        else:
+            audio_buffer = self.current_buffer[self.current_sample:self.current_sample +self.buffer_size]
+            self.current_sample += self.buffer_size
+            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
+            if self.current_sample >= len(self.current_buffer):
+                print(f"reached end of buffer {self.current_sample} / {len(self.current_buffer)}")
+                self.current_sample = 0
+                self.current_buffer = self.next_buffer.copy()
+                if not self.generate_thread.is_alive():
+                    #this is where get_frame is called (e.g. current z is decoded and stored in next buffer)
+                    #existing next buffer becomes current buffer
+                    self._start_generator()
+
+            self.internal_callback()
+            self.on_new_frame(audio_buffer)
+            return audio_buffer * self.gain
+        
     def toggle_bend(self,
         function:str,
         layer_name: str,
@@ -1069,71 +1141,6 @@ class RAVEPlayer(AudioDevice):
         for name, module in decoder.named_modules():
             if name == layer_name:
                 return module
-
-    def _start_generator(self) -> None:
-        """Start background generation thread."""
-        self.generate_thread = threading.Thread(target=self._fill_next_buffer, daemon=True)
-        self.generate_thread.start()
-        
-    def _fill_next_buffer(self):
-        self.next_buffer = self.get_frame()
-
-    def update_z(self, input_audio):
-        if self.overlap_add:
-            full_input = np.concatenate([self.input_buffer, input_audio])
-        else:
-            full_input = input_audio
-        
-        # Encode
-        with torch.no_grad():
-            x = torch.from_numpy(full_input).reshape(1, 1, -1).to(self.device)
-            z = self.model.encode(x)
-            if z.shape[1] == 256:
-                z = z[:, :128, :]
-        self.current_latent = z
-        if self.overlap_add:
-            self.input_buffer = input_audio[-self.overlap:].copy()
-    
-    def get_frame(self):
-        """Decode and overlap-add with windowing"""
-        if self.current_latent is None:
-            return np.zeros(self.hop_size, dtype=np.float32)
-        
-        with torch.no_grad():
-            # Decode
-            y = self.model.decode(self.current_latent)
-            y = y.cpu().numpy().squeeze()
-        
-        if self.overlap_add:
-            y_new = y[:self.frame_size] if len(y) >= self.frame_size else np.pad(y, (0, self.frame_size - len(y)))
-            y_windowed = y_new * self.window
-            output = np.zeros(self.frame_size, dtype=np.float32)
-            output[:self.overlap] = self.output_overlap
-            output += y_windowed
-            self.output_overlap = output[self.hop_size:].copy()        
-            return output[:self.hop_size]
-        else:
-            return y
-
-    def audio_callback(self):
-        """Generate audio samples."""
-        if self.pause_event.is_set():
-            return self._get_silence()
-        else:
-            audio_buffer = self.current_buffer[self.current_sample:self.current_sample +self.buffer_size]
-            self.current_sample += self.buffer_size
-
-            #Currently dont do proper wrapping for buffer sizes that arent factors of self.frame_size
-            if self.current_sample >= self.frame_size:
-                self.current_sample = 0
-                self.current_buffer = self.next_buffer.copy()
-                if not self.generate_thread.is_alive():
-                    self._start_generator()
-
-            self.internal_callback()
-            self.on_new_frame(audio_buffer)
-            return audio_buffer * self.gain
-
 
 class AudioCapture(AudioDevice):
     """Capture and analyze audio streams in real-time."""
