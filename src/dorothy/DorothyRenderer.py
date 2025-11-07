@@ -818,7 +818,7 @@ class DorothyRenderer:
                 use_stroke=True,
                 stroke_weight=self._stroke_weight,
                 stroke_color=self.stroke_color,
-                transform=self.transform,
+                transform=self.transform.matrix,
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter
             )
@@ -842,47 +842,70 @@ class DorothyRenderer:
         self.draw_queue.clear()
     
     def _group_commands_into_batches(self):
-        """Create minimal batches while preserving draw order
-        
-        Strategy: Batch consecutive commands with same render state
-        """
+        """Group commands by state AND transform"""
         if not self.draw_queue:
             return []
         
-        # Sort by draw order
         sorted_cmds = sorted(self.draw_queue, key=lambda c: c.draw_order)
-        
         batches = []
         current_batch = [sorted_cmds[0]]
         
-        def state_key(cmd):
-            """Get rendering state for a command"""
-            fill_key = tuple(cmd.color) if cmd.use_fill and cmd.color else None
-            stroke_key = (tuple(cmd.stroke_color), cmd.stroke_weight) if cmd.use_stroke else None
-            return (cmd.type, fill_key, stroke_key, cmd.use_fill, cmd.use_stroke)
+        def state_matches(cmd1, cmd2):
+            """Check if two commands have matching render state"""
+            # Type must match
+            if cmd1.type != cmd2.type:
+                return False
+            
+            # Fill state must match
+            if cmd1.use_fill != cmd2.use_fill:
+                return False
+            if cmd1.use_fill and cmd1.color != cmd2.color:
+                return False
+            
+            # Stroke state must match
+            if cmd1.use_stroke != cmd2.use_stroke:
+                return False
+            if cmd1.use_stroke:
+                if cmd1.stroke_color != cmd2.stroke_color:
+                    return False
+                if abs(cmd1.stroke_weight - cmd2.stroke_weight) > 0.01:
+                    return False
+            
+            # Transform must match
+            return self._transforms_equal(cmd1.transform, cmd2.transform)
         
-        current_state = state_key(sorted_cmds[0])
+        prev_cmd = sorted_cmds[0]
         
         for cmd in sorted_cmds[1:]:
-            cmd_state = state_key(cmd)
-            
-            if cmd_state == current_state:
-                # Same state - add to current batch
+            if state_matches(prev_cmd, cmd):
                 current_batch.append(cmd)
             else:
-                # State changed - start new batch
                 batches.append(current_batch)
                 current_batch = [cmd]
-                current_state = cmd_state
+                prev_cmd = cmd
         
-        # Add final batch
         if current_batch:
             batches.append(current_batch)
         
         return batches
-    
+
+    def _transforms_equal(self, t1, t2, epsilon=1e-5):
+        """Check if two transform matrices are equal"""
+        # Convert to numpy arrays
+        if isinstance(t1, glm.mat4):
+            a1 = np.array([t1[i][j] for i in range(4) for j in range(4)])
+        else:
+            a1 = np.array(t1).flatten()
+        
+        if isinstance(t2, glm.mat4):
+            a2 = np.array([t2[i][j] for i in range(4) for j in range(4)])
+        else:
+            a2 = np.array(t2).flatten()
+        
+        return np.allclose(a1, a2, atol=epsilon)
+
     def _render_batch(self, commands: List[DrawCommand]):
-        """Render a batch of similar commands with fill and stroke support"""
+        """Render batch - all commands have same transform"""
         if not commands:
             return
         
@@ -892,42 +915,40 @@ class DorothyRenderer:
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
         
-        # Render FILL pass
+        # All commands in batch have same transform - use first one
+        self.shader_2d['model'].write(first_cmd.transform)
+        
+        # FILL PASS - can batch all vertices together!
         if first_cmd.use_fill and first_cmd.color is not None:
-            # Combine fill vertices
             all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands])
             
             fill_vbo = self.ctx.buffer(all_fill_verts)
             fill_vao = self.ctx.simple_vertex_array(self.shader_2d, fill_vbo, 'in_position')
             
             self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
-            
-            # Render based on type (all use TRIANGLES for fill)
             fill_vao.render(moderngl.TRIANGLES)
             
             fill_vao.release()
             fill_vbo.release()
         
-        # Render STROKE pass
+        # STROKE PASS
         if first_cmd.use_stroke and first_cmd.stroke_color is not None:
-            # Combine stroke vertices
-            all_stroke_verts = np.concatenate([cmd.stroke_vertices for cmd in commands if cmd.stroke_vertices is not None])
+            stroke_verts_list = [cmd.stroke_vertices for cmd in commands if cmd.stroke_vertices is not None]
             
-            if len(all_stroke_verts) > 0:
+            if stroke_verts_list:
+                all_stroke_verts = np.concatenate(stroke_verts_list)
+                
                 stroke_vbo = self.ctx.buffer(all_stroke_verts)
                 stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
                 
                 self.ctx.line_width = first_cmd.stroke_weight
                 self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
-                
-                # All stroke vertices use LINES mode (pairs of vertices)
                 stroke_vao.render(moderngl.LINES)
                 
                 stroke_vao.release()
                 stroke_vbo.release()
-
+                
     def polyline(self, points, closed: bool = False):
         """Draw a polyline (connected line segments)"""
         if len(points) < 2:

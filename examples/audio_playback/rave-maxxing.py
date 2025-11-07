@@ -1,5 +1,6 @@
 from dorothy import Dorothy
 from dorothy.Audio import Sampler
+import numpy as np
 
 dot = Dorothy()
 
@@ -14,12 +15,13 @@ class MySketch:
         rave_id = dot.music.start_rave_stream(
             "/Users/lmccallum/Documents/checkpoints/RAVE/taylor_vocals_mono_e18d54798e/", 
             latent_dim=latent_dim, output_device=4, buffer_size = 1024)
-        dot.music.audio_outputs[rave_id].load_cluster_results("audio_playback/")
+        dot.music.audio_outputs[rave_id].load_cluster_results("models/")
         dot.music.audio_outputs[rave_id].pause()
         layer_names = list(dot.music.audio_outputs[rave_id].cluster_results.keys())
-        layer_names = ["audioplayback/optimised/" + l for l in layer_names]
+        layer_names = ["models/optimised/" + l for l in layer_names]
         n_layers = len(layer_names)
         paths = [[l+"/top_5_bpm_latent_maximised.wav",l+"/top_5_pitch_latent_maximised.wav"] for l in layer_names]
+        paths = np.array(paths).ravel()
         self.sampler = Sampler(dot.music)
         self.sampler.load(paths)
         w = dot.width//n_layers
@@ -37,6 +39,7 @@ class MySketch:
                     id=f"{i}_pitch", on_hover=on_hover)
             btn.set_style(idle_color = dot.black)
         self.prev = dot.millis
+        dot.start_record(1, end=20000)
 
     def draw(self):
         dot.background((40, 40, 50))

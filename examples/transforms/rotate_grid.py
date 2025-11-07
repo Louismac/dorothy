@@ -13,7 +13,8 @@ class MySketch:
         print("setup")
         #Play file from your computer
         file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path)
+        # dot.music.start_file_stream(file_path)
+        dot.music.start_device_stream(1)
 
         dot.stroke(dot.grey)
         

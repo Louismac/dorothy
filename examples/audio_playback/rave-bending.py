@@ -21,12 +21,12 @@ class MySketch:
             latent_dim=latent_dim, output_device=4, buffer_size = 1024)
         
         # rave_id = dot.music.start_rave_stream(
-        #     "models/taylor_vocals.ts",
+        #     "models/rave_gospel.ts",
         #     buffer_size = 4096, 
         #     latent_dim=latent_dim,output_device=5)
-        dot.music.audio_outputs[rave_id].load_cluster_results("audio_playback/")
+        dot.music.audio_outputs[rave_id].load_cluster_results("models/")
         layer_names = list(dot.music.audio_outputs[rave_id].cluster_results.keys())
-        device_id = dot.music.start_device_stream(2, buffer_size = 44100)        
+        device_id = dot.music.start_device_stream(3, buffer_size = 44100)        
         #device_id = dot.music.start_file_stream("../audio/Wiley.wav",buffer_size=2048)
         dot.music.update_rave_from_stream(device_id)
         n_layers = len(layer_names)

@@ -18,10 +18,14 @@ class MySketch:
   def draw(self):
 
     dot.background(dot.black)
+    dot.fill(dot.red)
+    dot.stroke(dot.red)
     for bin_num, bin_val in enumerate(dot.music.fft()[:256:8]):
       x = bin_num*50
       with dot.transform():
         dot.scale(1,bin_val)
         dot.paste(self.rgb_images[bin_num%8], (x, 0))
+        
+
 
 MySketch() 

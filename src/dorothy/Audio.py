@@ -22,12 +22,15 @@ import psutil
 # Optional dependencies
 try:
     import torch
+    import torch.nn as nn
+    import gin
+    from rave import RAVE
     torch.set_grad_enabled(False)
     from .utils.magnet import preprocess_data, RNNModel, generate
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
-    warnings.warn("PyTorch not available. ML features disabled.", ImportWarning)
+    warnings.warn("Some libraries not available. ML features disabled.", ImportWarning)
 
 
 # ============================================================================
@@ -882,11 +885,10 @@ class CustomPlayer(AudioDevice):
             return audio_buffer * self.gain
 
 
-import torch.nn as nn
+
 from pathlib import Path
 import json
-import gin
-from rave import RAVE
+
 
 @dataclass
 class ClusterResult:
