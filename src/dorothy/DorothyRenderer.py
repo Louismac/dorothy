@@ -126,6 +126,7 @@ class DorothyRenderer:
         self.batch_vao = None
         self.max_batch_vertices = 100000  # Adjust based on needs
         self.draw_order_counter = 0
+        self.last_fbo = None  # Track last bound FBO
 
         # Transform and camera
         self.transform = Transform()
@@ -147,6 +148,31 @@ class DorothyRenderer:
         self.active_layer = None  # Currently rendering to a layer
         self.effect_shaders = {}
         self.effect_vaos = {}
+
+    def _ensure_fbo(self, target_fbo):
+        """Ensure correct FBO is bound, flushing if needed"""
+        if target_fbo != self.last_fbo:
+            # FBO changed - flush pending draws first
+            if self.enable_batching and len(self.draw_queue) > 0:
+                self._flush_for_fbo_change()
+            
+            # Bind new FBO
+            if target_fbo is None:
+                self.ctx.screen.use()
+            else:
+                target_fbo.use()
+            
+            self.last_fbo = target_fbo
+    
+    def _flush_for_fbo_change(self):
+        """Flush batch because FBO is changing"""
+        # Render all queued commands to current FBO
+        batches = self._group_commands_into_batches()
+        for batch in batches:
+            self._render_batch(batch)
+        
+        self.draw_queue.clear()
+        self.draw_order_counter = 0
         
     def _setup_shaders(self):
         """Initialize shader programs"""
@@ -271,6 +297,7 @@ class DorothyRenderer:
         
         self.active_layer = layer_id
         fbo = self.layers[layer_id]['fbo']
+        self._ensure_fbo(fbo) 
         fbo.use()
         self.ctx.viewport = (0, 0, self.width, self.height)
 
@@ -279,6 +306,9 @@ class DorothyRenderer:
         """Stop rendering to layer, return to previous layer"""
         if self.active_layer is None:
             return
+        
+        if self.enable_batching and len(self.draw_queue) > 0:
+            self._flush_for_fbo_change()
         
         # Pop previous layer from stack
         if self.layer_stack:
@@ -291,12 +321,15 @@ class DorothyRenderer:
             else:
                 # Return to screen
                 self.active_layer = None
+                self.last_fbo = None
                 self.ctx.screen.use()
         else:
             # No stack, default to screen
             self.active_layer = None
+            self.last_fbo = None
             self.ctx.screen.use()
         self.ctx.viewport = (0, 0, self.width, self.height)
+        
 
     def draw_layer(self, layer_id: int, alpha: float = 1.0, x: int = 0, y: int = 0):
         """Draw a layer to the current render target with optional transparency
@@ -383,6 +416,8 @@ class DorothyRenderer:
             layer_id: The layer to clear
             color: RGBA color (0.0-1.0 range)
         """
+        if self.enable_batching and len(self.draw_queue) > 0:
+            self._flush_for_fbo_change()
         if layer_id not in self.layers:
             raise ValueError(f"Layer {layer_id} does not exist")
         
@@ -443,6 +478,8 @@ class DorothyRenderer:
                     If False, shader output is shown but not fed back (post-processing)
         """
         # Get cached shader (or compile if first time)
+        if self.enable_batching and len(self.draw_queue) > 0:
+            self._flush_for_fbo_change()
         custom_shader = self.get_effect_shader(fragment_shader_code)
         if custom_shader is None:
             print("Shader is None, skipping effect")
