@@ -942,6 +942,7 @@ class Dorothy:
         try:
             yield
         finally:
+            self.renderer.flush_batch()
             self.renderer.end_layer()
     
     def draw_layer(self, layer_id: int, alpha: float = 1.0):

@@ -111,13 +111,8 @@ class Button:
             dot.set_stroke_weight(self.border_width)
         else:
             dot.no_stroke()
-        
-        # Draw rounded rectangle
-        if self.corner_radius > 0:
-            self._draw_rounded_rect(dot)
-        else:
-            dot.rectangle((self.x, self.y), 
-                         (self.x + self.width, self.y + self.height))
+
+        dot.rectangle((self.x, self.y), (self.x + self.width, self.y + self.height))
         
         # # Draw text (centered)
         # if self.text:

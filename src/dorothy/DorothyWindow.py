@@ -79,6 +79,8 @@ class DorothyWindow(mglw.WindowConfig):
                     if self.dorothy.frames == 0:
                         traceback.print_exc()
             
+            self.dorothy.renderer.flush_batch()
+            
             # End drawing to persistent canvas
             self.dorothy.renderer.end_layer()
             

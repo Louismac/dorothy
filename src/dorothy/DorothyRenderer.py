@@ -8,6 +8,28 @@ import glm
 from typing import Tuple, Optional
 import cv2
 from .DorothyShaders import DOTSHADERS
+from dataclasses import dataclass
+from typing import List, Tuple, Literal
+from enum import Enum
+
+class DrawCommandType(Enum):
+    RECTANGLE = "rectangle"
+    CIRCLE = "circle"
+    LINE = "line"
+    TRIANGLE = "triangle"
+
+@dataclass
+class DrawCommand:
+    """Represents a single draw command"""
+    type: DrawCommandType
+    vertices: np.ndarray  # Pre-computed vertices
+    color: Tuple[float, float, float, float]
+    use_fill: bool
+    use_stroke: bool
+    stroke_weight: float
+    stroke_color: Tuple[float, float, float, float]
+    transform: np.ndarray  # Copy of transform matrix at time of call
+
 
 
 class Transform:
@@ -92,6 +114,14 @@ class DorothyRenderer:
         self._stroke_weight = 10
         self.use_fill = True
         self.use_stroke = False
+        # Batching system
+        self.enable_batching = True  # Can disable for debugging
+        self.draw_queue = []  # Queue of DrawCommand objects
+        
+        # Batched buffers (reused across frames)
+        self.batch_vbo = None
+        self.batch_vao = None
+        self.max_batch_vertices = 100000  # Adjust based on needs
         
         # Transform and camera
         self.transform = Transform()
@@ -670,64 +700,6 @@ class DorothyRenderer:
         else:
             raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
-    def _draw_annotation(self, position: Tuple[float, float], text: str):
-        """Draw annotation text near a shape (simplified version)
-        
-        Note: Full text rendering requires a font atlas. This is a placeholder
-        that draws a small indicator. For production, integrate a text rendering
-        library like moderngl-text or PIL-based texture text.
-        """
-        # Draw a small cross at the position to indicate annotation point
-        x, y = position
-        offset = 3
-        
-        # Save current stroke settings
-        old_stroke = self.use_stroke
-        old_color = self.stroke_color
-        old_weight = self._stroke_weight
-        
-        # Draw cross
-        self.use_stroke = True
-        self.stroke_color = (255, 255, 0, 255)  # Yellow
-        # self._stroke_weight = 1
-        
-        # Vertical line
-        vertices = np.array([x, y - offset, x, y + offset], dtype='f4')
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        vao.render(moderngl.LINES)
-        vao.release()
-        vbo.release()
-        
-        # Horizontal line
-        vertices = np.array([x - offset, y, x + offset, y], dtype='f4')
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        vao.render(moderngl.LINES)
-        vao.release()
-        vbo.release()
-        
-        # Restore stroke settings
-        self.use_stroke = old_stroke
-        self.stroke_color = old_color
-        self._stroke_weight = old_weight
-        
-        # TODO: Actual text rendering would go here
-        # For now, just the cross indicator shows where the annotation would be
-    
-    def _create_circle_vertices(self, center: Tuple[float, float], radius: float, segments: int = 32):
-        """Generate circle vertices"""
-        vertices = [center[0], center[1]]  # Center point first for TRIANGLE_FAN
-        for i in range(segments + 1):  # +1 to close the circle
-            angle = 2 * np.pi * i / segments
-            x = center[0] + radius * np.cos(angle)
-            y = center[1] + radius * np.sin(angle)
-            vertices.extend([x, y])
-        return np.array(vertices, dtype='f4')
-    
     def _draw_thick_stroke(self, vertices, closed=False):
         """Draw thick lines as quads instead of using line_width
         
@@ -782,162 +754,193 @@ class DorothyRenderer:
             return None
         
         return np.array(quad_vertices, dtype='f4')
-
-    # Now update each drawing method:
-
-    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
-        """Draw a circle in 2D mode"""
-        vertices = self._create_circle_vertices(center, radius)
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        # Set uniforms
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        
-        # Draw fill
-        if self.use_fill:
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            vao.render(moderngl.TRIANGLE_FAN)
-        
-        # Draw stroke
-        if self.use_stroke:
-            # Create stroke vertices (without center point)
-            stroke_vertices = []
-            segments = 32
-            for i in range(segments + 1):
-                angle = 2 * np.pi * i / segments
-                x = center[0] + radius * np.cos(angle)
-                y = center[1] + radius * np.sin(angle)
-                stroke_vertices.extend([x, y])
-            
-            stroke_array = np.array(stroke_vertices, dtype='f4')
-            
-            # Try thick stroke first
-            thick_verts = self._draw_thick_stroke(stroke_array, closed=True)
-            
-            if thick_verts is not None:
-                # Draw as quads
-                thick_vbo = self.ctx.buffer(thick_verts)
-                thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
-                
-                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-                thick_vao.render(moderngl.TRIANGLE_STRIP)
-                
-                thick_vao.release()
-                thick_vbo.release()
-            else:
-                # Fall back to thin line
-                stroke_vbo = self.ctx.buffer(stroke_array)
-                stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
-                
-                self.ctx.line_width = 1.0
-                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-                stroke_vao.render(moderngl.LINE_STRIP)
-                
-                stroke_vao.release()
-                stroke_vbo.release()
-        
-        vao.release()
-        vbo.release()
-        
-        if annotate:
-            self._draw_annotation(center, f"({int(center[0])}, {int(center[1])})\nr={int(radius)}")
-
+    
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a rectangle"""
+        """Draw a rectangle (queued for batching)"""
         x1, y1 = pos1
         x2, y2 = pos2
         
-        vertices = np.array([
-            x1, y1,
-            x2, y1,
-            x2, y2,
-            x1, y2
-        ], dtype='f4')
+        if self.enable_batching:
+            # Create vertices but don't draw yet
+            vertices = np.array([
+                x1, y1,
+                x2, y1,
+                x2, y2,
+                x1, y1,
+                x2, y2,
+                x1, y2
+            ], dtype='f4')
+            
+            # Queue the draw command
+            cmd = DrawCommand(
+                type=DrawCommandType.RECTANGLE,
+                vertices=vertices,
+                color=self.fill_color if self.use_fill else None,
+                use_fill=self.use_fill,
+                use_stroke=self.use_stroke,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color if self.use_stroke else None,
+                transform=self.transform.matrix  # Snapshot current transform
+            )
+            
+            self.draw_queue.append(cmd)
+        else:
+            # Immediate mode (old behavior, for debugging)
+            self._draw_rectangle_immediate(pos1, pos2)
+    
+    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
+        """Draw a circle"""
+        if self.enable_batching:
+            # Generate vertices as triangle list
+            vertices = self._create_circle_vertices_triangles(center, radius)
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.CIRCLE,
+                vertices=vertices,
+                color=self.fill_color if self.use_fill else None,
+                use_fill=self.use_fill,
+                use_stroke=self.use_stroke,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color if self.use_stroke else None,
+                transform=self.transform.matrix
+            )
+            
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_circle_immediate(center, radius)
+
+    def _create_circle_vertices_triangles(self, center, radius, segments=32):
+        """Create circle as explicit triangles (not fan)"""
+        cx, cy = center
+        vertices = []
         
-        vbo = self.ctx.buffer(vertices)
+        for i in range(segments):
+            angle1 = 2 * np.pi * i / segments
+            angle2 = 2 * np.pi * (i + 1) / segments
+            
+            x1 = cx + radius * np.cos(angle1)
+            y1 = cy + radius * np.sin(angle1)
+            x2 = cx + radius * np.cos(angle2)
+            y2 = cy + radius * np.sin(angle2)
+            
+            # One triangle per segment
+            vertices.extend([cx, cy, x1, y1, x2, y2])
+        
+        return np.array(vertices, dtype='f4')
+        
+    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
+        """Draw a line (queued for batching)"""
+        if self.enable_batching:
+            vertices = np.array([pos1[0], pos1[1], pos2[0], pos2[1]], dtype='f4')
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE,
+                vertices=vertices,
+                color=self.stroke_color,
+                use_fill=False,
+                use_stroke=True,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color,
+                transform=self.transform
+            )
+            
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_line_immediate(pos1, pos2)
+    
+    def flush_batch(self):
+        """Execute all queued draw commands in batches"""
+        if not self.draw_queue:
+            return
+        
+        # Group commands by type and rendering state for efficient batching
+        # This is the key optimization!
+        batches = self._group_commands_into_batches()
+        
+        # Render each batch
+        for batch in batches:
+            self._render_batch(batch)
+        
+        # Clear the queue
+        self.draw_queue.clear()
+    
+    def _group_commands_into_batches(self):
+        """Group draw commands by rendering state for efficient batching
+        
+        Returns:
+            List of batches, where each batch contains commands that can be drawn together
+        """
+        from itertools import groupby
+        
+        # Sort commands by (type, color, stroke_weight, transform)
+        # Commands with same state can be batched together
+        def batch_key(cmd):
+            # Create a hashable key for batching
+            color_key = tuple(cmd.color) if cmd.color is not None else None
+            stroke_key = (cmd.use_stroke, tuple(cmd.stroke_color), cmd.stroke_weight) if cmd.use_stroke else None
+            # For transforms, we'd need to hash the matrix (skip for now, batch per-transform)
+            return (cmd.type, color_key, stroke_key, cmd.use_fill)
+        
+        # Group by key
+        sorted_cmds = sorted(self.draw_queue, key=batch_key)
+        batches = []
+        
+        for key, group in groupby(sorted_cmds, key=batch_key):
+            batches.append(list(group))
+        
+        return batches
+    
+    def _render_batch(self, commands: List[DrawCommand]):
+        """Render a batch of similar commands in one draw call"""
+        if not commands:
+            return
+        
+        # All commands in batch have same type and rendering state
+        first_cmd = commands[0]
+        
+        # Combine all vertices
+        all_vertices = []
+        for cmd in commands:
+            all_vertices.append(cmd.vertices)
+        
+        combined_vertices = np.concatenate(all_vertices)
+        
+        # Create buffer for entire batch
+        vbo = self.ctx.buffer(combined_vertices)
         vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
         
-        # Enable blending for transparency
+        # Set rendering state (same for all in batch)
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
+        
+        # For now, use identity transform (we'd need instancing for per-shape transforms)
+        # Or render each transform group separately
         self.shader_2d['model'].write(self.transform.matrix)
         
-        if self.use_fill:
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            vao.render(moderngl.TRIANGLE_FAN)
-        
-        if self.use_stroke:
-            # Try thick stroke
-            thick_verts = self._draw_thick_stroke(vertices, closed=True)
+        if first_cmd.use_fill and first_cmd.color is not None:
+            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
             
-            if thick_verts is not None:
-                thick_vbo = self.ctx.buffer(thick_verts)
-                thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
-                
-                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-                thick_vao.render(moderngl.TRIANGLE_STRIP)
-                
-                thick_vao.release()
-                thick_vbo.release()
-            else:
-                self.ctx.line_width = 1.0
-                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-                vao.render(moderngl.LINE_LOOP)
+            # Determine primitive type
+            if first_cmd.type == DrawCommandType.RECTANGLE:
+                vao.render(moderngl.TRIANGLES)
+            elif first_cmd.type == DrawCommandType.CIRCLE:
+                # Need to render multiple fans - more complex
+                # For now, render as triangles if pre-tessellated
+                vao.render(moderngl.TRIANGLES)
+            elif first_cmd.type == DrawCommandType.LINE:
+                vao.render(moderngl.LINES)
+        
+        # Handle stroke separately if needed
+        if first_cmd.use_stroke:
+            
+            self.ctx.line_width = 1.0
+            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+            vao.render(moderngl.LINE_STRIP)
         
         vao.release()
         vbo.release()
-        
-        if annotate:
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
-            self._draw_annotation((center_x, center_y), 
-                                f"({int(x1)}, {int(y1)})\n({int(x2)}, {int(y2)})")
-
-    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a line"""
-        vertices = np.array([
-            pos1[0], pos1[1],
-            pos2[0], pos2[1]
-        ], dtype='f4')
-        
-        # Enable blending for transparency
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
-        self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        # Try thick line
-        thick_verts = self._draw_thick_stroke(vertices, closed=False)
-        
-        if thick_verts is not None:
-            thick_vbo = self.ctx.buffer(thick_verts)
-            thick_vao = self.ctx.simple_vertex_array(self.shader_2d, thick_vbo, 'in_position')
-            thick_vao.render(moderngl.TRIANGLE_STRIP)
-            thick_vao.release()
-            thick_vbo.release()
-        else:
-            vbo = self.ctx.buffer(vertices)
-            vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-            self.ctx.line_width = 1.0
-            vao.render(moderngl.LINES)
-            vao.release()
-            vbo.release()
-        
-        if annotate:
-            center_x = (pos1[0] + pos2[0]) / 2
-            center_y = (pos1[1] + pos2[1]) / 2
-            self._draw_annotation((center_x, center_y), 
-                                f"({int(pos1[0])}, {int(pos1[1])})\n({int(pos2[0])}, {int(pos2[1])})")
 
     def polyline(self, points, closed: bool = False):
         """Draw a polyline (connected line segments)"""
