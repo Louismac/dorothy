@@ -1,5 +1,6 @@
 from dorothy import Dorothy
 from random import random
+import numpy as np
 
 dot = Dorothy(640,640)
 
@@ -15,16 +16,21 @@ class MySketch:
         with dot.layer(self.bg_layer):
             dot.background(dot.black)
             for i in range(100):
-                dot.fill((100, 100, 200))
+                dot.fill((100,100,100))
                 dot.circle((random() * 800, random() * 600), 5)
+                dot.fill((0,100,255))
+                dot.circle((random() * 800, random() * 600), 5)
+                
 
-    def draw(self):        
-        # Draw background layer
+    def draw(self):       
+        # # Draw background layer
         dot.draw_layer(self.bg_layer)
-        dot.stroke(dot.blue)
         # Draw foreground
-        dot.fill((255, 255, 0))
-        dot.circle((dot.mouse_x, dot.mouse_y), 50)
+        dot.stroke(dot.green)
+        dot.line((0,0),(dot.mouse_x, dot.mouse_y))
+        dot.no_stroke()
+        pts = np.random.random((1000,2))
+        [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 1) for pt in pts]            
 
 MySketch()          
 

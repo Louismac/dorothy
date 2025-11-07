@@ -928,7 +928,7 @@ class RAVEPlayer(AudioDevice):
             #https://github.com/acids-ircam/cached_conv
             import cached_conv as cc
             cc.use_cached_conv(True)
-            
+
             model_path = Path(model_path)
             ckpt_file = list(model_path.glob('*.ckpt'))[0]
             gin_file = list(model_path.glob('*.gin'))[0]
@@ -1155,6 +1155,44 @@ class RAVEPlayer(AudioDevice):
         
         handle = layer.register_forward_hook(noise_hook)
         self.hooks["noise"][layer_name][cluster_id] = handle
+
+
+    def add_lfo_hook(
+        self,
+        layer_name: str,
+        cluster_id: int = 0,
+        freq = 10, amp = 0.5
+    ):
+        """
+        Add noise to neuron activations
+        
+        Args:
+            layer_name: Layer name
+            cluster_neurons: Neurons to add noise to
+            noise_std: Standard deviation of noise
+            noise_type: 'gaussian' or 'uniform'
+        """
+        layer = self._get_layer(layer_name)
+        layer_clusters = self.cluster_results[layer_name]
+        neuron_indices = np.where(np.array(layer_clusters.cluster_labels) == cluster_id)[0].tolist()
+        
+        def lfo_hook(module, input, output):
+            if isinstance(output, torch.Tensor):
+                pass
+                # # Get current time/sample (this is simplified)
+                # t = torch.arange(output.shape[-1], device=output.device).float()
+                # oscillation = amp * torch.sin(
+                #     2 * np.pi * freq * t / 48000 + phase_offset
+                # )
+                
+                # if isinstance(output, torch.Tensor):
+                #     if len(output.shape) == 3:  # (batch, channels, time)
+                #         output[:, neuron_indices, :] *= (1 + oscillation)
+            
+            return output
+        
+        handle = layer.register_forward_hook(lfo_hook)
+        self.hooks["lfo"][layer_name][cluster_id] = handle
 
     def load_cluster_results(self, output_dir):
         self.hooks = {"noise":{},"ablation":{}}            

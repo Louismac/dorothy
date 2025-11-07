@@ -11,6 +11,7 @@ from .DorothyShaders import DOTSHADERS
 from dataclasses import dataclass
 from typing import List, Tuple, Literal
 from enum import Enum
+from itertools import groupby
 
 class DrawCommandType(Enum):
     RECTANGLE = "rectangle"
@@ -22,15 +23,16 @@ class DrawCommandType(Enum):
 class DrawCommand:
     """Represents a single draw command"""
     type: DrawCommandType
-    vertices: np.ndarray  # Pre-computed vertices
-    color: Tuple[float, float, float, float]
-    use_fill: bool
-    use_stroke: bool
-    stroke_weight: float
-    stroke_color: Tuple[float, float, float, float]
-    transform: np.ndarray  # Copy of transform matrix at time of call
-
-
+    fill_vertices: np.ndarray 
+    stroke_vertices: Optional[np.ndarray] = None 
+    color: Optional[Tuple[float, float, float, float]] = None
+    use_fill: bool = True
+    use_stroke: bool = False
+    stroke_weight: float = 1.0
+    stroke_color: Optional[Tuple[float, float, float, float]] = None
+    transform: np.ndarray = None
+    layer_id: Optional[int] = None
+    draw_order: int = 0 
 
 class Transform:
     """Manages transformation matrices""" 
@@ -103,6 +105,7 @@ class Camera:
 class DorothyRenderer:
     """Core rendering engine using ModernGL"""
     
+
     def __init__(self, ctx: moderngl.Context, width: int, height: int):
         self.ctx = ctx
         self.width = width
@@ -122,7 +125,8 @@ class DorothyRenderer:
         self.batch_vbo = None
         self.batch_vao = None
         self.max_batch_vertices = 100000  # Adjust based on needs
-        
+        self.draw_order_counter = 0
+
         # Transform and camera
         self.transform = Transform()
         self.camera = Camera(width, height)
@@ -700,69 +704,14 @@ class DorothyRenderer:
         else:
             raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
-    def _draw_thick_stroke(self, vertices, closed=False):
-        """Draw thick lines as quads instead of using line_width
-        
-        Args:
-            vertices: np.array of [x1, y1, x2, y2, ...] coordinates
-            closed: If True, connect last point to first
-        """
-        if self._stroke_weight <= 1.0:
-            # Use regular lines for weight 1
-            return None  # Signal to use regular line rendering
-        
-        thickness = self._stroke_weight
-        points = vertices.reshape(-1, 2)
-        
-        if len(points) < 2:
-            return None
-        
-        # If closed, add first point at end
-        if closed:
-            points = np.vstack([points, points[0:1]])
-        
-        # Build quad strip for thick line
-        quad_vertices = []
-        
-        for i in range(len(points) - 1):
-            x1, y1 = points[i]
-            x2, y2 = points[i + 1]
-            
-            # Calculate perpendicular direction
-            dx = x2 - x1
-            dy = y2 - y1
-            length = np.sqrt(dx*dx + dy*dy)
-            
-            if length < 0.001:
-                continue
-            
-            # Normalize and get perpendicular
-            dx /= length
-            dy /= length
-            px = -dy * thickness / 2
-            py = dx * thickness / 2
-            
-            # Add quad for this segment
-            quad_vertices.extend([
-                x1 + px, y1 + py,
-                x1 - px, y1 - py,
-                x2 + px, y2 + py,
-                x2 - px, y2 - py,
-            ])
-        
-        if not quad_vertices:
-            return None
-        
-        return np.array(quad_vertices, dtype='f4')
-    
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
         """Draw a rectangle (queued for batching)"""
         x1, y1 = pos1
         x2, y2 = pos2
         
         if self.enable_batching:
-            # Create vertices but don't draw yet
-            vertices = np.array([
+            # Fill vertices (2 triangles)
+            fill_verts = np.array([
                 x1, y1,
                 x2, y1,
                 x2, y2,
@@ -771,49 +720,40 @@ class DorothyRenderer:
                 x1, y2
             ], dtype='f4')
             
-            # Queue the draw command
+            # Stroke vertices (line loop - pairs of vertices for LINES mode)
+            stroke_verts = np.array([
+                x1, y1, x2, y1,  # Top edge
+                x2, y1, x2, y2,  # Right edge
+                x2, y2, x1, y2,  # Bottom edge
+                x1, y2, x1, y1,  # Left edge
+            ], dtype='f4')
+            
             cmd = DrawCommand(
                 type=DrawCommandType.RECTANGLE,
-                vertices=vertices,
+                fill_vertices=fill_verts,
+                stroke_vertices=stroke_verts,
                 color=self.fill_color if self.use_fill else None,
                 use_fill=self.use_fill,
                 use_stroke=self.use_stroke,
                 stroke_weight=self._stroke_weight,
                 stroke_color=self.stroke_color if self.use_stroke else None,
-                transform=self.transform.matrix  # Snapshot current transform
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter
             )
-            
+            self.draw_order_counter += 1
             self.draw_queue.append(cmd)
-        else:
-            # Immediate mode (old behavior, for debugging)
-            self._draw_rectangle_immediate(pos1, pos2)
     
-    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
-        """Draw a circle"""
-        if self.enable_batching:
-            # Generate vertices as triangle list
-            vertices = self._create_circle_vertices_triangles(center, radius)
-            
-            cmd = DrawCommand(
-                type=DrawCommandType.CIRCLE,
-                vertices=vertices,
-                color=self.fill_color if self.use_fill else None,
-                use_fill=self.use_fill,
-                use_stroke=self.use_stroke,
-                stroke_weight=self._stroke_weight,
-                stroke_color=self.stroke_color if self.use_stroke else None,
-                transform=self.transform.matrix
-            )
-            
-            self.draw_queue.append(cmd)
-        else:
-            self._draw_circle_immediate(center, radius)
-
-    def _create_circle_vertices_triangles(self, center, radius, segments=32):
-        """Create circle as explicit triangles (not fan)"""
-        cx, cy = center
-        vertices = []
+    def _create_circle_vertices(self, center, radius, segments=32):
+        """Create circle fill and stroke vertices
         
+        Returns:
+            (fill_vertices, stroke_vertices)
+        """
+        cx, cy = center
+        
+        # Fill vertices (triangles)
+        fill_verts = []
         for i in range(segments):
             angle1 = 2 * np.pi * i / segments
             angle2 = 2 * np.pi * (i + 1) / segments
@@ -823,11 +763,47 @@ class DorothyRenderer:
             x2 = cx + radius * np.cos(angle2)
             y2 = cy + radius * np.sin(angle2)
             
-            # One triangle per segment
-            vertices.extend([cx, cy, x1, y1, x2, y2])
+            # Triangle: center -> point1 -> point2
+            fill_verts.extend([cx, cy, x1, y1, x2, y2])
         
-        return np.array(vertices, dtype='f4')
+        # Stroke vertices (line segments around perimeter)
+        stroke_verts = []
+        for i in range(segments):
+            angle1 = 2 * np.pi * i / segments
+            angle2 = 2 * np.pi * (i + 1) / segments
+            
+            x1 = cx + radius * np.cos(angle1)
+            y1 = cy + radius * np.sin(angle1)
+            x2 = cx + radius * np.cos(angle2)
+            y2 = cy + radius * np.sin(angle2)
+            
+            # Line segment (pair of vertices for LINES mode)
+            stroke_verts.extend([x1, y1, x2, y2])
         
+        return np.array(fill_verts, dtype='f4'), np.array(stroke_verts, dtype='f4')
+
+
+    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
+        """Draw a circle (queued for batching)"""
+        if self.enable_batching:
+            fill_verts, stroke_verts = self._create_circle_vertices(center, radius)
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.CIRCLE,
+                fill_vertices=fill_verts,
+                stroke_vertices=stroke_verts,
+                color=self.fill_color if self.use_fill else None,
+                use_fill=self.use_fill,
+                use_stroke=self.use_stroke,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color if self.use_stroke else None,
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter
+            )
+            self.draw_order_counter += 1
+            self.draw_queue.append(cmd)
+            
     def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
         """Draw a line (queued for batching)"""
         if self.enable_batching:
@@ -835,18 +811,19 @@ class DorothyRenderer:
             
             cmd = DrawCommand(
                 type=DrawCommandType.LINE,
-                vertices=vertices,
+                stroke_vertices=vertices,
+                fill_vertices=None,
                 color=self.stroke_color,
                 use_fill=False,
                 use_stroke=True,
                 stroke_weight=self._stroke_weight,
                 stroke_color=self.stroke_color,
-                transform=self.transform
+                transform=self.transform,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter
             )
-            
+            self.draw_order_counter += 1
             self.draw_queue.append(cmd)
-        else:
-            self._draw_line_immediate(pos1, pos2)
     
     def flush_batch(self):
         """Execute all queued draw commands in batches"""
@@ -865,82 +842,91 @@ class DorothyRenderer:
         self.draw_queue.clear()
     
     def _group_commands_into_batches(self):
-        """Group draw commands by rendering state for efficient batching
+        """Create minimal batches while preserving draw order
         
-        Returns:
-            List of batches, where each batch contains commands that can be drawn together
+        Strategy: Batch consecutive commands with same render state
         """
-        from itertools import groupby
+        if not self.draw_queue:
+            return []
         
-        # Sort commands by (type, color, stroke_weight, transform)
-        # Commands with same state can be batched together
-        def batch_key(cmd):
-            # Create a hashable key for batching
-            color_key = tuple(cmd.color) if cmd.color is not None else None
-            stroke_key = (cmd.use_stroke, tuple(cmd.stroke_color), cmd.stroke_weight) if cmd.use_stroke else None
-            # For transforms, we'd need to hash the matrix (skip for now, batch per-transform)
-            return (cmd.type, color_key, stroke_key, cmd.use_fill)
+        # Sort by draw order
+        sorted_cmds = sorted(self.draw_queue, key=lambda c: c.draw_order)
         
-        # Group by key
-        sorted_cmds = sorted(self.draw_queue, key=batch_key)
         batches = []
+        current_batch = [sorted_cmds[0]]
         
-        for key, group in groupby(sorted_cmds, key=batch_key):
-            batches.append(list(group))
+        def state_key(cmd):
+            """Get rendering state for a command"""
+            fill_key = tuple(cmd.color) if cmd.use_fill and cmd.color else None
+            stroke_key = (tuple(cmd.stroke_color), cmd.stroke_weight) if cmd.use_stroke else None
+            return (cmd.type, fill_key, stroke_key, cmd.use_fill, cmd.use_stroke)
+        
+        current_state = state_key(sorted_cmds[0])
+        
+        for cmd in sorted_cmds[1:]:
+            cmd_state = state_key(cmd)
+            
+            if cmd_state == current_state:
+                # Same state - add to current batch
+                current_batch.append(cmd)
+            else:
+                # State changed - start new batch
+                batches.append(current_batch)
+                current_batch = [cmd]
+                current_state = cmd_state
+        
+        # Add final batch
+        if current_batch:
+            batches.append(current_batch)
         
         return batches
     
     def _render_batch(self, commands: List[DrawCommand]):
-        """Render a batch of similar commands in one draw call"""
+        """Render a batch of similar commands with fill and stroke support"""
         if not commands:
             return
         
-        # All commands in batch have same type and rendering state
         first_cmd = commands[0]
         
-        # Combine all vertices
-        all_vertices = []
-        for cmd in commands:
-            all_vertices.append(cmd.vertices)
-        
-        combined_vertices = np.concatenate(all_vertices)
-        
-        # Create buffer for entire batch
-        vbo = self.ctx.buffer(combined_vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_2d, vbo, 'in_position')
-        
-        # Set rendering state (same for all in batch)
+        # Set up rendering state
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        
-        # For now, use identity transform (we'd need instancing for per-shape transforms)
-        # Or render each transform group separately
         self.shader_2d['model'].write(self.transform.matrix)
         
+        # Render FILL pass
         if first_cmd.use_fill and first_cmd.color is not None:
+            # Combine fill vertices
+            all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands])
+            
+            fill_vbo = self.ctx.buffer(all_fill_verts)
+            fill_vao = self.ctx.simple_vertex_array(self.shader_2d, fill_vbo, 'in_position')
+            
             self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
             
-            # Determine primitive type
-            if first_cmd.type == DrawCommandType.RECTANGLE:
-                vao.render(moderngl.TRIANGLES)
-            elif first_cmd.type == DrawCommandType.CIRCLE:
-                # Need to render multiple fans - more complex
-                # For now, render as triangles if pre-tessellated
-                vao.render(moderngl.TRIANGLES)
-            elif first_cmd.type == DrawCommandType.LINE:
-                vao.render(moderngl.LINES)
-        
-        # Handle stroke separately if needed
-        if first_cmd.use_stroke:
+            # Render based on type (all use TRIANGLES for fill)
+            fill_vao.render(moderngl.TRIANGLES)
             
-            self.ctx.line_width = 1.0
-            self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
-            vao.render(moderngl.LINE_STRIP)
+            fill_vao.release()
+            fill_vbo.release()
         
-        vao.release()
-        vbo.release()
+        # Render STROKE pass
+        if first_cmd.use_stroke and first_cmd.stroke_color is not None:
+            # Combine stroke vertices
+            all_stroke_verts = np.concatenate([cmd.stroke_vertices for cmd in commands if cmd.stroke_vertices is not None])
+            
+            if len(all_stroke_verts) > 0:
+                stroke_vbo = self.ctx.buffer(all_stroke_verts)
+                stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
+                
+                self.ctx.line_width = first_cmd.stroke_weight
+                self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+                
+                # All stroke vertices use LINES mode (pairs of vertices)
+                stroke_vao.render(moderngl.LINES)
+                
+                stroke_vao.release()
+                stroke_vbo.release()
 
     def polyline(self, points, closed: bool = False):
         """Draw a polyline (connected line segments)"""
