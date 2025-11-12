@@ -16,7 +16,14 @@ class MySketch:
         #Output RAVE from speakers
         latent_dim = 8
         
-        rave_id = dot.music.start_rave_stream("models/taylor_vocals.ts", latent_dim=latent_dim)
+        # rave_id = dot.music.start_rave_stream("models/taylor_vocals.ts", latent_dim=latent_dim)
+
+        latent_dim = 128
+        
+        rave_id = dot.music.start_rave_stream(
+            "models/taylor_vocal/", 
+            latent_dim=latent_dim, output_device=3)
+
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)
         # rave_id = dot.music.start_rave_stream("models/taylor.ts", latent_dim=latent_dim, output_device = 1)
@@ -27,7 +34,7 @@ class MySketch:
         
         ########## RUN FROM INPUT DEVICE ########## 
         #pass in the number of the device you want to input to RAVE e.g. blackhole or mic
-        device_id = dot.music.start_device_stream(3)
+        device_id = dot.music.start_device_stream(2, buffer_size=4096)
         dot.music.update_rave_from_stream(device_id)
 
         ########## RUN FROM FILE ########## 
@@ -79,15 +86,15 @@ class MySketch:
     def draw(self):
         dot.background((255,255,255))
 
-        for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
-            bin_val = bin_val * 10
-            pt1 = (bin_num*50, dot.height)
-            pt2 = (0, dot.height-int(bin_val*1000))
-            color = (0,(1-bin_val)*255,0)
-            thickness = 1+int(bin_val*2)
-            dot.stroke(color)
-            dot.set_stroke_weight(thickness)
-            dot.line(pt1, pt2)
+        # for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
+        #     bin_val = bin_val * 10
+        #     pt1 = (bin_num*50, dot.height)
+        #     pt2 = (0, dot.height-int(bin_val*1000))
+        #     color = (0,(1-bin_val)*255,0)
+        #     thickness = 1+int(bin_val*2)
+        #     dot.stroke(color)
+        #     dot.set_stroke_weight(thickness)
+        #     dot.line(pt1, pt2)
 
 MySketch()          
 

@@ -27,7 +27,13 @@ class MySketch:
         
     def draw(self):
         dot.fill(dot.red)
+        dot.set_stroke_weight(5)
+        dot.stroke(dot.blue)
         dot.circle((dot.width//2,dot.height//2),100)
+        dot.set_stroke_weight(20)
+        dot.rectangle((dot.width//2,dot.height//2),(100,100))
+        dot.set_stroke_weight(10)
+        dot.line((dot.width//2,dot.height//2),(0,0))
         dot.apply_shader(self.feedback, accumulate=True, zoom=1-(dot.music.amplitude()*0.25))
 
 MySketch()   

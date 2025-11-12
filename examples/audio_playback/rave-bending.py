@@ -17,7 +17,7 @@ class MySketch:
         latent_dim = 128
         
         rave_id = dot.music.start_rave_stream(
-            "/Users/lmccallum/Documents/checkpoints/RAVE/taylor_vocals_mono_e18d54798e/", 
+            "models/drum_loops/", 
             latent_dim=latent_dim, output_device=4, buffer_size = 1024)
         
         # rave_id = dot.music.start_rave_stream(

@@ -963,7 +963,7 @@ class RAVEPlayer(AudioDevice):
 
     def _initialize_caches(self):
         """Force cache initialization"""
-        dummy = torch.zeros(1, 1, 2**14)
+        dummy = torch.zeros(1, self.model.n_channels, 2**14)
         
         with torch.no_grad():
             # This creates cache buffers
@@ -1003,6 +1003,7 @@ class RAVEPlayer(AudioDevice):
         # Encode
         with torch.no_grad():
             x = torch.from_numpy(full_input).reshape(1, 1, -1).to(self.device)
+            x = x.repeat(1, self.model.n_channels, 1)
             z = self.model.encode(x)
             #just take mean (drop std)
             if z.shape[1] == self.latent_dim*2:

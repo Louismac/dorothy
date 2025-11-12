@@ -37,7 +37,7 @@ Requires-Dist: psutil==5.9.6
 Requires-Dist: pycparser==2.21
 Requires-Dist: requests==2.31.0
 Requires-Dist: scikit-learn==1.7.2
-Requires-Dist: scipy>1.15.0
+Requires-Dist: scipy>=1.10.0
 Requires-Dist: sounddevice==0.4.6
 Requires-Dist: soundfile==0.12.1
 Requires-Dist: soxr==1.0.0
