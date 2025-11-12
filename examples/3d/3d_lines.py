@@ -49,7 +49,6 @@ class Example3D:
                 x = np.cos(angle) * radius
                 z = np.sin(angle) * radius
                 y = i / 100
-                print((x, y, z))
                 points.append((x, y, z))
 
             dot.stroke((255, 255, 0))

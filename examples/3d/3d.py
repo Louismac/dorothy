@@ -19,7 +19,7 @@ class Example3D:
         with dot.transform():
             dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
             dot.fill((100, 100, 255, 128))
-            dot.box((1, 1, 1), (0.5, 0, 0))
+            dot.box(1, 1, 1)
 
         # Switch to 2D for rectangle
         dot.camera_2d()

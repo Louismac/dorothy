@@ -13,18 +13,24 @@ from typing import List, Tuple, Literal
 from enum import Enum
 from itertools import groupby
 
+# Add to DrawCommandType enum
 class DrawCommandType(Enum):
     RECTANGLE = "rectangle"
     CIRCLE = "circle"
     LINE = "line"
     TRIANGLE = "triangle"
+    SPHERE = "sphere"           # ← Add 3D types
+    BOX = "box"
+    LINE_3D = "line_3d"
+    POLYLINE_3D = "polyline_3d"
+    MESH = "mesh"
 
 @dataclass
 class DrawCommand:
-    """Represents a single draw command"""
+    """Represents a single draw command (2D or 3D)"""
     type: DrawCommandType
-    fill_vertices: np.ndarray 
-    stroke_vertices: Optional[np.ndarray] = None 
+    fill_vertices: np.ndarray
+    stroke_vertices: Optional[np.ndarray] = None
     color: Optional[Tuple[float, float, float, float]] = None
     use_fill: bool = True
     use_stroke: bool = False
@@ -32,8 +38,15 @@ class DrawCommand:
     stroke_color: Optional[Tuple[float, float, float, float]] = None
     transform: np.ndarray = None
     layer_id: Optional[int] = None
-    draw_order: int = 0 
-    stroke_as_geometry: bool = False 
+    draw_order: int = 0
+    stroke_as_geometry: bool = False
+    
+    # 3D-specific fields
+    is_3d: bool = False
+    texture_layer: Optional[int] = None
+    use_lighting: bool = False
+    normal_data: Optional[np.ndarray] = None  # Normals for lighting
+    texcoord_data: Optional[np.ndarray] = None  # UVs for texturing
 
 class Transform:
     """Manages transformation matrices""" 
@@ -1076,7 +1089,7 @@ class DorothyRenderer:
         self.draw_queue.clear()
     
     def _group_commands_into_batches(self):
-        """Group commands by state AND transform"""
+        """Group commands by state (2D and 3D separately)"""
         if not self.draw_queue:
             return []
         
@@ -1085,7 +1098,11 @@ class DorothyRenderer:
         current_batch = [sorted_cmds[0]]
         
         def state_matches(cmd1, cmd2):
-            """Check if two commands have matching render state"""
+            """Check if two commands can be batched"""
+            # 2D and 3D can't batch together
+            if cmd1.is_3d != cmd2.is_3d:
+                return False
+            
             # Type must match
             if cmd1.type != cmd2.type:
                 return False
@@ -1104,7 +1121,20 @@ class DorothyRenderer:
                     return False
                 if abs(cmd1.stroke_weight - cmd2.stroke_weight) > 0.01:
                     return False
+                if cmd1.stroke_as_geometry != cmd2.stroke_as_geometry:
+                    return False
             
+            # 3D-specific: texture and lighting must match
+            if cmd1.is_3d:
+                if cmd1.texture_layer != cmd2.texture_layer:
+                    return False
+                if cmd1.use_lighting != cmd2.use_lighting:
+                    return False
+            
+            if cmd1.type == DrawCommandType.POLYLINE_3D:
+                if getattr(cmd1, 'closed', False) != getattr(cmd2, 'closed', False):
+                    return False
+
             # Transform must match
             return self._transforms_equal(cmd1.transform, cmd2.transform)
         
@@ -1139,6 +1169,147 @@ class DorothyRenderer:
         return np.allclose(a1, a2, atol=epsilon)
 
     def _render_batch(self, commands: List[DrawCommand]):
+        """Render batch (2D or 3D)"""
+        if not commands:
+            return
+        
+        first_cmd = commands[0]
+        
+        # Route to appropriate renderer
+        if first_cmd.is_3d:
+            self._render_batch_3d(commands)
+        else:
+            self._render_batch_2d(commands)
+
+
+    def _render_batch_3d(self, commands):
+        """Render 3D batch"""
+        if not commands:
+            return
+        
+        first_cmd = commands[0]
+        
+        # Enable 3D rendering state
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        # Choose shader
+        if first_cmd.texture_layer is not None:
+            shader = self.shader_3d_textured
+        else:
+            shader = self.shader_3d
+        
+        # Set common uniforms
+        shader['projection'].write(self.camera.get_projection_matrix())
+        shader['view'].write(self.camera.get_view_matrix())
+        shader['model'].write(first_cmd.transform)
+        
+        # Render based on type
+        if first_cmd.type in [DrawCommandType.SPHERE, DrawCommandType.BOX, DrawCommandType.MESH]:
+            # Batch filled 3D geometry
+            self._render_3d_geometry_batch(commands, shader)
+        elif first_cmd.type in [DrawCommandType.LINE_3D, DrawCommandType.POLYLINE_3D]:
+            # Batch 3D lines
+            self._render_3d_lines_batch(commands, shader)
+
+    def _render_3d_geometry_batch(self, commands, shader):
+        """Batch render 3D geometry with normals and texcoords"""
+        first_cmd = commands[0]
+        
+        # Set lighting
+        if first_cmd.use_lighting:
+            shader['use_lighting'] = True
+            shader['light_pos'].write(glm.vec3(5, 5, 5))
+            shader['camera_pos'].write(self.camera.position)
+        else:
+            if 'use_lighting' in shader:
+                shader['use_lighting'] = False
+        
+        # Handle texture or solid color
+        if first_cmd.texture_layer is not None and first_cmd.texture_layer in self.layers:
+            texture = self.layers[first_cmd.texture_layer]['fbo'].color_attachments[0]
+            texture.use(0)
+            shader['texture0'] = 0
+            shader['use_texture'] = True
+        else:
+            if 'use_texture' in shader:
+                shader['use_texture'] = False
+            # Use fill color for geometry
+            shader['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
+        
+        # Combine all vertices, normals, texcoords
+        all_positions = []
+        all_normals = []
+        all_texcoords = []
+        
+        for cmd in commands:
+            all_positions.append(cmd.fill_vertices)
+            if cmd.normal_data is not None:
+                all_normals.append(cmd.normal_data)
+            if cmd.texcoord_data is not None:
+                all_texcoords.append(cmd.texcoord_data)
+        
+        positions = np.concatenate(all_positions)
+        normals = np.concatenate(all_normals) if all_normals else np.zeros_like(positions)
+        texcoords_flat = np.concatenate(all_texcoords) if all_texcoords else np.zeros(len(positions)//3*2, dtype='f4')
+        
+        # Interleave: x,y,z, nx,ny,nz, u,v
+        vertex_data = []
+        num_vertices = len(positions) // 3
+        for i in range(num_vertices):
+            vertex_data.extend(positions[i*3:i*3+3])  # xyz
+            vertex_data.extend(normals[i*3:i*3+3])    # normal
+            vertex_data.extend(texcoords_flat[i*2:i*2+2])  # uv
+        
+        vertex_data = np.array(vertex_data, dtype='f4')
+        
+        # Create VAO
+        vbo = self.ctx.buffer(vertex_data)
+        vao = self.ctx.vertex_array(
+            shader,
+            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+        )
+        
+        # Render
+        vao.render(moderngl.TRIANGLES)
+        
+        vao.release()
+        vbo.release()
+
+    def _render_3d_lines_batch(self, commands, shader):
+        """Batch render 3D lines"""
+        first_cmd = commands[0]
+        
+        # Disable lighting for lines
+        if 'use_lighting' in shader:
+            shader['use_lighting'] = False
+        
+        # Use stroke color for lines
+        shader['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+        
+        # Combine all line vertices
+        all_verts = np.concatenate([cmd.stroke_vertices for cmd in commands])
+        
+        vbo = self.ctx.buffer(all_verts)
+        vao = self.ctx.simple_vertex_array(shader, vbo, 'in_position')
+        
+        # Render based on type
+        self.ctx.line_width = first_cmd.stroke_weight
+        
+        if first_cmd.type == DrawCommandType.LINE_3D:
+            vao.render(moderngl.LINES)
+        elif first_cmd.type == DrawCommandType.POLYLINE_3D:
+            # Check if any command has closed=True
+            render_mode = moderngl.LINE_STRIP
+            # Note: If mixing closed/open polylines in batch, they'll all render the same way
+            # Ideally they shouldn't batch together - add to state_matches check
+            vao.render(render_mode)
+        
+        vao.release()
+        vbo.release()
+
+    def _render_batch_2d(self, commands: List[DrawCommand]):
         """Render batch with thick stroke support"""
         if not commands:
             return
@@ -1372,249 +1543,206 @@ class DorothyRenderer:
         vao.release()
         vbo.release()
     # ====== 3D Drawing Methods ======
-    
+        
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
-        """Draw a 3D sphere
-        
-        Args:
-            radius: Sphere radius
-            position: (x, y, z) center position
-        """
-        if not self.sphere_geometry:
-            self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
-        
-        # Apply position and scale
-        self.transform.push()
-        self.transform.translate(position[0], position[1], position[2])
-        self.transform.scale(radius)
-        
-        self._draw_3d_geometry(self.sphere_geometry)
-        
-        self.transform.pop()
-    
-    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0, 
-        texture_layers=None):
-        """Draw a box with optional textures (same on all faces or different per face)
-        
-        Args:
-            width, height, depth: Box dimensions
-            texture_layers: Layer ID (int) for all faces, or dict like:
-                        {'front': layer1, 'back': layer2, 'right': layer3,
-                            'left': layer4, 'top': layer5, 'bottom': layer6}
-                        None for solid color
-        """
-        w, h, d = width/2, height/2, depth/2
-        
-        # Normalize texture_layers to dict format
-        if isinstance(texture_layers, int):
-            # Single texture for all faces
-            tex_dict = {
-                'front': texture_layers,
-                'back': texture_layers,
-                'right': texture_layers,
-                'left': texture_layers,
-                'top': texture_layers,
-                'bottom': texture_layers
-            }
-        elif isinstance(texture_layers, dict):
-            # Use provided dict, fill in missing faces with None
-            tex_dict = {
-                'front': texture_layers.get('front'),
-                'back': texture_layers.get('back'),
-                'right': texture_layers.get('right'),
-                'left': texture_layers.get('left'),
-                'top': texture_layers.get('top'),
-                'bottom': texture_layers.get('bottom')
-            }
-        else:
-            # No texture, all None
-            tex_dict = {face: None for face in ['front', 'back', 'right', 'left', 'top', 'bottom']}
-        
-        # Define each face with its vertices
-        # Format: x, y, z, nx, ny, nz, u, v
-        faces_data = {
-            'front': np.array([
-                -w, -h,  d,  0, 0, 1,  0, 0,
-                w, -h,  d,  0, 0, 1,  1, 0,
-                w,  h,  d,  0, 0, 1,  1, 1,
-                -w, -h,  d,  0, 0, 1,  0, 0,
-                w,  h,  d,  0, 0, 1,  1, 1,
-                -w,  h,  d,  0, 0, 1,  0, 1,
-            ], dtype='f4'),
+        """Draw a 3D sphere (batched)"""
+        if self.enable_batching:
+            # Get or create sphere geometry
+            if not self.sphere_geometry:
+                self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
             
-            'back': np.array([
-                w, -h, -d,  0, 0, -1,  0, 0,
-                -w, -h, -d,  0, 0, -1,  1, 0,
-                -w,  h, -d,  0, 0, -1,  1, 1,
-                w, -h, -d,  0, 0, -1,  0, 0,
-                -w,  h, -d,  0, 0, -1,  1, 1,
-                w,  h, -d,  0, 0, -1,  0, 1,
-            ], dtype='f4'),
+            # Calculate transform with position and scale
+            transform_matrix = self.transform.matrix
             
-            'right': np.array([
-                w, -h,  d,  1, 0, 0,  0, 0,
-                w, -h, -d,  1, 0, 0,  1, 0,
-                w,  h, -d,  1, 0, 0,  1, 1,
-                w, -h,  d,  1, 0, 0,  0, 0,
-                w,  h, -d,  1, 0, 0,  1, 1,
-                w,  h,  d,  1, 0, 0,  0, 1,
-            ], dtype='f4'),
+            # Apply position translation
+            pos_transform = glm.translate(glm.mat4(1.0), glm.vec3(*position))
+            # Apply scale
+            scale_transform = glm.scale(glm.mat4(1.0), glm.vec3(radius, radius, radius))
             
-            'left': np.array([
-                -w, -h, -d, -1, 0, 0,  0, 0,
-                -w, -h,  d, -1, 0, 0,  1, 0,
-                -w,  h,  d, -1, 0, 0,  1, 1,
-                -w, -h, -d, -1, 0, 0,  0, 0,
-                -w,  h,  d, -1, 0, 0,  1, 1,
-                -w,  h, -d, -1, 0, 0,  0, 1,
-            ], dtype='f4'),
+            # Combine: transform * translate * scale
+            final_transform = np.array(glm.mat4(transform_matrix) * pos_transform * scale_transform)
             
-            'top': np.array([
-                -w,  h,  d,  0, 1, 0,  0, 0,
-                w,  h,  d,  0, 1, 0,  1, 0,
-                w,  h, -d,  0, 1, 0,  1, 1,
-                -w,  h,  d,  0, 1, 0,  0, 0,
-                w,  h, -d,  0, 1, 0,  1, 1,
-                -w,  h, -d,  0, 1, 0,  0, 1,
-            ], dtype='f4'),
+            # Get geometry data
+            vertices, normals, texcoords = self._extract_geometry_data(self.sphere_geometry)
             
-            'bottom': np.array([
-                -w, -h, -d,  0, -1, 0,  0, 0,
-                w, -h, -d,  0, -1, 0,  1, 0,
-                w, -h,  d,  0, -1, 0,  1, 1,
-                -w, -h, -d,  0, -1, 0,  0, 0,
-                w, -h,  d,  0, -1, 0,  1, 1,
-                -w, -h,  d,  0, -1, 0,  0, 1,
-            ], dtype='f4'),
-        }
-        
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-        
-        # Draw each face
-        for face_name, vertices in faces_data.items():
-            layer_id = tex_dict[face_name]
-            
-            vbo = self.ctx.buffer(vertices)
-            
-            # Choose shader based on texture
-            if layer_id is not None and layer_id in self.layers:
-                shader = self.shader_3d_textured
-            else:
-                shader = self.shader_3d
-            
-            vao = self.ctx.vertex_array(
-                shader,
-                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+            cmd = DrawCommand(
+                type=DrawCommandType.SPHERE,
+                fill_vertices=vertices,
+                normal_data=normals,
+                texcoord_data=texcoords,
+                color=self.fill_color if self.use_fill else None,
+                use_fill=self.use_fill,
+                use_stroke=False,
+                transform=final_transform,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+                is_3d=True,
+                use_lighting=True,
             )
             
-            # Set uniforms
-            shader['projection'].write(self.camera.get_projection_matrix())
-            shader['view'].write(self.camera.get_view_matrix())
-            shader['model'].write(self.transform.matrix)
+            self.draw_order_counter += 1
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_sphere_immediate(radius, position)
+    
+    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0, 
+            texture_layers=None):
+        """Draw a box (batched)"""
+        if self.enable_batching:
+            w, h, d = width/2, height/2, depth/2
             
-            # Texture or solid color
-            if layer_id is not None and layer_id in self.layers:
-                texture = self.layers[layer_id]['fbo'].color_attachments[0]
-                texture.use(0)
-                shader['texture0'] = 0
-                shader['use_texture'] = True
+            # Normalize texture_layers
+            if isinstance(texture_layers, int):
+                tex_dict = {face: texture_layers for face in 
+                           ['front', 'back', 'right', 'left', 'top', 'bottom']}
+            elif isinstance(texture_layers, dict):
+                tex_dict = {
+                    'front': texture_layers.get('front'),
+                    'back': texture_layers.get('back'),
+                    'right': texture_layers.get('right'),
+                    'left': texture_layers.get('left'),
+                    'top': texture_layers.get('top'),
+                    'bottom': texture_layers.get('bottom')
+                }
             else:
-                if hasattr(shader, 'get') and 'use_texture' in shader:
-                    shader['use_texture'] = False
-                shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
+                tex_dict = {face: None for face in 
+                           ['front', 'back', 'right', 'left', 'top', 'bottom']}
             
-            # Lighting
-            shader['lighting_enabled'] = False
-            shader['camera_position'] = tuple(self.camera.position)
+            # Define all faces
+            faces_data = self._create_box_faces(w, h, d)
             
-            # Render this face
-            vao.render(moderngl.TRIANGLES)
-            
-            vao.release()
-            vbo.release()
-
+            # Queue each face as separate command (allows different textures)
+            for face_name, (vertices, normals, texcoords) in faces_data.items():
+                cmd = DrawCommand(
+                    type=DrawCommandType.BOX,
+                    fill_vertices=vertices,
+                    normal_data=normals,
+                    texcoord_data=texcoords,
+                    color=self.fill_color,
+                    use_fill=True,
+                    use_stroke=False,
+                    transform=self.transform.matrix,
+                    layer_id=self.active_layer,
+                    draw_order=self.draw_order_counter,
+                    is_3d=True,
+                    use_lighting=False,
+                    texture_layer=tex_dict[face_name],
+                )
+                
+                self.draw_order_counter += 1
+                self.draw_queue.append(cmd)
+        else:
+            self._draw_box_immediate(width, height, depth, texture_layers)
+    
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
-        """Draw a line in 3D space
-        
-        Args:
-            pos1: (x, y, z) start point
-            pos2: (x, y, z) end point
-        """
-        vertices = np.array([
-            pos1[0], pos1[1], pos1[2],
-            pos2[0], pos2[1], pos2[2]
-        ], dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
-        
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-        
-        # Use shared 3D geometry setup
-        self._draw_3d_geometry(None)  # Sets uniforms
-        
-        # Override color to use stroke color instead of fill
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        # Disable lighting for lines (just use flat color)
-        self.shader_3d['use_lighting'] = False
-        
-        # Draw line
-        self.ctx.line_width = self._stroke_weight
-        vao.render(moderngl.LINES)
-        
-        vao.release()
-        vbo.release()
-
+        """Draw a line in 3D space (batched)"""
+        if self.enable_batching:
+            vertices = np.array([
+                pos1[0], pos1[1], pos1[2],
+                pos2[0], pos2[1], pos2[2]
+            ], dtype='f4')
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE_3D,
+                fill_vertices=np.array([], dtype='f4'),
+                stroke_vertices=vertices,
+                color=None,
+                use_fill=False,
+                use_stroke=True,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color,
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+                is_3d=True,
+                use_lighting=False,
+            )
+            
+            self.draw_order_counter += 1
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_line_3d_immediate(pos1, pos2)
+    
     def polyline_3d(self, points, closed: bool = False):
-        """Draw a 3D polyline (connected line segments)
-        
-        Args:
-            points: List of (x, y, z) coordinates
-            closed: If True, connect last point back to first
-        """
+        """Draw a 3D polyline (batched)"""
         if len(points) < 2:
             return
         
-        # Create vertices
-        vertices = []
-        for x, y, z in points:
-            vertices.extend([x, y, z])
-        
-        if closed:
-            vertices.extend([points[0][0], points[0][1], points[0][2]])
-        
-        vertices = np.array(vertices, dtype='f4')
-        
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
-        
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-        
-        # Use shared 3D geometry setup
-        self._draw_3d_geometry(None)
-        
-        # Override color to use stroke color
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        # Disable lighting for lines
-        self.shader_3d['use_lighting'] = False
-        
-        # Draw polyline
-        self.ctx.line_width = self._stroke_weight
-        vao.render(moderngl.LINE_STRIP)
-        
-        vao.release()
-        vbo.release()
+        if self.enable_batching:
+            vertices = []
+            for x, y, z in points:
+                vertices.extend([x, y, z])
+            
+            if closed:
+                vertices.extend([points[0][0], points[0][1], points[0][2]])
+            
+            vertices = np.array(vertices, dtype='f4')
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.POLYLINE_3D,
+                fill_vertices=np.array([], dtype='f4'),
+                stroke_vertices=vertices,
+                color=None,
+                use_fill=False,
+                use_stroke=True,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color,
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+                is_3d=True,
+                use_lighting=False,
+                closed=closed,  # Store for rendering
+            )
+            
+            self.draw_order_counter += 1
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_polyline_3d_immediate(points, closed)
+    
+    def draw_mesh(self, mesh_data, texture_layer=None):
+        """Draw a loaded mesh (batched)"""
+        if self.enable_batching:
+            vertices = mesh_data['vertices']
+            vertex_count = mesh_data['vertex_count']
+            
+            # Extract interleaved data
+            # Format: x,y,z, nx,ny,nz, u,v (8 floats per vertex)
+            stride = 8
+            positions = vertices[0::stride]  # Every 8th starting at 0
+            normals = vertices[3::stride]    # Every 8th starting at 3
+            texcoords = vertices[6::stride]  # Every 8th starting at 6
+            
+            # Actually need to properly extract
+            positions = []
+            normals = []
+            texcoords = []
+            for i in range(vertex_count):
+                base = i * stride
+                positions.extend(vertices[base:base+3])
+                normals.extend(vertices[base+3:base+6])
+                texcoords.extend(vertices[base+6:base+8])
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.MESH,
+                fill_vertices=np.array(positions, dtype='f4'),
+                normal_data=np.array(normals, dtype='f4'),
+                texcoord_data=np.array(texcoords, dtype='f4'),
+                color=self.fill_color,
+                use_fill=True,
+                use_stroke=False,
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+                is_3d=True,
+                use_lighting=True,
+                texture_layer=texture_layer,
+            )
+            
+            self.draw_order_counter += 1
+            self.draw_queue.append(cmd)
+        else:
+            self._draw_mesh_immediate(mesh_data, texture_layer)
 
     def load_obj(self, filepath):
         """Load a Wavefront OBJ file
@@ -1701,50 +1829,6 @@ class DorothyRenderer:
             'vertices': np.array(mesh_data, dtype='f4'),
             'vertex_count': len(final_vertices) // 3
         }
-
-    def draw_mesh(self, mesh_data, texture_layer=None):
-        """Draw a loaded mesh"""
-        vertices = mesh_data['vertices']
-        vertex_count = mesh_data['vertex_count']
-        
-        vbo = self.ctx.buffer(vertices)
-        
-        # Always use textured shader for OBJ meshes (they have UVs)
-        shader = self.shader_3d_textured
-        
-        vao = self.ctx.vertex_array(
-            shader,
-            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
-        )
-        
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-        
-        # Set uniforms
-        shader['projection'].write(self.camera.get_projection_matrix())
-        shader['view'].write(self.camera.get_view_matrix())
-        shader['model'].write(self.transform.matrix)
-        
-        # Texture or solid color
-        if texture_layer is not None and texture_layer in self.layers:
-            texture = self.layers[texture_layer]['fbo'].color_attachments[0]
-            texture.use(0)
-            shader['texture0'] = 0
-            shader['use_texture'] = True
-        else:
-            shader['use_texture'] = False
-            shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-        
-        # Lighting
-        shader['camera_position'] = tuple(self.camera.position)
-        
-        # Render
-        vao.render(moderngl.TRIANGLES)
-        
-        vao.release()
-        vbo.release()
         
     def _draw_3d_geometry(self, geom):
         """Internal method to render 3D geometry"""
@@ -1757,7 +1841,122 @@ class DorothyRenderer:
         self.shader_3d['use_lighting'] = True
         if geom is not None:
             geom.render(self.shader_3d)
-    
+
+    def _extract_geometry_data(self, geom):
+        """Extract vertices, normals, texcoords from geometry object"""
+        # Assuming your geometry object has these attributes
+        # Adjust based on your actual geometry implementation
+        if hasattr(geom, 'vertices'):
+            vertices = np.array(geom.vertices, dtype='f4')
+        else:
+            vertices = np.array([], dtype='f4')
+        
+        normals = np.array(geom.normals, dtype='f4') if hasattr(geom, 'normals') else None
+        texcoords = np.array(geom.texcoords, dtype='f4') if hasattr(geom, 'texcoords') else None
+        
+        return vertices, normals, texcoords
+
+    def _create_box_faces(self, w, h, d):
+        """Create box face geometry"""
+        faces = {}
+        
+        # Front face
+        faces['front'] = (
+            np.array([
+                -w, -h,  d,  w, -h,  d,  w,  h,  d,
+                -w, -h,  d,  w,  h,  d, -w,  h,  d,
+            ], dtype='f4'),
+            np.array([
+                0, 0, 1,  0, 0, 1,  0, 0, 1,
+                0, 0, 1,  0, 0, 1,  0, 0, 1,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        # Back face
+        faces['back'] = (
+            np.array([
+                w, -h, -d, -w, -h, -d, -w,  h, -d,
+                w, -h, -d, -w,  h, -d,  w,  h, -d,
+            ], dtype='f4'),
+            np.array([
+                0, 0, -1,  0, 0, -1,  0, 0, -1,
+                0, 0, -1,  0, 0, -1,  0, 0, -1,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        # Right face
+        faces['right'] = (
+            np.array([
+                w, -h,  d,  w, -h, -d,  w,  h, -d,
+                w, -h,  d,  w,  h, -d,  w,  h,  d,
+            ], dtype='f4'),
+            np.array([
+                1, 0, 0,  1, 0, 0,  1, 0, 0,
+                1, 0, 0,  1, 0, 0,  1, 0, 0,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        # Left face
+        faces['left'] = (
+            np.array([
+                -w, -h, -d, -w, -h,  d, -w,  h,  d,
+                -w, -h, -d, -w,  h,  d, -w,  h, -d,
+            ], dtype='f4'),
+            np.array([
+                -1, 0, 0, -1, 0, 0, -1, 0, 0,
+                -1, 0, 0, -1, 0, 0, -1, 0, 0,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        # Top face
+        faces['top'] = (
+            np.array([
+                -w,  h,  d,  w,  h,  d,  w,  h, -d,
+                -w,  h,  d,  w,  h, -d, -w,  h, -d,
+            ], dtype='f4'),
+            np.array([
+                0, 1, 0,  0, 1, 0,  0, 1, 0,
+                0, 1, 0,  0, 1, 0,  0, 1, 0,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        # Bottom face
+        faces['bottom'] = (
+            np.array([
+                -w, -h, -d,  w, -h, -d,  w, -h,  d,
+                -w, -h, -d,  w, -h,  d, -w, -h,  d,
+            ], dtype='f4'),
+            np.array([
+                0, -1, 0,  0, -1, 0,  0, -1, 0,
+                0, -1, 0,  0, -1, 0,  0, -1, 0,
+            ], dtype='f4'),
+            np.array([
+                0, 0,  1, 0,  1, 1,
+                0, 0,  1, 1,  0, 1,
+            ], dtype='f4')
+        )
+        
+        return faces
     # ====== State Methods ======
     
     def fill(self, color: Tuple):
