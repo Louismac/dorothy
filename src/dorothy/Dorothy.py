@@ -776,15 +776,15 @@ class Dorothy:
         return self.renderer.text_size(text_str, font_size, font)
     
     # 2D shapes
-    def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
+    def circle(self, center: Tuple[float, float], radius: float):
         """Draw a circle"""
         self._ensure_renderer()
-        self.renderer.circle(center, radius, annotate)
+        self.renderer.circle(center, radius)
     
-    def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
+    def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float]):
         """Draw a rectangle"""
         self._ensure_renderer()
-        self.renderer.rectangle(pos1, pos2, annotate)
+        self.renderer.rectangle(pos1, pos2)
     
     def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
         """Draw a line"""

@@ -743,27 +743,74 @@ class DorothyRenderer:
             raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
     def _create_rectangle_stroke_geometry(self, x1, y1, x2, y2, thickness):
-        """Create thick stroke geometry for rectangle outline"""
-        # Create 4 thick lines for each edge
-        all_verts = []
+        """Create thick stroke geometry for rectangle with mitered corners
         
-        # Top edge
-        top = self._create_thick_line_geometry(x1, y1, x2, y1, thickness)
-        all_verts.append(top)
+        Creates an outline ring by building outer and inner rectangles
+        """
+        half_thick = thickness / 2
         
-        # Right edge
-        right = self._create_thick_line_geometry(x2, y1, x2, y2, thickness)
-        all_verts.append(right)
+        # Outer rectangle (expanded by half thickness)
+        outer_x1 = x1 - half_thick
+        outer_y1 = y1 - half_thick
+        outer_x2 = x2 + half_thick
+        outer_y2 = y2 + half_thick
         
-        # Bottom edge
-        bottom = self._create_thick_line_geometry(x2, y2, x1, y2, thickness)
-        all_verts.append(bottom)
+        # Inner rectangle (shrunk by half thickness)
+        inner_x1 = x1 + half_thick
+        inner_y1 = y1 + half_thick
+        inner_x2 = x2 - half_thick
+        inner_y2 = y2 - half_thick
         
-        # Left edge
-        left = self._create_thick_line_geometry(x1, y2, x1, y1, thickness)
-        all_verts.append(left)
+        # Build the stroke as quads around the perimeter
+        # Each edge is 2 triangles forming a quad
         
-        return np.concatenate(all_verts)
+        vertices = []
+        
+        # Top edge quad
+        vertices.extend([
+            outer_x1, outer_y1,  # Outer top-left
+            outer_x2, outer_y1,  # Outer top-right
+            inner_x2, inner_y1,  # Inner top-right
+            
+            outer_x1, outer_y1,  # Outer top-left
+            inner_x2, inner_y1,  # Inner top-right
+            inner_x1, inner_y1,  # Inner top-left
+        ])
+        
+        # Right edge quad
+        vertices.extend([
+            outer_x2, outer_y1,  # Outer top-right
+            outer_x2, outer_y2,  # Outer bottom-right
+            inner_x2, inner_y2,  # Inner bottom-right
+            
+            outer_x2, outer_y1,  # Outer top-right
+            inner_x2, inner_y2,  # Inner bottom-right
+            inner_x2, inner_y1,  # Inner top-right
+        ])
+        
+        # Bottom edge quad
+        vertices.extend([
+            outer_x2, outer_y2,  # Outer bottom-right
+            outer_x1, outer_y2,  # Outer bottom-left
+            inner_x1, inner_y2,  # Inner bottom-left
+            
+            outer_x2, outer_y2,  # Outer bottom-right
+            inner_x1, inner_y2,  # Inner bottom-left
+            inner_x2, inner_y2,  # Inner bottom-right
+        ])
+        
+        # Left edge quad
+        vertices.extend([
+            outer_x1, outer_y2,  # Outer bottom-left
+            outer_x1, outer_y1,  # Outer top-left
+            inner_x1, inner_y1,  # Inner top-left
+            
+            outer_x1, outer_y2,  # Outer bottom-left
+            inner_x1, inner_y1,  # Inner top-left
+            inner_x1, inner_y2,  # Inner bottom-left
+        ])
+        
+        return np.array(vertices, dtype='f4')
 
 
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
@@ -818,24 +865,52 @@ class DorothyRenderer:
             self.draw_queue.append(cmd)
     
     def _create_circle_stroke_geometry(self, center, radius, thickness, segments=32):
-        """Create thick stroke geometry for circle outline"""
+        """Create thick stroke geometry for circle as a ring/donut
+        
+        Creates two circles (outer and inner) and connects them with quads
+        """
         cx, cy = center
-        all_verts = []
+        half_thick = thickness / 2
+        
+        # Outer and inner radii
+        outer_radius = radius + half_thick
+        inner_radius = radius - half_thick
+        
+        vertices = []
         
         for i in range(segments):
+            # Current and next angles
             angle1 = 2 * np.pi * i / segments
             angle2 = 2 * np.pi * (i + 1) / segments
             
-            x1 = cx + radius * np.cos(angle1)
-            y1 = cy + radius * np.sin(angle1)
-            x2 = cx + radius * np.cos(angle2)
-            y2 = cy + radius * np.sin(angle2)
+            # Outer circle points
+            outer_x1 = cx + outer_radius * np.cos(angle1)
+            outer_y1 = cy + outer_radius * np.sin(angle1)
+            outer_x2 = cx + outer_radius * np.cos(angle2)
+            outer_y2 = cy + outer_radius * np.sin(angle2)
             
-            # Create thick line segment
-            segment = self._create_thick_line_geometry(x1, y1, x2, y2, thickness)
-            all_verts.append(segment)
+            # Inner circle points
+            inner_x1 = cx + inner_radius * np.cos(angle1)
+            inner_y1 = cy + inner_radius * np.sin(angle1)
+            inner_x2 = cx + inner_radius * np.cos(angle2)
+            inner_y2 = cy + inner_radius * np.sin(angle2)
+            
+            # Create quad (2 triangles) connecting inner and outer circles
+            # Triangle 1: outer1 -> outer2 -> inner2
+            vertices.extend([
+                outer_x1, outer_y1,
+                outer_x2, outer_y2,
+                inner_x2, inner_y2,
+            ])
+            
+            # Triangle 2: outer1 -> inner2 -> inner1
+            vertices.extend([
+                outer_x1, outer_y1,
+                inner_x2, inner_y2,
+                inner_x1, inner_y1,
+            ])
         
-        return np.concatenate(all_verts) if all_verts else np.array([], dtype='f4')
+        return np.array(vertices, dtype='f4')
 
 
     def _create_circle_vertices(self, center, radius, segments=32):
@@ -883,7 +958,7 @@ class DorothyRenderer:
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
         """Draw a circle (queued for batching)"""
         if self.enable_batching:
-            fill_verts, stroke_verts = self._create_circle_vertices(center, radius)
+            fill_verts, stroke_verts, stroke_as_fill = self._create_circle_vertices(center, radius)
             
             cmd = DrawCommand(
                 type=DrawCommandType.CIRCLE,
@@ -896,7 +971,8 @@ class DorothyRenderer:
                 stroke_color=self.stroke_color if self.use_stroke else None,
                 transform=self.transform.matrix,
                 layer_id=self.active_layer,
-                draw_order=self.draw_order_counter
+                draw_order=self.draw_order_counter,
+                stroke_as_geometry = stroke_as_fill
             )
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
