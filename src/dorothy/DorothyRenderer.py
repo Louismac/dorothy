@@ -394,7 +394,8 @@ class DorothyRenderer:
             
             # Set uniforms
             shader['projection'].write(self.camera.get_projection_matrix())
-            shader['model'].write(self.transform.matrix)
+            transform = self._make_transform_contiguous(self.transform.matrix)
+            shader['model'].write(transform)
             shader['texture0'] = 0
             shader['alpha'] = alpha
             
@@ -692,7 +693,8 @@ class DorothyRenderer:
         
         # Set uniforms - use current transform and camera
         self.shader_texture_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_texture_2d['model'].write(self.transform.matrix)
+        transform = self._make_transform_contiguous(self.transform.matrix)
+        self.shader_texture_2d['model'].write(transform)
         self.shader_texture_2d['texture0'] = 0
         self.shader_texture_2d['alpha'] = alpha
         
@@ -1087,7 +1089,7 @@ class DorothyRenderer:
         
         # Clear the queue
         self.draw_queue.clear()
-    
+        
     def _group_commands_into_batches(self):
         """Group commands by state (2D and 3D separately)"""
         if not self.draw_queue:
@@ -1126,15 +1128,19 @@ class DorothyRenderer:
             
             # 3D-specific: texture and lighting must match
             if cmd1.is_3d:
-                if cmd1.texture_layer != cmd2.texture_layer:
+                # CRITICAL: Textured vs non-textured can't batch (different shaders!)
+                has_texture1 = cmd1.texture_layer is not None
+                has_texture2 = cmd2.texture_layer is not None
+                if has_texture1 != has_texture2:
+                    return False  # One has texture, one doesn't - different shaders
+                
+                # If both have textures, they must be the same texture
+                if has_texture1 and cmd1.texture_layer != cmd2.texture_layer:
                     return False
+                
                 if cmd1.use_lighting != cmd2.use_lighting:
                     return False
             
-            if cmd1.type == DrawCommandType.POLYLINE_3D:
-                if getattr(cmd1, 'closed', False) != getattr(cmd2, 'closed', False):
-                    return False
-
             # Transform must match
             return self._transforms_equal(cmd1.transform, cmd2.transform)
         
@@ -1193,49 +1199,65 @@ class DorothyRenderer:
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.ctx.enable(moderngl.DEPTH_TEST)
+        self.ctx.depth_mask = True
         
-        # Choose shader
+        # Choose correct shader based on whether we're using textures
         if first_cmd.texture_layer is not None:
             shader = self.shader_3d_textured
         else:
-            shader = self.shader_3d
+            shader = self.shader_3d  # Non-textured shader
         
         # Set common uniforms
         shader['projection'].write(self.camera.get_projection_matrix())
         shader['view'].write(self.camera.get_view_matrix())
-        shader['model'].write(first_cmd.transform)
+        
+        # Ensure transform is C-contiguous
+        transform = first_cmd.transform
+        if isinstance(transform, np.ndarray):
+            if not transform.flags['C_CONTIGUOUS']:
+                transform = np.ascontiguousarray(transform)
+        shader['model'].write(transform)
         
         # Render based on type
         if first_cmd.type in [DrawCommandType.SPHERE, DrawCommandType.BOX, DrawCommandType.MESH]:
-            # Batch filled 3D geometry
             self._render_3d_geometry_batch(commands, shader)
         elif first_cmd.type in [DrawCommandType.LINE_3D, DrawCommandType.POLYLINE_3D]:
-            # Batch 3D lines
             self._render_3d_lines_batch(commands, shader)
 
+
     def _render_3d_geometry_batch(self, commands, shader):
-        """Batch render 3D geometry with normals and texcoords"""
+        """Batch render 3D geometry"""
         first_cmd = commands[0]
         
         # Set lighting
         if first_cmd.use_lighting:
-            shader['use_lighting'] = True
-            shader['light_pos'].write(glm.vec3(5, 5, 5))
-            shader['camera_pos'].write(self.camera.position)
+            if 'use_lighting' in shader:
+                shader['use_lighting'] = True
+            if 'light_pos' in shader:
+                shader['light_pos'].write(glm.vec3(5, 5, 5))
+            if 'camera_position' in shader:
+                shader['camera_position'] = tuple(self.camera.position)
+            if 'camera_pos' in shader:  # In case shader uses different name
+                shader['camera_pos'] = tuple(self.camera.position)
         else:
             if 'use_lighting' in shader:
                 shader['use_lighting'] = False
         
-        # Handle texture or solid color
-        if first_cmd.texture_layer is not None and first_cmd.texture_layer in self.layers:
-            texture = self.layers[first_cmd.texture_layer]['fbo'].color_attachments[0]
-            texture.use(0)
-            shader['texture0'] = 0
-            shader['use_texture'] = True
-        else:
-            if 'use_texture' in shader:
+        # Determine if we're using textured or non-textured shader
+        is_textured_shader = (shader == self.shader_3d_textured)
+        
+        if is_textured_shader:
+            # Textured shader
+            if first_cmd.texture_layer is not None and first_cmd.texture_layer in self.layers:
+                texture = self.layers[first_cmd.texture_layer]['fbo'].color_attachments[0]
+                texture.use(0)
+                shader['texture0'] = 0
+                shader['use_texture'] = True
+            else:
                 shader['use_texture'] = False
-            # Use fill color for geometry
+                shader['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
+        else:
+            # Non-textured shader - just set color
             shader['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
         
         # Combine all vertices, normals, texcoords
@@ -1244,39 +1266,70 @@ class DorothyRenderer:
         all_texcoords = []
         
         for cmd in commands:
-            all_positions.append(cmd.fill_vertices)
-            if cmd.normal_data is not None:
-                all_normals.append(cmd.normal_data)
-            if cmd.texcoord_data is not None:
-                all_texcoords.append(cmd.texcoord_data)
+            if cmd.fill_vertices is not None and len(cmd.fill_vertices) > 0:
+                all_positions.append(cmd.fill_vertices)
+                if cmd.normal_data is not None and len(cmd.normal_data) > 0:
+                    all_normals.append(cmd.normal_data)
+                if cmd.texcoord_data is not None and len(cmd.texcoord_data) > 0:
+                    all_texcoords.append(cmd.texcoord_data)
+        
+        if not all_positions:
+            return
         
         positions = np.concatenate(all_positions)
+        if len(positions) == 0:
+            return
+        
         normals = np.concatenate(all_normals) if all_normals else np.zeros_like(positions)
-        texcoords_flat = np.concatenate(all_texcoords) if all_texcoords else np.zeros(len(positions)//3*2, dtype='f4')
         
-        # Interleave: x,y,z, nx,ny,nz, u,v
-        vertex_data = []
-        num_vertices = len(positions) // 3
-        for i in range(num_vertices):
-            vertex_data.extend(positions[i*3:i*3+3])  # xyz
-            vertex_data.extend(normals[i*3:i*3+3])    # normal
-            vertex_data.extend(texcoords_flat[i*2:i*2+2])  # uv
-        
-        vertex_data = np.array(vertex_data, dtype='f4')
-        
-        # Create VAO
-        vbo = self.ctx.buffer(vertex_data)
-        vao = self.ctx.vertex_array(
-            shader,
-            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
-        )
+        # Create VAO based on shader type
+        if is_textured_shader:
+            # Textured shader needs texcoords
+            texcoords_flat = np.concatenate(all_texcoords) if all_texcoords else np.zeros(len(positions)//3*2, dtype='f4')
+            
+            # Interleave: x,y,z, nx,ny,nz, u,v
+            vertex_data = []
+            num_vertices = len(positions) // 3
+            for i in range(num_vertices):
+                vertex_data.extend(positions[i*3:i*3+3])      # xyz
+                vertex_data.extend(normals[i*3:i*3+3])        # normal
+                vertex_data.extend(texcoords_flat[i*2:i*2+2]) # uv
+            
+            vertex_data = np.array(vertex_data, dtype='f4')
+            
+            if len(vertex_data) == 0:
+                return
+            
+            vbo = self.ctx.buffer(vertex_data)
+            vao = self.ctx.vertex_array(
+                shader,
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+            )
+        else:
+            # Non-textured shader - only position and normal
+            # Interleave: x,y,z, nx,ny,nz
+            vertex_data = []
+            num_vertices = len(positions) // 3
+            for i in range(num_vertices):
+                vertex_data.extend(positions[i*3:i*3+3])  # xyz
+                vertex_data.extend(normals[i*3:i*3+3])    # normal
+            
+            vertex_data = np.array(vertex_data, dtype='f4')
+            
+            if len(vertex_data) == 0:
+                return
+            
+            vbo = self.ctx.buffer(vertex_data)
+            vao = self.ctx.vertex_array(
+                shader,
+                [(vbo, '3f 3f', 'in_position', 'in_normal')]
+            )
         
         # Render
         vao.render(moderngl.TRIANGLES)
         
         vao.release()
         vbo.release()
-
     def _render_3d_lines_batch(self, commands, shader):
         """Batch render 3D lines"""
         first_cmd = commands[0]
@@ -1320,7 +1373,8 @@ class DorothyRenderer:
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(first_cmd.transform)
+        transform = self._make_transform_contiguous(first_cmd.transform)
+        self.shader_2d['model'].write(transform)
         
         # FILL PASS
         if first_cmd.use_fill and first_cmd.color is not None:
@@ -1372,7 +1426,22 @@ class DorothyRenderer:
                     
                     stroke_vao.release()
                     stroke_vbo.release()
-                
+
+    def _make_transform_contiguous(self, transform):
+        """Ensure transform matrix is C-contiguous numpy array"""
+        if isinstance(transform, glm.mat4):
+            # Convert glm to numpy
+            transform = np.array(transform, dtype='f4')
+        
+        if isinstance(transform, np.ndarray):
+            if not transform.flags['C_CONTIGUOUS']:
+                transform = np.ascontiguousarray(transform, dtype='f4')
+            # Also ensure it's float32
+            if transform.dtype != np.float32:
+                transform = transform.astype('f4')
+        
+        return transform
+
     def polyline(self, points, closed: bool = False):
         """Draw a polyline (connected line segments)"""
         if len(points) < 2:
@@ -1394,7 +1463,8 @@ class DorothyRenderer:
         
         # Set uniforms
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
+        transform = self._make_transform_contiguous(self.transform.matrix)
+        self.shader_2d['model'].write(transform)
         
         if self.use_stroke:
             self.shader_2d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
@@ -1514,7 +1584,8 @@ class DorothyRenderer:
         
         # Set uniforms
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(self.transform.matrix)
+        transform = self._make_transform_contiguous(self.transform.matrix)
+        self.shader_2d['model'].write(transform)
         
         # Draw fill
         if self.use_fill:
@@ -1544,12 +1615,74 @@ class DorothyRenderer:
         vbo.release()
     # ====== 3D Drawing Methods ======
         
+    def _generate_sphere_vertices(self, radius=1.0, sectors=32, rings=32):
+        """Generate sphere geometry manually"""
+        vertices = []
+        normals = []
+        texcoords = []
+        
+        # Generate vertices
+        for ring in range(rings + 1):
+            theta = ring * np.pi / rings  # 0 to pi
+            sin_theta = np.sin(theta)
+            cos_theta = np.cos(theta)
+            
+            for sector in range(sectors + 1):
+                phi = sector * 2 * np.pi / sectors  # 0 to 2pi
+                sin_phi = np.sin(phi)
+                cos_phi = np.cos(phi)
+                
+                # Position
+                x = radius * sin_theta * cos_phi
+                y = radius * cos_theta
+                z = radius * sin_theta * sin_phi
+                
+                # Normal (same as position for unit sphere)
+                nx = sin_theta * cos_phi
+                ny = cos_theta
+                nz = sin_theta * sin_phi
+                
+                # Texcoord
+                u = sector / sectors
+                v = ring / rings
+                
+                vertices.extend([x, y, z])
+                normals.extend([nx, ny, nz])
+                texcoords.extend([u, v])
+        
+        # Generate indices and convert to triangles
+        triangle_verts = []
+        triangle_normals = []
+        triangle_texcoords = []
+        
+        for ring in range(rings):
+            for sector in range(sectors):
+                # Four vertices of the quad
+                current = ring * (sectors + 1) + sector
+                next_ring = current + sectors + 1
+                
+                # First triangle
+                for idx in [current, next_ring, current + 1]:
+                    triangle_verts.extend(vertices[idx*3:idx*3+3])
+                    triangle_normals.extend(normals[idx*3:idx*3+3])
+                    triangle_texcoords.extend(texcoords[idx*2:idx*2+2])
+                
+                # Second triangle
+                for idx in [current + 1, next_ring, next_ring + 1]:
+                    triangle_verts.extend(vertices[idx*3:idx*3+3])
+                    triangle_normals.extend(normals[idx*3:idx*3+3])
+                    triangle_texcoords.extend(texcoords[idx*2:idx*2+2])
+        
+        return (np.array(triangle_verts, dtype='f4'),
+                np.array(triangle_normals, dtype='f4'),
+                np.array(triangle_texcoords, dtype='f4'))
+
+
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
         """Draw a 3D sphere (batched)"""
         if self.enable_batching:
-            # Get or create sphere geometry
-            if not self.sphere_geometry:
-                self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
+            # Generate sphere geometry each time (or cache it)
+            vertices, normals, texcoords = self._generate_sphere_vertices(radius=1.0)
             
             # Calculate transform with position and scale
             transform_matrix = self.transform.matrix
@@ -1559,11 +1692,15 @@ class DorothyRenderer:
             # Apply scale
             scale_transform = glm.scale(glm.mat4(1.0), glm.vec3(radius, radius, radius))
             
-            # Combine: transform * translate * scale
-            final_transform = np.array(glm.mat4(transform_matrix) * pos_transform * scale_transform)
+            # Convert transform to glm if needed
+            if isinstance(transform_matrix, np.ndarray):
+                transform_matrix = glm.mat4([
+                    [transform_matrix[i,j] for j in range(4)]
+                    for i in range(4)
+                ])
             
-            # Get geometry data
-            vertices, normals, texcoords = self._extract_geometry_data(self.sphere_geometry)
+            final_transform_glm = transform_matrix * pos_transform * scale_transform
+            final_transform = np.ascontiguousarray(np.array(final_transform_glm, dtype='f4'))
             
             cmd = DrawCommand(
                 type=DrawCommandType.SPHERE,
@@ -1577,63 +1714,118 @@ class DorothyRenderer:
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter,
                 is_3d=True,
-                use_lighting=True,
+                use_lighting=False,
             )
             
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
-        else:
-            self._draw_sphere_immediate(radius, position)
     
-    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0, 
+    def box(self, size: Union[float, Tuple[float, float, float]] = 1.0, 
+            position: Tuple[float, float, float] = (0, 0, 0),
             texture_layers=None):
-        """Draw a box (batched)"""
+        """Draw a box"""
+        # Parse size
+        if isinstance(size, (int, float)):
+            width = height = depth = size
+        else:
+            width, height, depth = size
+        
         if self.enable_batching:
             w, h, d = width/2, height/2, depth/2
             
+            # Calculate transform with position
+            transform_matrix = self.transform.matrix
+            pos_transform = glm.translate(glm.mat4(1.0), glm.vec3(*position))
+            
+            if isinstance(transform_matrix, np.ndarray):
+                transform_matrix = glm.mat4([
+                    [transform_matrix[i,j] for j in range(4)]
+                    for i in range(4)
+                ])
+            
+            final_transform_glm = transform_matrix * pos_transform
+            final_transform = np.ascontiguousarray(np.array(final_transform_glm, dtype='f4'))
+            
             # Normalize texture_layers
             if isinstance(texture_layers, int):
-                tex_dict = {face: texture_layers for face in 
-                           ['front', 'back', 'right', 'left', 'top', 'bottom']}
+                # Single texture for all faces - can batch everything together
+                tex_layer = texture_layers
+                all_same = True
             elif isinstance(texture_layers, dict):
-                tex_dict = {
-                    'front': texture_layers.get('front'),
-                    'back': texture_layers.get('back'),
-                    'right': texture_layers.get('right'),
-                    'left': texture_layers.get('left'),
-                    'top': texture_layers.get('top'),
-                    'bottom': texture_layers.get('bottom')
-                }
+                # Check if all faces use same texture
+                tex_values = set(texture_layers.values())
+                if len(tex_values) == 1:
+                    tex_layer = list(tex_values)[0]
+                    all_same = True
+                else:
+                    all_same = False
             else:
-                tex_dict = {face: None for face in 
-                           ['front', 'back', 'right', 'left', 'top', 'bottom']}
+                # No texture
+                tex_layer = None
+                all_same = True
             
-            # Define all faces
+            # Get all faces
             faces_data = self._create_box_faces(w, h, d)
             
-            # Queue each face as separate command (allows different textures)
-            for face_name, (vertices, normals, texcoords) in faces_data.items():
+            if all_same:
+                # ALL FACES in ONE command (better batching!)
+                all_verts = []
+                all_normals = []
+                all_texcoords = []
+                for face_name, (verts, norms, texcs) in faces_data.items():
+                    all_verts.append(verts)
+                    all_normals.append(norms)
+                    all_texcoords.append(texcs)
+                
+                combined_verts = np.concatenate(all_verts)
+                combined_normals = np.concatenate(all_normals)
+                combined_texcoords = np.concatenate(all_texcoords)
+                
                 cmd = DrawCommand(
                     type=DrawCommandType.BOX,
-                    fill_vertices=vertices,
-                    normal_data=normals,
-                    texcoord_data=texcoords,
+                    fill_vertices=combined_verts,
+                    normal_data=combined_normals,
+                    texcoord_data=combined_texcoords,
                     color=self.fill_color,
                     use_fill=True,
                     use_stroke=False,
-                    transform=self.transform.matrix,
+                    transform=final_transform,
                     layer_id=self.active_layer,
                     draw_order=self.draw_order_counter,
                     is_3d=True,
                     use_lighting=False,
-                    texture_layer=tex_dict[face_name],
+                    texture_layer=tex_layer,
                 )
                 
                 self.draw_order_counter += 1
                 self.draw_queue.append(cmd)
-        else:
-            self._draw_box_immediate(width, height, depth, texture_layers)
-    
+            else:
+                # Different textures per face - separate commands
+                if isinstance(texture_layers, dict):
+                    tex_dict = texture_layers
+                else:
+                    tex_dict = {face: None for face in faces_data.keys()}
+                
+                for face_name, (vertices, normals, texcoords) in faces_data.items():
+                    cmd = DrawCommand(
+                        type=DrawCommandType.BOX,
+                        fill_vertices=vertices,
+                        normal_data=normals,
+                        texcoord_data=texcoords,
+                        color=self.fill_color,
+                        use_fill=True,
+                        use_stroke=False,
+                        transform=final_transform,
+                        layer_id=self.active_layer,
+                        draw_order=self.draw_order_counter,
+                        is_3d=True,
+                        use_lighting=False,
+                        texture_layer=tex_dict.get(face_name),
+                    )
+                    
+                    self.draw_order_counter += 1
+                    self.draw_queue.append(cmd)
+        
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
         """Draw a line in 3D space (batched)"""
         if self.enable_batching:
@@ -1829,27 +2021,25 @@ class DorothyRenderer:
             'vertices': np.array(mesh_data, dtype='f4'),
             'vertex_count': len(final_vertices) // 3
         }
-        
-    def _draw_3d_geometry(self, geom):
-        """Internal method to render 3D geometry"""
-        self.shader_3d['model'].write(self.transform.matrix)
-        self.shader_3d['view'].write(self.camera.get_view_matrix())
-        self.shader_3d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-        self.shader_3d['light_pos'].write(glm.vec3(5, 5, 5))
-        self.shader_3d['camera_pos'].write(self.camera.position)
-        self.shader_3d['use_lighting'] = True
-        if geom is not None:
-            geom.render(self.shader_3d)
 
     def _extract_geometry_data(self, geom):
         """Extract vertices, normals, texcoords from geometry object"""
         # Assuming your geometry object has these attributes
         # Adjust based on your actual geometry implementation
-        if hasattr(geom, 'vertices'):
-            vertices = np.array(geom.vertices, dtype='f4')
+        # Option A: If geometry has render method that creates buffers
+        if hasattr(geom, 'vbo') and geom.vbo is not None:
+            # Read back from existing buffer
+            vertices = np.frombuffer(geom.vbo.read(), dtype='f4')
+        
+        # Option B: If geometry stores data directly
+        elif hasattr(geom, 'vertex_data'):
+            vertices = np.array(geom.vertex_data, dtype='f4')
+        
+        # Option C: Generate sphere manually
         else:
-            vertices = np.array([], dtype='f4')
+            # Generate sphere vertices here
+            vertices, normals, texcoords = self._generate_sphere_vertices()
+            return vertices, normals, texcoords
         
         normals = np.array(geom.normals, dtype='f4') if hasattr(geom, 'normals') else None
         texcoords = np.array(geom.texcoords, dtype='f4') if hasattr(geom, 'texcoords') else None

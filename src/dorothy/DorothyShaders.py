@@ -29,26 +29,22 @@ class DOTSHADERS:
     
     FRAG_3D_TEXTURED = '''
         #version 330
-        
+
         uniform sampler2D texture0;
         uniform bool use_texture;
         uniform vec4 color;
-        uniform bool lighting_enabled;
-        
+        uniform bool use_lighting;
+
         // Lighting uniforms
-        uniform int num_lights;
-        uniform vec3 light_positions[4];
-        uniform vec3 light_colors[4];
-        uniform float light_intensities[4];
-        uniform vec3 ambient_light;
-        uniform vec3 camera_position;
-        
+        uniform vec3 light_pos;
+        uniform vec3 camera_pos;  // Changed from camera_pos for consistency
+
         in vec3 v_position;
         in vec3 v_normal;
         in vec2 v_texcoord;
-        
+
         out vec4 fragColor;
-        
+
         void main() {
             // Get base color from texture or solid color
             vec4 base_color;
@@ -58,31 +54,33 @@ class DOTSHADERS:
                 base_color = color;
             }
             
-            if (!lighting_enabled) {
+            // Early exit if no lighting
+            if (!use_lighting) {
                 fragColor = base_color;
                 return;
             }
             
             // Lighting calculations
             vec3 normal = normalize(v_normal);
-            vec3 view_dir = normalize(camera_position - v_position);
+            vec3 light_dir = normalize(light_pos - v_position);
+            vec3 view_dir = normalize(camera_pos - v_position);
+            vec3 reflect_dir = reflect(-light_dir, normal);
             
-            vec3 result = ambient_light * base_color.rgb;
+            // Ambient component
+            float ambient_strength = 0.3;
+            vec3 ambient = ambient_strength * vec3(1.0);
             
-            for (int i = 0; i < num_lights; i++) {
-                vec3 light_dir = normalize(light_positions[i] - v_position);
-                
-                // Diffuse
-                float diff = max(dot(normal, light_dir), 0.0);
-                vec3 diffuse = diff * light_colors[i] * light_intensities[i];
-                
-                // Specular
-                vec3 halfway_dir = normalize(light_dir + view_dir);
-                float spec = pow(max(dot(normal, halfway_dir), 0.0), 32.0);
-                vec3 specular = spec * light_colors[i] * light_intensities[i] * 0.3;
-                
-                result += (diffuse + specular) * base_color.rgb;
-            }
+            // Diffuse component
+            float diff = max(dot(normal, light_dir), 0.0);
+            vec3 diffuse = diff * vec3(1.0);
+            
+            // Specular component
+            float spec_strength = 0.5;
+            float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
+            vec3 specular = spec_strength * spec * vec3(1.0);
+            
+            // Combine lighting
+            vec3 result = (ambient + diffuse + specular) * base_color.rgb;
             
             fragColor = vec4(result, base_color.a);
         }

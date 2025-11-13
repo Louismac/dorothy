@@ -50,11 +50,12 @@ class Example3D:
         # Draw box with different textures per face
         dot.background((10, 10, 20))
         dot.camera_3d()
+        dot.fill(dot.cyan)
         with dot.transform():
             dot.rotate(dot.frames * 0.01, 0, 1, 0)
             dot.rotate(dot.frames * 0.005, 1, 0, 0)
             
-            dot.box(20, 20, 20, texture_layers={
+            dot.box((20, 20, 20), (0,1,2),texture_layers={
                 'front': self.front_layer,
                 'back': self.back_layer,
                 'right': self.right_layer,
@@ -67,6 +68,6 @@ class Example3D:
             x = 30 * np.cos(angle)
             z = 30 * np.sin(angle)
             dot.translate(x,1,z)
-            dot.box(10, 10, 10, texture_layers=self.front_layer)
+            dot.box((10, 10, 10), texture_layers=self.front_layer)
         
 Example3D()
