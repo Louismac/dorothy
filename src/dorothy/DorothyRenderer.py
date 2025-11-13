@@ -1464,6 +1464,7 @@ class DorothyRenderer:
                 shader['use_texture'] = True
             else:
                 shader['use_texture'] = False
+                shader['use_lighting'] = True
                 shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
             
             # Render
