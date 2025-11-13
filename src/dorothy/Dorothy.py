@@ -923,6 +923,14 @@ class Dorothy:
         self.renderer.camera.position = glm.vec3(*eye)
         self.renderer.camera.target = glm.vec3(*target)
     
+    def set_light_pos(self, pos: Tuple[float, float, float]):
+        self._ensure_renderer()
+        self.renderer.light_pos = pos
+
+    def use_lighting(self, on: bool = True):
+        self._ensure_renderer()
+        self.renderer.use_lighting = on
+    
     # Layers
     def get_layer(self) -> int:
         """Create a new rendering layer (offscreen framebuffer)

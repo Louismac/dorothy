@@ -132,6 +132,8 @@ class DorothyRenderer:
         # Transform and camera
         self.transform = Transform()
         self.camera = Camera(width, height)
+        self.light_pos = (5,5,5)
+        self.use_lighting = True
         
         # Setup shaders
         self._setup_shaders()
@@ -1462,9 +1464,12 @@ class DorothyRenderer:
                 texture.use(0)
                 shader['texture0'] = 0
                 shader['use_texture'] = True
+                shader['use_lighting'] = self.use_lighting
+                shader['light_pos'].write(glm.vec3(self.light_pos))
             else:
                 shader['use_texture'] = False
-                shader['use_lighting'] = True
+                shader['use_lighting'] = self.use_lighting
+                shader['light_pos'].write(glm.vec3(self.light_pos))
                 shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
             
             # Render
@@ -1735,6 +1740,7 @@ class DorothyRenderer:
         
         # Lighting
         shader['camera_position'] = tuple(self.camera.position)
+        shader['light_pos'].write(glm.vec3(self.light_pos))
         
         # Render
         vao.render(moderngl.TRIANGLES)
@@ -1748,9 +1754,9 @@ class DorothyRenderer:
         self.shader_3d['view'].write(self.camera.get_view_matrix())
         self.shader_3d['projection'].write(self.camera.get_projection_matrix())
         self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-        self.shader_3d['light_pos'].write(glm.vec3(5, 5, 5))
+        self.shader_3d['light_pos'].write(glm.vec3(self.light_pos))
         self.shader_3d['camera_pos'].write(self.camera.position)
-        self.shader_3d['use_lighting'] = True
+        self.shader_3d['use_lighting'] = self.use_lighting
         if geom is not None:
             geom.render(self.shader_3d)
     

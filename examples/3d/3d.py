@@ -1,6 +1,7 @@
 from dorothy import Dorothy 
 import numpy as np
 
+
 dot = Dorothy(640,480)
 class Example3D:
     def __init__(self):
@@ -17,7 +18,14 @@ class Example3D:
     def draw(self):
         dot.camera_3d()
         dot.background((30, 30, 40))
-        
+
+        angle = dot.frames * 0.01
+        x = 5 * np.cos(angle)
+        z = 5 * np.sin(angle)
+        y = 10 * np.sin(angle/2)
+        dot.renderer.light_pos = (x, y, z)
+
+        dot.camera_3d()
         # 3D box (animated)
         with dot.transform():
             dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
