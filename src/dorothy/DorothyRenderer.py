@@ -1430,8 +1430,49 @@ class DorothyRenderer:
             # No texture, all None
             tex_dict = {face: None for face in ['front', 'back', 'right', 'left', 'top', 'bottom']}
         
-        # Define each face with its vertices
-        # Format: x, y, z, nx, ny, nz, u, v
+        
+        faces_data = self._create_box_faces(w,h,d)
+        
+        # Enable blending and depth
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        # Always use textured shader, just set use_texture flag
+        for face_name, vertices in faces_data.items():
+            layer_id = tex_dict[face_name]
+            
+            vbo = self.ctx.buffer(vertices)
+            
+            # ALWAYS use textured shader (data format matches)
+            shader = self.shader_3d_textured
+            vao = self.ctx.vertex_array(
+                shader,
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+            )
+            
+            # Set uniforms
+            shader['projection'].write(self.camera.get_projection_matrix())
+            shader['view'].write(self.camera.get_view_matrix())
+            shader['model'].write(self.transform.matrix)
+            
+            # Texture or solid color
+            if layer_id is not None and layer_id in self.layers:
+                texture = self.layers[layer_id]['fbo'].color_attachments[0]
+                texture.use(0)
+                shader['texture0'] = 0
+                shader['use_texture'] = True
+            else:
+                shader['use_texture'] = False
+                shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
+            
+            # Render
+            vao.render(moderngl.TRIANGLES)
+            vao.release()
+            vbo.release()
+
+    def _create_box_faces(self, w, h, d):
+        """Create box face geometry - returns dict of interleaved vertex data"""
         faces_data = {
             'front': np.array([
                 -w, -h,  d,  0, 0, 1,  0, 0,
@@ -1488,53 +1529,7 @@ class DorothyRenderer:
             ], dtype='f4'),
         }
         
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-        
-        # Draw each face
-        for face_name, vertices in faces_data.items():
-            layer_id = tex_dict[face_name]
-            
-            vbo = self.ctx.buffer(vertices)
-            
-            # Choose shader based on texture
-            if layer_id is not None and layer_id in self.layers:
-                shader = self.shader_3d_textured
-            else:
-                shader = self.shader_3d
-            
-            vao = self.ctx.vertex_array(
-                shader,
-                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
-            )
-            
-            # Set uniforms
-            shader['projection'].write(self.camera.get_projection_matrix())
-            shader['view'].write(self.camera.get_view_matrix())
-            shader['model'].write(self.transform.matrix)
-            
-            # Texture or solid color
-            if layer_id is not None and layer_id in self.layers:
-                texture = self.layers[layer_id]['fbo'].color_attachments[0]
-                texture.use(0)
-                shader['texture0'] = 0
-                shader['use_texture'] = True
-            else:
-                if hasattr(shader, 'get') and 'use_texture' in shader:
-                    shader['use_texture'] = False
-                shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-            
-            # Lighting
-            shader['lighting_enabled'] = False
-            shader['camera_position'] = tuple(self.camera.position)
-            
-            # Render this face
-            vao.render(moderngl.TRIANGLES)
-            
-            vao.release()
-            vbo.release()
+        return faces_data
 
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
         """Draw a line in 3D space

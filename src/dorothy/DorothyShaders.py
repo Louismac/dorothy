@@ -28,85 +28,74 @@ class DOTSHADERS:
     ''' 
     
     FRAG_3D_TEXTURED = '''
-        #version 330
-        
-        uniform sampler2D texture0;
-        uniform bool use_texture;
-        uniform vec4 color;
-        uniform bool lighting_enabled;
-        
-        // Lighting uniforms
-        uniform int num_lights;
-        uniform vec3 light_positions[4];
-        uniform vec3 light_colors[4];
-        uniform float light_intensities[4];
-        uniform vec3 ambient_light;
-        uniform vec3 camera_position;
-        
-        in vec3 v_position;
-        in vec3 v_normal;
-        in vec2 v_texcoord;
-        
-        out vec4 fragColor;
-        
-        void main() {
-            // Get base color from texture or solid color
-            vec4 base_color;
-            if (use_texture) {
-                base_color = texture(texture0, v_texcoord);
-            } else {
-                base_color = color;
-            }
-            
-            if (!lighting_enabled) {
-                fragColor = base_color;
-                return;
-            }
-            
-            // Lighting calculations
-            vec3 normal = normalize(v_normal);
-            vec3 view_dir = normalize(camera_position - v_position);
-            
-            vec3 result = ambient_light * base_color.rgb;
-            
-            for (int i = 0; i < num_lights; i++) {
-                vec3 light_dir = normalize(light_positions[i] - v_position);
+
+                #version 330
+                uniform sampler2D texture0;
+                uniform bool use_texture;
+                uniform vec4 color;
+                uniform vec3 light_pos;
+                uniform vec3 camera_pos;
+                uniform bool use_lighting;
                 
-                // Diffuse
-                float diff = max(dot(normal, light_dir), 0.0);
-                vec3 diffuse = diff * light_colors[i] * light_intensities[i];
+                in vec3 v_normal;
+                in vec3 v_position;
+                in vec2 v_texcoord;
                 
-                // Specular
-                vec3 halfway_dir = normalize(light_dir + view_dir);
-                float spec = pow(max(dot(normal, halfway_dir), 0.0), 32.0);
-                vec3 specular = spec * light_colors[i] * light_intensities[i] * 0.3;
+                out vec4 fragColor;
                 
-                result += (diffuse + specular) * base_color.rgb;
-            }
-            
-            fragColor = vec4(result, base_color.a);
-        }
+                void main() {
+                        vec4 base_color;
+                    if (use_texture) {
+                        base_color = texture(texture0, v_texcoord);
+                    } else {
+                        base_color = color;
+                    }
+                    if (use_lighting) {
+                        vec3 normal = normalize(v_normal);
+                        vec3 light_dir = normalize(light_pos - v_position);
+                        vec3 view_dir = normalize(camera_pos - v_position);
+                        vec3 reflect_dir = reflect(-light_dir, normal);
+                        
+                        // Ambient
+                        float ambient = 0.3;
+                        
+                        // Diffuse
+                        float diffuse = max(dot(normal, light_dir), 0.0);
+                        
+                        // Specular
+                        float specular = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.5;
+                        
+                        float lighting = ambient + diffuse + specular;
+                        fragColor = vec4(base_color.rgb * lighting, base_color.a);
+                    } else {
+                        fragColor = base_color;
+                    }
+                }
+        
     '''
 
     VERT_3D = '''
-                #version 330
+            #version 330
+            
+            uniform mat4 projection;
+            uniform mat4 view;
+            uniform mat4 model;
+            
+            in vec3 in_position;
+            in vec3 in_normal;
+            in vec2 in_texcoord;
+            
+            out vec3 v_position;
+            out vec3 v_normal;
+            out vec2 v_texcoord;
+            
+            void main() {
+                vec4 world_pos = model * vec4(in_position, 1.0);
+                v_position = world_pos.xyz;
+                v_normal = mat3(model) * in_normal;
                 
-                uniform mat4 model;
-                uniform mat4 view;
-                uniform mat4 projection;
-                
-                in vec3 in_position;
-                in vec3 in_normal;
-                
-                out vec3 v_normal;
-                out vec3 v_position;
-                
-                void main() {
-                    vec4 world_pos = model * vec4(in_position, 1.0);
-                    v_position = world_pos.xyz;
-                    v_normal = mat3(transpose(inverse(model))) * in_normal;
-                    gl_Position = projection * view * world_pos;
-                }
+                gl_Position = projection * view * world_pos;
+            }
             '''
 
     FRAG_3D = '''
