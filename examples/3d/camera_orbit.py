@@ -25,7 +25,7 @@ class Example3D:
         dot.camera_3d()
         # 3D box (animated)
         with dot.transform():
-            dot.fill((100, 100, 255, 128))
+            dot.fill((100, 100, 255))
             dot.box((1, 1, 1),(np.sin(np.pi * dot.frames * 0.01)*5, 0, 0))
 
         # 3D sphere (static)

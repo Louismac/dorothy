@@ -13,7 +13,7 @@ class Example3D:
         self.layer = dot.get_layer()
         with dot.layer(self.layer):
             dot.background(dot.blue)
-        dot.set_camera((0, 0, 5), (0, 0, 0))
+        dot.set_camera((5, 5, 5), (0, 0, 0))
         self.lights = True
     
     def draw(self):
@@ -25,14 +25,13 @@ class Example3D:
         z = 5 * np.sin(angle)
         y = 10 * np.sin(angle/2)
         dot.renderer.light_pos = (x, y, z)
-        if dot.frames%20==0:
+        if dot.frames%50==0:
             dot.use_lighting(not dot.renderer.use_lighting)
 
-        dot.camera_3d()
         # 3D box (animated)
-        dot.fill(dot.blue)
+        dot.fill((0,0,255,120))
         dot.box((1, 1, 1),(np.sin(np.pi * dot.frames * 0.01), 0, 0))
-        dot.fill(dot.red)
+        dot.fill((255,0,0,200))
         dot.sphere(1,(0,np.sin(np.pi * dot.frames * 0.01), 0))
         
 Example3D()

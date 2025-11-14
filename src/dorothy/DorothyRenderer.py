@@ -1202,6 +1202,11 @@ class DorothyRenderer:
             self._render_3d_batch(commands)
 
     def _render_3d_batch(self,commands: List[DrawCommand]):
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        # self.ctx.front_face = 'ccw' 
+        # self.ctx.enable(moderngl.CULL_FACE)  # Enable face culling
         first_cmd = commands[0]
         if first_cmd.type == DrawCommandType.SPHERE:
             
@@ -1246,6 +1251,8 @@ class DorothyRenderer:
             # Similar to mesh batching
             box_vertices = first_cmd.fill_vertices
             box_vbo = self.ctx.buffer(box_vertices)
+            
+            
             
             # Collect instance data
             instance_data = []
