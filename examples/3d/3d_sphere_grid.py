@@ -28,10 +28,7 @@ class MySketch:
                 x = (i - 5) * 1  # -250 to 250
                 y = (j - 5) * 1
                 z = 0
-                
-                with dot.transform():
-                    dot.translate(x, y, z)
-                    dot.sphere(amp * 20)
+                dot.sphere(amp * 20,(x, y, z))
                 # print(x,y)
         dot.rgb_split(accumulate=False, offset=amp*0.5)
 

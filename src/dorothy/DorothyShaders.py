@@ -2,6 +2,81 @@ class DOTSHADERS:
 
     # In DorothyRenderer.__init__, add this shader:
 
+    VERT_3D_INSTANCED = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 view;
+        
+        in vec3 in_position;
+        in vec3 in_normal;
+        in vec2 in_texcoord_0;
+        
+        // Per-instance attributes
+        in mat4 instance_model;
+        in vec4 instance_color;
+        
+        out vec3 v_position;
+        out vec3 v_normal;
+        out vec2 v_texcoord;
+        out vec4 v_color;
+        
+        void main() {
+            vec4 world_pos = instance_model * vec4(in_position, 1.0);
+            v_position = world_pos.xyz;
+            v_normal = mat3(instance_model) * in_normal;
+            v_texcoord = in_texcoord_0;
+            v_color = instance_color;
+            
+            gl_Position = projection * view * world_pos;
+        }
+    ''' 
+
+    FRAG_3D_INSTANCED = '''
+        #version 330
+        uniform sampler2D texture0;
+        uniform bool use_texture;
+        uniform vec4 color;
+        uniform vec3 light_pos;
+        uniform vec3 camera_pos;
+        uniform bool use_lighting;
+        uniform float ambient = 0.3;
+        
+        in vec3 v_normal;
+        in vec3 v_position;
+        in vec2 v_texcoord;
+        in vec4 v_color;
+        
+        out vec4 fragColor;
+        
+        void main() {
+            vec4 base_color;
+            if (use_texture) {
+                base_color = texture(texture0, v_texcoord);
+            } else {
+                base_color = v_color;  // Use per-instance colour instead of uniform
+            }
+            
+            if (use_lighting) {
+                vec3 normal = normalize(v_normal);
+                vec3 light_dir = normalize(light_pos - v_position);
+                vec3 view_dir = normalize(camera_pos - v_position);
+                vec3 reflect_dir = reflect(-light_dir, normal);
+                
+                // Diffuse
+                float diffuse = max(dot(normal, light_dir), 0.0);
+                
+                // Specular
+                float specular = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.5;
+                
+                float lighting = ambient + diffuse + specular;
+                fragColor = vec4(base_color.rgb * lighting, base_color.a);
+            } else {
+                fragColor = base_color;
+            }
+        }
+    '''
+
     VERT_3D_TEXTURED = '''
         #version 330
         
@@ -11,7 +86,7 @@ class DOTSHADERS:
         
         in vec3 in_position;
         in vec3 in_normal;
-        in vec2 in_texcoord;
+        in vec2 in_texcoord_0;
         
         out vec3 v_position;
         out vec3 v_normal;
@@ -21,7 +96,7 @@ class DOTSHADERS:
             vec4 world_pos = model * vec4(in_position, 1.0);
             v_position = world_pos.xyz;
             v_normal = mat3(model) * in_normal;
-            v_texcoord = in_texcoord;
+            v_texcoord = in_texcoord_0;
             
             gl_Position = projection * view * world_pos;
         }
@@ -36,6 +111,7 @@ class DOTSHADERS:
                 uniform vec3 light_pos;
                 uniform vec3 camera_pos;
                 uniform bool use_lighting;
+                uniform float ambient=0.3;
                 
                 in vec3 v_normal;
                 in vec3 v_position;
@@ -56,9 +132,6 @@ class DOTSHADERS:
                         vec3 view_dir = normalize(camera_pos - v_position);
                         vec3 reflect_dir = reflect(-light_dir, normal);
                         
-                        // Ambient
-                        float ambient = 0.3;
-                        
                         // Diffuse
                         float diffuse = max(dot(normal, light_dir), 0.0);
                         
@@ -73,67 +146,6 @@ class DOTSHADERS:
                 }
         
     '''
-
-    VERT_3D = '''
-            #version 330
-            
-            uniform mat4 projection;
-            uniform mat4 view;
-            uniform mat4 model;
-            
-            in vec3 in_position;
-            in vec3 in_normal;
-            in vec2 in_texcoord;
-            
-            out vec3 v_position;
-            out vec3 v_normal;
-            out vec2 v_texcoord;
-            
-            void main() {
-                vec4 world_pos = model * vec4(in_position, 1.0);
-                v_position = world_pos.xyz;
-                v_normal = mat3(model) * in_normal;
-                
-                gl_Position = projection * view * world_pos;
-            }
-            '''
-
-    FRAG_3D = '''
-                #version 330
-                
-                uniform vec4 color;
-                uniform vec3 light_pos;
-                uniform vec3 camera_pos;
-                uniform bool use_lighting;
-                
-                in vec3 v_normal;
-                in vec3 v_position;
-                
-                out vec4 fragColor;
-                
-                void main() {
-                    if (use_lighting) {
-                        vec3 normal = normalize(v_normal);
-                        vec3 light_dir = normalize(light_pos - v_position);
-                        vec3 view_dir = normalize(camera_pos - v_position);
-                        vec3 reflect_dir = reflect(-light_dir, normal);
-                        
-                        // Ambient
-                        float ambient = 0.3;
-                        
-                        // Diffuse
-                        float diffuse = max(dot(normal, light_dir), 0.0);
-                        
-                        // Specular
-                        float specular = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.5;
-                        
-                        float lighting = ambient + diffuse + specular;
-                        fragColor = vec4(color.rgb * lighting, color.a);
-                    } else {
-                        fragColor = color;
-                    }
-                }
-            '''
     
     VERT_2D = '''
                 #version 330
@@ -163,12 +175,12 @@ class DOTSHADERS:
                 #version 330
                 
                 in vec2 in_position;
-                in vec2 in_texcoord;
+                in vec2 in_texcoord_0;
                 
                 out vec2 v_texcoord;
                 
                 void main() {
-                    v_texcoord = in_texcoord;
+                    v_texcoord = in_texcoord_0;
                     gl_Position = vec4(in_position, 0.0, 1.0);
                 }
             '''
@@ -199,12 +211,12 @@ class DOTSHADERS:
                 uniform mat4 model;
                 
                 in vec2 in_position;
-                in vec2 in_texcoord;
+                in vec2 in_texcoord_0;
                 
                 out vec2 v_texcoord;
                 
                 void main() {
-                    v_texcoord = in_texcoord;
+                    v_texcoord = in_texcoord_0;
                     gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
                 }
             '''
@@ -235,12 +247,12 @@ class DOTSHADERS:
                     uniform mat4 model;
                     
                     in vec2 in_position;
-                    in vec2 in_texcoord;
+                    in vec2 in_texcoord_0;
                     
                     out vec2 v_texcoord;
                     
                     void main() {
-                        v_texcoord = in_texcoord;
+                        v_texcoord = in_texcoord_0;
                         gl_Position = projection * model * vec4(in_position, 0.0, 1.0);
                     }
                 '''

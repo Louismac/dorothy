@@ -18,6 +18,8 @@ class DrawCommandType(Enum):
     CIRCLE = "circle"
     LINE = "line"
     TRIANGLE = "triangle"
+    LINE_3D = "3dline"
+    SPHERE = "sphere"
 
 @dataclass
 class DrawCommand:
@@ -33,7 +35,8 @@ class DrawCommand:
     transform: np.ndarray = None
     layer_id: Optional[int] = None
     draw_order: int = 0 
-    stroke_as_geometry: bool = False 
+    stroke_as_geometry: bool = False
+    is_3d: bool = False 
 
 class Transform:
     """Manages transformation matrices""" 
@@ -134,6 +137,7 @@ class DorothyRenderer:
         self.camera = Camera(width, height)
         self.light_pos = (5,5,5)
         self.use_lighting = True
+        self.ambient_light = 0.3
         
         # Setup shaders
         self._setup_shaders()
@@ -180,13 +184,13 @@ class DorothyRenderer:
     def _setup_shaders(self):
         """Initialize shader programs"""
         
-        # Basic 3D shader with lighting
-        self.shader_3d = self.ctx.program(
-            vertex_shader=DOTSHADERS.VERT_3D,
-            fragment_shader=DOTSHADERS.FRAG_3D
+        self.shader_3d_instanced = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_3D_INSTANCED,
+            fragment_shader=DOTSHADERS.FRAG_3D_INSTANCED
         )
 
-        self.shader_3d_textured = self.ctx.program(
+        # Basic 3D shader with lighting
+        self.shader_3d = self.ctx.program(
             vertex_shader=DOTSHADERS.VERT_3D_TEXTURED,
             fragment_shader=DOTSHADERS.FRAG_3D_TEXTURED
         )
@@ -230,13 +234,25 @@ class DorothyRenderer:
         self.quad_vao = self.ctx.simple_vertex_array(
             self.shader_texture, 
             self.quad_vbo, 
-            'in_position', 'in_texcoord'
+            'in_position', 'in_texcoord_0'
         )
         
     def _setup_geometry(self):
         """Setup reusable geometry"""
         # 3D primitives will be created on-demand using moderngl_window.geometry
-        self.sphere_geometry = None
+        verts, normals, texcoords = self._generate_sphere_vertices(radius=1.0, sectors=32, rings=32)
+
+# Interleave the data: position, normal, texcoord for each vertex
+        vertex_data = []
+        num_verts = len(verts) // 3
+        for i in range(num_verts):
+            vertex_data.extend(verts[i*3:i*3+3])      # position (3 floats)
+            vertex_data.extend(normals[i*3:i*3+3])    # normal (3 floats)
+            vertex_data.extend(texcoords[i*2:i*2+2])  # texcoord (2 floats)
+
+        vertex_array = np.array(vertex_data, dtype='f4')
+        self.sphere_vbo = self.ctx.buffer(vertex_array)
+        self.sphere_ibo = None 
         self.box_geometry = None
         
     def clear(self, color: Optional[Tuple] = None):
@@ -379,7 +395,7 @@ class DorothyRenderer:
             ], dtype='f4')
                         
             vbo = self.ctx.buffer(vertices)
-            vao = self.ctx.simple_vertex_array(shader, vbo, 'in_position', 'in_texcoord')
+            vao = self.ctx.simple_vertex_array(shader, vbo, 'in_position', 'in_texcoord_0')
             
             # Set uniforms
             shader['projection'].write(self.camera.get_projection_matrix())
@@ -441,12 +457,12 @@ class DorothyRenderer:
                 #version 330
                 
                 in vec2 in_position;
-                in vec2 in_texcoord;
+                in vec2 in_texcoord_0;
                 
                 out vec2 v_texcoord;
                 
                 void main() {
-                    v_texcoord = in_texcoord;
+                    v_texcoord = in_texcoord_0;
                     gl_Position = vec4(in_position, 0.0, 1.0);
                 }
             '''
@@ -506,7 +522,7 @@ class DorothyRenderer:
                 custom_shader,
                 self.quad_vbo,
                 'in_position',
-                'in_texcoord'
+                'in_texcoord_0'
             )
         
         custom_vao = self.effect_vaos[shader_hash]
@@ -676,7 +692,7 @@ class DorothyRenderer:
         vao = self.ctx.simple_vertex_array(
             self.shader_texture_2d,
             vbo,
-            'in_position', 'in_texcoord'
+            'in_position', 'in_texcoord_0'
         )
         
         # Set uniforms - use current transform and camera
@@ -1146,8 +1162,56 @@ class DorothyRenderer:
             return
         
         first_cmd = commands[0]
-        
-        # Set up rendering state
+        if not first_cmd.is_3d:
+            self._render_2d_batch(commands)
+        else:
+            self._render_3d_batch(commands)
+
+    def _render_3d_batch(self,commands: List[DrawCommand]):
+        first_cmd = commands[0]
+        if first_cmd.type == DrawCommandType.SPHERE:
+            
+            # Collect all instance data
+            instance_data = []
+            for cmd in commands:
+                
+                # Flatten 4x4 matrix into 16 floats + 4 colour floats
+                matrix_flat = np.array(cmd.transform, dtype='f4').T.flatten()
+                
+                colour = np.array(self._normalize_color(cmd.color), dtype='f4')
+                instance_data.append(np.concatenate([matrix_flat, colour]))
+            
+            instance_array = np.array(instance_data, dtype='f4')
+            
+            # Create instance buffer
+            instance_buffer = self.ctx.buffer(instance_array)
+            
+                        
+            vao = self.ctx.vertex_array(
+                self.shader_3d_instanced,
+                [
+                    (self.sphere_vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0'),
+                    (instance_buffer, '16f 4f /i', 'instance_model', 'instance_color'),
+                ],
+                index_buffer=None  # No index buffer
+            )
+
+            # Set shared uniforms
+            self.shader_3d_instanced['view'].write(self.camera.get_view_matrix())
+            self.shader_3d_instanced['projection'].write(self.camera.get_projection_matrix())
+            self.shader_3d_instanced['light_pos'].write(glm.vec3(self.light_pos))
+            self.shader_3d_instanced['camera_pos'].write(self.camera.position)
+            self.shader_3d_instanced['use_lighting'] = self.use_lighting
+    
+
+            vao.render(moderngl.TRIANGLES, instances=len(commands))
+            
+            vao.release()
+            instance_buffer.release()
+
+    def _render_2d_batch(self,commands: List[DrawCommand]):
+        first_cmd = commands[0]
+                # Set up rendering state
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
@@ -1374,6 +1438,68 @@ class DorothyRenderer:
         vao.release()
         vbo.release()
     # ====== 3D Drawing Methods ======
+
+    def _generate_sphere_vertices(self, radius=1.0, sectors=32, rings=32):
+        """Generate sphere geometry manually"""
+        vertices = []
+        normals = []
+        texcoords = []
+        
+        # Generate vertices
+        for ring in range(rings + 1):
+            theta = ring * np.pi / rings  # 0 to pi
+            sin_theta = np.sin(theta)
+            cos_theta = np.cos(theta)
+            
+            for sector in range(sectors + 1):
+                phi = sector * 2 * np.pi / sectors  # 0 to 2pi
+                sin_phi = np.sin(phi)
+                cos_phi = np.cos(phi)
+                
+                # Position
+                x = radius * sin_theta * cos_phi
+                y = radius * cos_theta
+                z = radius * sin_theta * sin_phi
+                
+                # Normal (same as position for unit sphere)
+                nx = sin_theta * cos_phi
+                ny = cos_theta
+                nz = sin_theta * sin_phi
+                
+                # Texcoord
+                u = sector / sectors
+                v = ring / rings
+                
+                vertices.extend([x, y, z])
+                normals.extend([nx, ny, nz])
+                texcoords.extend([u, v])
+        
+        # Generate indices and convert to triangles
+        triangle_verts = []
+        triangle_normals = []
+        triangle_texcoords = []
+        
+        for ring in range(rings):
+            for sector in range(sectors):
+                # Four vertices of the quad
+                current = ring * (sectors + 1) + sector
+                next_ring = current + sectors + 1
+                
+                # First triangle
+                for idx in [current, next_ring, current + 1]:
+                    triangle_verts.extend(vertices[idx*3:idx*3+3])
+                    triangle_normals.extend(normals[idx*3:idx*3+3])
+                    triangle_texcoords.extend(texcoords[idx*2:idx*2+2])
+                
+                # Second triangle
+                for idx in [current + 1, next_ring, next_ring + 1]:
+                    triangle_verts.extend(vertices[idx*3:idx*3+3])
+                    triangle_normals.extend(normals[idx*3:idx*3+3])
+                    triangle_texcoords.extend(texcoords[idx*2:idx*2+2])
+        
+        return (np.array(triangle_verts, dtype='f4'),
+                np.array(triangle_normals, dtype='f4'),
+                np.array(triangle_texcoords, dtype='f4'))
     
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
         """Draw a 3D sphere
@@ -1382,19 +1508,18 @@ class DorothyRenderer:
             radius: Sphere radius
             position: (x, y, z) center position
         """
-        if not self.sphere_geometry:
-            self.sphere_geometry = geometry.sphere(radius=1.0, sectors=32, rings=32)
         
         # Apply position and scale
         self.transform.push()
         self.transform.translate(position[0], position[1], position[2])
         self.transform.scale(radius)
         
-        self._draw_3d_geometry(self.sphere_geometry)
+        self._draw_3d_geometry(None, DrawCommandType.SPHERE)
         
         self.transform.pop()
     
-    def box(self, width: float = 1.0, height: float = 1.0, depth: float = 1.0, 
+    def box(self, size: Tuple[float, float, float] = (0, 0, 0), 
+            position: Tuple[float, float, float] = (0, 0, 0),
         texture_layers=None):
         """Draw a box with optional textures (same on all faces or different per face)
         
@@ -1405,7 +1530,7 @@ class DorothyRenderer:
                             'left': layer4, 'top': layer5, 'bottom': layer6}
                         None for solid color
         """
-        w, h, d = width/2, height/2, depth/2
+        w, h, d = size
         
         # Normalize texture_layers to dict format
         if isinstance(texture_layers, int):
@@ -1439,6 +1564,9 @@ class DorothyRenderer:
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.ctx.enable(moderngl.DEPTH_TEST)
+
+        self.transform.push()
+        self.transform.translate(position[0], position[1], position[2])
         
         # Always use textured shader, just set use_texture flag
         for face_name, vertices in faces_data.items():
@@ -1447,17 +1575,16 @@ class DorothyRenderer:
             vbo = self.ctx.buffer(vertices)
             
             # ALWAYS use textured shader (data format matches)
-            shader = self.shader_3d_textured
+            shader = self.shader_3d
             vao = self.ctx.vertex_array(
                 shader,
-                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0')]
             )
             
             # Set uniforms
             shader['projection'].write(self.camera.get_projection_matrix())
             shader['view'].write(self.camera.get_view_matrix())
             shader['model'].write(self.transform.matrix)
-            
             # Texture or solid color
             if layer_id is not None and layer_id in self.layers:
                 texture = self.layers[layer_id]['fbo'].color_attachments[0]
@@ -1476,6 +1603,10 @@ class DorothyRenderer:
             vao.render(moderngl.TRIANGLES)
             vao.release()
             vbo.release()
+        
+        #resetting transform from translate for position
+        self.transform.pop()
+        
 
     def _create_box_faces(self, w, h, d):
         """Create box face geometry - returns dict of interleaved vertex data"""
@@ -1549,29 +1680,29 @@ class DorothyRenderer:
             pos2[0], pos2[1], pos2[2]
         ], dtype='f4')
         
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
+        # vbo = self.ctx.buffer(vertices)
+        # vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
         
         # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
+        # self.ctx.enable(moderngl.BLEND)
+        # self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        # self.ctx.enable(moderngl.DEPTH_TEST)
         
         # Use shared 3D geometry setup
-        self._draw_3d_geometry(None)  # Sets uniforms
+        self._draw_3d_geometry(vertices, DrawCommandType.LINE_3D)  # Sets uniforms
         
-        # Override color to use stroke color instead of fill
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+        # # Override color to use stroke color instead of fill
+        # self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
         
-        # Disable lighting for lines (just use flat color)
-        self.shader_3d['use_lighting'] = False
+        # # Disable lighting for lines (just use flat color)
+        # self.shader_3d['use_lighting'] = False
         
-        # Draw line
-        self.ctx.line_width = self._stroke_weight
-        vao.render(moderngl.LINES)
+        # # Draw line
+        # self.ctx.line_width = self._stroke_weight
+        # vao.render(moderngl.LINES)
         
-        vao.release()
-        vbo.release()
+        # vao.release()
+        # vbo.release()
 
     def polyline_3d(self, points, closed: bool = False):
         """Draw a 3D polyline (connected line segments)
@@ -1593,29 +1724,29 @@ class DorothyRenderer:
         
         vertices = np.array(vertices, dtype='f4')
         
-        vbo = self.ctx.buffer(vertices)
-        vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
+        # vbo = self.ctx.buffer(vertices)
+        # vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
         
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
+        # # Enable blending and depth
+        # self.ctx.enable(moderngl.BLEND)
+        # self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        # self.ctx.enable(moderngl.DEPTH_TEST)
         
         # Use shared 3D geometry setup
-        self._draw_3d_geometry(None)
+        self._draw_3d_geometry(vertices ,DrawCommandType.LINE_3D)
         
-        # Override color to use stroke color
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
+        # # Override color to use stroke color
+        # self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
         
-        # Disable lighting for lines
-        self.shader_3d['use_lighting'] = False
+        # # Disable lighting for lines
+        # self.shader_3d['use_lighting'] = False
         
-        # Draw polyline
-        self.ctx.line_width = self._stroke_weight
-        vao.render(moderngl.LINE_STRIP)
+        # # Draw polyline
+        # self.ctx.line_width = self._stroke_weight
+        # vao.render(moderngl.LINE_STRIP)
         
-        vao.release()
-        vbo.release()
+        # vao.release()
+        # vbo.release()
 
     def load_obj(self, filepath):
         """Load a Wavefront OBJ file
@@ -1711,11 +1842,11 @@ class DorothyRenderer:
         vbo = self.ctx.buffer(vertices)
         
         # Always use textured shader for OBJ meshes (they have UVs)
-        shader = self.shader_3d_textured
+        shader = self.shader_3d
         
         vao = self.ctx.vertex_array(
             shader,
-            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord')]
+            [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0')]
         )
         
         # Enable blending and depth
@@ -1748,17 +1879,25 @@ class DorothyRenderer:
         vao.release()
         vbo.release()
         
-    def _draw_3d_geometry(self, geom):
-        """Internal method to render 3D geometry"""
-        self.shader_3d['model'].write(self.transform.matrix)
-        self.shader_3d['view'].write(self.camera.get_view_matrix())
-        self.shader_3d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
-        self.shader_3d['light_pos'].write(glm.vec3(self.light_pos))
-        self.shader_3d['camera_pos'].write(self.camera.position)
-        self.shader_3d['use_lighting'] = self.use_lighting
-        if geom is not None:
-            geom.render(self.shader_3d)
+    def _draw_3d_geometry(self, geom, type):
+
+        cmd = DrawCommand(
+                type=type,
+                fill_vertices=geom if type==DrawCommandType.SPHERE else None,
+                stroke_vertices=None if type==DrawCommandType.SPHERE else geom,
+                color=self.fill_color if self.use_fill else None,
+                use_fill=self.use_fill,
+                use_stroke=self.use_stroke,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color if self.use_stroke else None,
+                transform=self.transform.matrix,
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+                is_3d=True
+            )
+            
+        self.draw_order_counter += 1
+        self.draw_queue.append(cmd)        
     
     # ====== State Methods ======
     

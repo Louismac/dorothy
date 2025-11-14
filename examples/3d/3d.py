@@ -6,11 +6,12 @@ class Example3D:
     
     def setup(self):
         dot.camera_3d()
+        dot.set_camera((0, 0, 5), (0, 0, 0))
     
     def draw(self):
         dot.fill(dot.red)
-        dot.sphere(0.5, (1,1,1))
+        dot.sphere(0.5, (-0.5, 0.5, 0.5))
         dot.fill(dot.blue)
-        dot.box(0.5, 0.5, 0.5)
+        dot.box((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
      
 Example3D()

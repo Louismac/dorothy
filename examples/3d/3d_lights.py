@@ -30,12 +30,9 @@ class Example3D:
 
         dot.camera_3d()
         # 3D box (animated)
-        with dot.transform():
-            dot.translate(np.sin(np.pi * dot.frames * 0.01), 0, 0)
-            dot.fill(dot.blue)
-            dot.box(1, 1, 1)
-            dot.fill(dot.red)
-            dot.translate(0,np.sin(np.pi * dot.frames * 0.01), 0)
-            dot.sphere(0.5)
+        dot.fill(dot.blue)
+        dot.box((1, 1, 1),(np.sin(np.pi * dot.frames * 0.01), 0, 0))
+        dot.fill(dot.red)
+        dot.sphere(1,(0,np.sin(np.pi * dot.frames * 0.01), 0))
         
 Example3D()
