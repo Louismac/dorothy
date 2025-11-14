@@ -15,7 +15,8 @@ class DorothyWindow(mglw.WindowConfig):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from .DorothyRenderer import DorothyRenderer
+        from .renderer import DorothyRenderer
+
         from .Dorothy import Dorothy
         from .Audio import Audio
 
