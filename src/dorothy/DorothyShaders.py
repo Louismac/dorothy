@@ -182,6 +182,29 @@ class DOTSHADERS:
             fragColor = v_color;
         }
     '''
+
+    VERT_2D_INSTANCED_RECT = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 model;
+        
+        in vec2 in_position;  // Unit rectangle (0,0 to 1,1)
+        
+        // Per-instance attributes
+        in vec2 instance_pos;    // Top-left corner
+        in vec2 instance_size;   // Width and height
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        
+        void main() {
+            // Transform unit rectangle to world space
+            vec2 world_pos = in_position * instance_size + instance_pos;
+            gl_Position = projection * model * vec4(world_pos, 0.0, 1.0);
+            v_color = instance_color;
+        }
+    '''
     
     VERT_2D = '''
                 #version 330

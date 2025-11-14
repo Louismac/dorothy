@@ -43,6 +43,8 @@ class DrawCommand:
     is_3d: bool = False 
     center: Optional[Tuple[float, float]] = None
     radius: Optional[float] = None
+    rect_pos1: Optional[Tuple[float, float]] = None
+    rect_pos2: Optional[Tuple[float, float]] = None
 
 class Transform:
     """Manages transformation matrices""" 
@@ -208,6 +210,11 @@ class DorothyRenderer:
 
         self.shader_2d_instanced = self.ctx.program(
             vertex_shader=DOTSHADERS.VERT_2D_INSTANCED,
+            fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED
+        )
+
+        self.shader_2d_instanced_rect = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_2D_INSTANCED_RECT,
             fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED
         )
         
@@ -776,123 +783,100 @@ class DorothyRenderer:
         else:
             raise ValueError(f"Color must be RGB or RGBA tuple, got: {color}")
     
-    def _create_rectangle_stroke_geometry(self, x1, y1, x2, y2, thickness):
-        """Create thick stroke geometry for rectangle with mitered corners
+    def _get_unit_rectangle_stroke_vbo(self, thickness_ratio):
+        """Get cached unit rectangle stroke (outline ring for 0,0 to 1,1 rect)
         
-        Creates an outline ring by building outer and inner rectangles
+        Args:
+            thickness_ratio: stroke thickness as ratio of rectangle size
         """
-        half_thick = thickness / 2
+        cache_key = round(thickness_ratio, 3)
         
-        # Outer rectangle (expanded by half thickness)
-        outer_x1 = x1 - half_thick
-        outer_y1 = y1 - half_thick
-        outer_x2 = x2 + half_thick
-        outer_y2 = y2 + half_thick
+        if not hasattr(self, '_unit_rect_stroke_cache'):
+            self._unit_rect_stroke_cache = {}
         
-        # Inner rectangle (shrunk by half thickness)
-        inner_x1 = x1 + half_thick
-        inner_y1 = y1 + half_thick
-        inner_x2 = x2 - half_thick
-        inner_y2 = y2 - half_thick
-        
-        # Build the stroke as quads around the perimeter
-        # Each edge is 2 triangles forming a quad
-        
-        vertices = []
-        
-        # Top edge quad
-        vertices.extend([
-            outer_x1, outer_y1,  # Outer top-left
-            outer_x2, outer_y1,  # Outer top-right
-            inner_x2, inner_y1,  # Inner top-right
+        if cache_key not in self._unit_rect_stroke_cache:
+            half_thick = thickness_ratio / 2
             
-            outer_x1, outer_y1,  # Outer top-left
-            inner_x2, inner_y1,  # Inner top-right
-            inner_x1, inner_y1,  # Inner top-left
-        ])
-        
-        # Right edge quad
-        vertices.extend([
-            outer_x2, outer_y1,  # Outer top-right
-            outer_x2, outer_y2,  # Outer bottom-right
-            inner_x2, inner_y2,  # Inner bottom-right
+            # Outer rectangle (expanded outward)
+            outer_x1, outer_y1 = -half_thick, -half_thick
+            outer_x2, outer_y2 = 1.0 + half_thick, 1.0 + half_thick
             
-            outer_x2, outer_y1,  # Outer top-right
-            inner_x2, inner_y2,  # Inner bottom-right
-            inner_x2, inner_y1,  # Inner top-right
-        ])
-        
-        # Bottom edge quad
-        vertices.extend([
-            outer_x2, outer_y2,  # Outer bottom-right
-            outer_x1, outer_y2,  # Outer bottom-left
-            inner_x1, inner_y2,  # Inner bottom-left
+            # Inner rectangle (shrunk inward)
+            inner_x1, inner_y1 = half_thick, half_thick
+            inner_x2, inner_y2 = 1.0 - half_thick, 1.0 - half_thick
             
-            outer_x2, outer_y2,  # Outer bottom-right
-            inner_x1, inner_y2,  # Inner bottom-left
-            inner_x2, inner_y2,  # Inner bottom-right
-        ])
-        
-        # Left edge quad
-        vertices.extend([
-            outer_x1, outer_y2,  # Outer bottom-left
-            outer_x1, outer_y1,  # Outer top-left
-            inner_x1, inner_y1,  # Inner top-left
+            vertices = []
             
-            outer_x1, outer_y2,  # Outer bottom-left
-            inner_x1, inner_y1,  # Inner top-left
-            inner_x1, inner_y2,  # Inner bottom-left
-        ])
+            # Top edge quad
+            vertices.extend([
+                outer_x1, outer_y1, outer_x2, outer_y1, inner_x2, inner_y1,
+                outer_x1, outer_y1, inner_x2, inner_y1, inner_x1, inner_y1,
+            ])
+            
+            # Right edge quad
+            vertices.extend([
+                outer_x2, outer_y1, outer_x2, outer_y2, inner_x2, inner_y2,
+                outer_x2, outer_y1, inner_x2, inner_y2, inner_x2, inner_y1,
+            ])
+            
+            # Bottom edge quad
+            vertices.extend([
+                outer_x2, outer_y2, outer_x1, outer_y2, inner_x1, inner_y2,
+                outer_x2, outer_y2, inner_x1, inner_y2, inner_x2, inner_y2,
+            ])
+            
+            # Left edge quad
+            vertices.extend([
+                outer_x1, outer_y2, outer_x1, outer_y1, inner_x1, inner_y1,
+                outer_x1, outer_y2, inner_x1, inner_y1, inner_x1, inner_y2,
+            ])
+            
+            vert_array = np.array(vertices, dtype='f4')
+            self._unit_rect_stroke_cache[cache_key] = self.ctx.buffer(vert_array)
         
-        return np.array(vertices, dtype='f4')
+        return self._unit_rect_stroke_cache[cache_key]
 
+    def _get_unit_rectangle_vbo(self):
+
+        """Get cached unit rectangle (0,0 to 1,1)"""
+        if not hasattr(self, '_unit_rect_vbo'):
+            # Unit rectangle as 2 triangles
+            vertices = np.array([
+                0.0, 0.0,
+                1.0, 0.0,
+                1.0, 1.0,
+                0.0, 0.0,
+                1.0, 1.0,
+                0.0, 1.0
+            ], dtype='f4')
+            self._unit_rect_vbo = self.ctx.buffer(vertices)
+        return self._unit_rect_vbo
 
     def rectangle(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a rectangle"""
-        x1, y1 = pos1
-        x2, y2 = pos2
-        
+        """Draw a rectangle (queued for batching with instancing)"""
         if self.enable_batching:
-            # Fill vertices (always same)
-            fill_verts = np.array([
-                x1, y1,
-                x2, y1,
-                x2, y2,
-                x1, y1,
-                x2, y2,
-                x1, y2
-            ], dtype='f4')
+            # Apply CPU transform to corners
+            x1, y1 = pos1
+            x2, y2 = pos2
             
-            # Stroke vertices - thick or thin
-            if self.use_stroke and self._stroke_weight > 1.0:
-                # Thick stroke - use geometry
-                stroke_verts = self._create_rectangle_stroke_geometry(
-                    x1, y1, x2, y2, self._stroke_weight
-                )
-                stroke_as_fill = True  # Render stroke as filled triangles
-            else:
-                # Thin stroke - use lines
-                stroke_verts = np.array([
-                    x1, y1, x2, y1,
-                    x2, y1, x2, y2,
-                    x2, y2, x1, y2,
-                    x1, y2, x1, y1,
-                ], dtype='f4')
-                stroke_as_fill = False
+            # Transform corners if needed
+            p1 = self.transform.matrix * glm.vec4(x1, y1, 0.0, 1.0)
+            p2 = self.transform.matrix * glm.vec4(x2, y2, 0.0, 1.0)
+            x1, y1 = p1.x, p1.y
+            x2, y2 = p2.x, p2.y
             
             cmd = DrawCommand(
                 type=DrawCommandType.RECTANGLE,
-                fill_vertices=fill_verts,
-                stroke_vertices=stroke_verts,
+                rect_pos1=(x1, y1),
+                rect_pos2=(x2, y2),
                 color=self.fill_color if self.use_fill else None,
                 use_fill=self.use_fill,
                 use_stroke=self.use_stroke,
                 stroke_weight=self._stroke_weight,
                 stroke_color=self.stroke_color if self.use_stroke else None,
-                transform=self.transform.matrix,
+                transform=glm.mat4(),  # Identity - already transformed
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter,
-                stroke_as_geometry=stroke_as_fill  # ← Add this flag
             )
             
             self.draw_order_counter += 1
@@ -1152,6 +1136,11 @@ class DorothyRenderer:
                 return self._transforms_equal(cmd1.transform, cmd2.transform)
             else:
                 if cmd1.type == DrawCommandType.CIRCLE and cmd2.type == DrawCommandType.CIRCLE:
+                    # Fill state can differ per instance (different colors OK)
+                    # Stroke state must match for grouping
+                    if cmd1.use_stroke != cmd2.use_stroke:
+                        return False
+                if cmd1.type == DrawCommandType.RECTANGLE and cmd2.type == DrawCommandType.RECTANGLE:
                     # Fill state can differ per instance (different colors OK)
                     # Stroke state must match for grouping
                     if cmd1.use_stroke != cmd2.use_stroke:
@@ -1433,7 +1422,7 @@ class DorothyRenderer:
                 
                 # Render each stroke weight group
                 for stroke_weight, stroke_cmds in strokes_by_weight.items():
-                    if stroke_weight > 1.0:
+                    if stroke_weight >= 1.0:
                         # Thick stroke - use ring geometry
                         # Use average radius for thickness ratio (or max)
                         avg_radius = sum(cmd.radius for cmd in stroke_cmds) / len(stroke_cmds)
@@ -1471,6 +1460,103 @@ class DorothyRenderer:
                         # Thin stroke - use line loop (or implement line instancing)
                         # For now, fall back to old method or skip
                         pass
+        elif first_cmd.type == DrawCommandType.RECTANGLE:
+            if first_cmd.use_fill:
+                unit_rect_vbo = self._get_unit_rectangle_vbo()
+                
+                # Build instance data
+                instance_data = []
+                for cmd in commands:
+                    if cmd.use_fill:
+                        x1, y1 = cmd.rect_pos1
+                        x2, y2 = cmd.rect_pos2
+                        width = x2 - x1
+                        height = y2 - y1
+                        
+                        color = np.array(self._normalize_color(cmd.color), dtype='f4')
+                        instance_data.extend([
+                            x1, y1,           # position (2f)
+                            width, height,    # size (2f)
+                            *color            # color (4f)
+                        ])
+                
+                if instance_data:
+                    instance_array = np.array(instance_data, dtype='f4')
+                    instance_buffer = self.ctx.buffer(instance_array)
+                    
+                    vao = self.ctx.vertex_array(
+                        self.shader_2d_instanced_rect,
+                        [
+                            (unit_rect_vbo, '2f', 'in_position'),
+                            (instance_buffer, '2f 2f 4f /i', 'instance_pos', 'instance_size', 'instance_color'),
+                        ]
+                    )
+                    
+                    self.shader_2d_instanced_rect['projection'].write(self.camera.get_projection_matrix())
+                    self.shader_2d_instanced_rect['model'].write(glm.mat4())
+                    
+                    vao.render(moderngl.TRIANGLES, instances=len(instance_data) // 8)
+                    
+                    vao.release()
+                    instance_buffer.release()
+            if first_cmd.use_stroke:
+                # Group by stroke weight
+                strokes_by_weight = {}
+                for cmd in commands:
+                    if cmd.use_stroke:
+                        weight = cmd.stroke_weight
+                        if weight not in strokes_by_weight:
+                            strokes_by_weight[weight] = []
+                        strokes_by_weight[weight].append(cmd)
+                
+                for stroke_weight, stroke_cmds in strokes_by_weight.items():
+                    if stroke_weight >= 1.0:
+                        # Thick stroke - use ring geometry
+                        # Calculate thickness ratio based on average rect size
+                        avg_width = sum(abs(cmd.rect_pos2[0] - cmd.rect_pos1[0]) for cmd in stroke_cmds) / len(stroke_cmds)
+                        avg_height = sum(abs(cmd.rect_pos2[1] - cmd.rect_pos1[1]) for cmd in stroke_cmds) / len(stroke_cmds)
+                        avg_size = (avg_width + avg_height) / 2
+                        thickness_ratio = stroke_weight / avg_size
+                        
+                        unit_stroke_vbo = self._get_unit_rectangle_stroke_vbo(thickness_ratio)
+                        
+                        # Build instance data
+                        stroke_instance_data = []
+                        for cmd in stroke_cmds:
+                            x1, y1 = cmd.rect_pos1
+                            x2, y2 = cmd.rect_pos2
+                            width = x2 - x1
+                            height = y2 - y1
+                            
+                            color = np.array(self._normalize_color(cmd.stroke_color), dtype='f4')
+                            stroke_instance_data.extend([
+                                x1, y1,           # position (2f)
+                                width, height,    # size (2f)
+                                *color            # color (4f)
+                            ])
+                        
+                        stroke_instance_array = np.array(stroke_instance_data, dtype='f4')
+                        stroke_instance_buffer = self.ctx.buffer(stroke_instance_array)
+                        
+                        stroke_vao = self.ctx.vertex_array(
+                            self.shader_2d_instanced_rect,
+                            [
+                                (unit_stroke_vbo, '2f', 'in_position'),
+                                (stroke_instance_buffer, '2f 2f 4f /i', 'instance_pos', 'instance_size', 'instance_color'),
+                            ]
+                        )
+                        
+                        self.shader_2d_instanced_rect['projection'].write(self.camera.get_projection_matrix())
+                        self.shader_2d_instanced_rect['model'].write(glm.mat4())
+                        
+                        stroke_vao.render(moderngl.TRIANGLES, instances=len(stroke_instance_data) // 8)
+                        
+                        stroke_vao.release()
+                        stroke_instance_buffer.release()
+                    else:
+                        # Thin stroke - skip or implement line rendering
+                        pass
+        
         elif first_cmd.use_fill and first_cmd.color is not None:
             self.shader_2d['projection'].write(self.camera.get_projection_matrix())
             self.shader_2d['model'].write(first_cmd.transform)

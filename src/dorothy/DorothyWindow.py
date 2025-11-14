@@ -58,7 +58,6 @@ class DorothyWindow(mglw.WindowConfig):
 
     def on_render(self, render_time: float, frame_time: float):
         """Called every frame"""
-
         # Create persistent canvas if needed
         try:
             self.dorothy._ensure_persistent_canvas()

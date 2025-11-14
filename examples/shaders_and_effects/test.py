@@ -11,16 +11,23 @@ class MySketch:
 
     def setup(self):
         dot.fill(dot.blue)
+        dot.set_stroke_weight(1)
 
     def draw(self):
-        print("start draw loop")
-        dot.background(dot.white)
-        dot.fill(dot.red)
-        dot.no_stroke()
-        dot.circle((320, 320), 50)  # Dead center of 640x640
-        dot.circle((0, 0), 20)      # Top-left corner
-        dot.circle((640, 640), 20)  # Bottom-right corner  
-        print(f"viewport {dot.renderer.ctx.viewport}")     
+        dot.camera_2d()
+        dot.background((50, 50, 50))
+        dot.fill((255, 0, 0))
+        dot.stroke(dot.green)
+        
+        # Draw at all four corners
+        dot.circle((10, 10), 10)        # Top-left - RED
+        dot.circle((630, 10), 10)       # Top-right - should be red
+        dot.circle((10, 630), 10)       # Bottom-left - should be red  
+        dot.circle((630, 630), 10)      # Bottom-right - should be red
+        
+        # Center
+        dot.fill((0, 255, 0))
+        dot.circle((320, 320), 50)  
 
 MySketch()          
 
