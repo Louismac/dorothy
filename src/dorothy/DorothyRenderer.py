@@ -2049,7 +2049,7 @@ class DorothyRenderer:
             shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
         
         # Lighting
-        shader['camera_position'] = tuple(self.camera.position)
+        shader['camera_pos'] = tuple(self.camera.position)
         shader['light_pos'].write(glm.vec3(self.light_pos))
         
         # Render

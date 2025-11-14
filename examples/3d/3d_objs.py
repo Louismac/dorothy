@@ -10,8 +10,8 @@ class Example3D:
         dot.camera_3d()
         dot.set_camera((40, 40, 40), (0, 0, 0))
         # Load mesh
-        self.model = dot.load_obj("model/cottage_obj.obj")
-        #self.model = dot.load_obj("model/Tree1.obj")
+        self.model = dot.load_obj("models/cottage_obj.obj")
+        #self.model = dot.load_obj("models/Tree1.obj")
         self.texture_layer = dot.get_layer()
 
     def draw(self):
