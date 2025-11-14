@@ -17,8 +17,8 @@ class MySketch:
         for i in range(1, 11):
             dot.set_stroke_weight(i)
             dot.rectangle((300, 50 + i*20), (750, 50 + i*60))
-            dot.circle((50+ i*20, 50 + i*20), (100))
-            dot.line((50, 50 + i*20), (250, 50 + i*20))
+            # dot.circle((50+ i*20, 50 + i*20), (100))
+            # dot.line((50, 50 + i*20), (250, 50 + i*20))
             
 
 MySketch()          

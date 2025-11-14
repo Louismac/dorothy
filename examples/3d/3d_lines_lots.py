@@ -35,9 +35,9 @@ class Example3D:
             dot.line_3d(vertices[i], vertices[j])
 
     def draw(self):
-        dot.background(dot.black)
+        dot.background((0,0,0))
         dot.set_stroke_weight(1)
-        s = 5
+        s = 10
         with dot.transform():
             dot.rotate(dot.frames * 0.02, 0, 1, 0)  # Rotate around Y
             dot.rotate(dot.frames * 0.01, 1, 0, 0)  # Rotate around X

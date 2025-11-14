@@ -183,6 +183,77 @@ class DOTSHADERS:
         }
     '''
 
+    VERT_2D_INSTANCED_LINE = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 model;
+        
+        in float in_position;  // 0.0 or 1.0
+        
+        // Per-instance attributes
+        in vec2 instance_start;
+        in vec2 instance_end;
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        
+        void main() {
+            // Interpolate between start and end
+            vec2 world_pos = mix(instance_start, instance_end, in_position);
+            gl_Position = projection * model * vec4(world_pos, 0.0, 1.0);
+            v_color = instance_color;
+        }
+    '''
+
+    FRAG_2D_INSTANCED_LINE = '''
+        #version 330
+        
+        in vec4 v_color;
+        out vec4 fragColor;
+        
+        void main() {
+            fragColor = v_color;
+        }
+    '''
+
+    # For thick lines - use rectangle shader with different geometry
+    VERT_2D_INSTANCED_THICK_LINE = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 model;
+        
+        in vec2 in_position;  // Unit thick line geometry vertices
+        
+        // Per-instance attributes  
+        in vec2 instance_start;
+        in vec2 instance_end;
+        in float instance_thickness;
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        
+        void main() {
+            // Calculate line direction and perpendicular
+            vec2 direction = instance_end - instance_start;
+            float length = length(direction);
+            direction = direction / length;
+            
+            vec2 perpendicular = vec2(-direction.y, direction.x);
+            
+            // Transform unit line geometry
+            // in_position.x is along the line (0 to 1)
+            // in_position.y is perpendicular (-0.5 to 0.5)
+            vec2 world_pos = instance_start 
+                        + direction * (in_position.x * length)
+                        + perpendicular * (in_position.y * instance_thickness);
+            
+            gl_Position = projection * model * vec4(world_pos, 0.0, 1.0);
+            v_color = instance_color;
+        }
+    '''
+
     VERT_2D_INSTANCED_RECT = '''
         #version 330
         

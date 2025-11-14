@@ -797,10 +797,10 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.rectangle(pos1, pos2)
     
-    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
+    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float]):
         """Draw a line"""
         self._ensure_renderer()
-        self.renderer.line(pos1, pos2, annotate)
+        self.renderer.line(pos1, pos2)
     
     def polyline(self, points, closed: bool = False):
         """Draw a circle"""

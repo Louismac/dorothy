@@ -45,6 +45,8 @@ class DrawCommand:
     radius: Optional[float] = None
     rect_pos1: Optional[Tuple[float, float]] = None
     rect_pos2: Optional[Tuple[float, float]] = None
+    line_start: Optional[Tuple[float, float]] = None
+    line_end: Optional[Tuple[float, float]] = None
 
 class Transform:
     """Manages transformation matrices""" 
@@ -216,6 +218,16 @@ class DorothyRenderer:
         self.shader_2d_instanced_rect = self.ctx.program(
             vertex_shader=DOTSHADERS.VERT_2D_INSTANCED_RECT,
             fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED
+        )
+
+        self.shader_2d_instanced_line = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_2D_INSTANCED_LINE,
+            fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED_LINE
+        )
+        
+        self.shader_2d_instanced_thick_line = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_2D_INSTANCED_THICK_LINE,
+            fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED_LINE
         )
         
         # Simple 2D shader
@@ -1033,48 +1045,60 @@ class DorothyRenderer:
         
         return vertices
 
+    def _get_unit_line_vbo(self):
+        """Get cached unit line (two points: 0 and 1)"""
+        if not hasattr(self, '_unit_line_vbo'):
+            vertices = np.array([0.0, 1.0], dtype='f4')
+            self._unit_line_vbo = self.ctx.buffer(vertices)
+        return self._unit_line_vbo
 
-    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float], annotate: bool = False):
-        """Draw a line (batched)"""
+    def _get_unit_thick_line_vbo(self):
+        """Get cached unit thick line geometry (rectangle from 0,0 to 1,0 with height 1)
+        
+        Creates a unit rectangle:
+        - x from 0 to 1 (along line direction)
+        - y from -0.5 to 0.5 (perpendicular, for thickness)
+        """
+        if not hasattr(self, '_unit_thick_line_vbo'):
+            # Rectangle as 2 triangles
+            vertices = np.array([
+                # x,    y
+                0.0, -0.5,  # Start bottom
+                1.0, -0.5,  # End bottom
+                1.0,  0.5,  # End top
+                
+                0.0, -0.5,  # Start bottom
+                1.0,  0.5,  # End top
+                0.0,  0.5,  # Start top
+            ], dtype='f4')
+            self._unit_thick_line_vbo = self.ctx.buffer(vertices)
+        return self._unit_thick_line_vbo
+    
+    def line(self, pos1: Tuple[float, float], pos2: Tuple[float, float]):
+        """Draw a line"""
         if self.enable_batching:
             x1, y1 = pos1
             x2, y2 = pos2
             
-            if self._stroke_weight > 1.0:
-                # Thick line - draw as geometry
-                line_verts = self._create_thick_line_geometry(x1, y1, x2, y2, self._stroke_weight)
-                cmd = DrawCommand(
-                    type=DrawCommandType.LINE,
-                    fill_vertices=line_verts,  # Draw as filled rectangle
-                    stroke_vertices=np.array([], dtype='f4'),  # No stroke
-                    color=self.stroke_color,  # Line uses stroke color as fill
-                    use_fill=True,
-                    use_stroke=False,
-                    stroke_weight=1.0,
-                    stroke_color=None,
-                    transform=self.transform.matrix,
-                    layer_id=self.active_layer,
-                    draw_order=self.draw_order_counter
-                )
-            else:
-                # Thin line (weight=1) - use regular line rendering
-                vertices = np.array([x1, y1, x2, y2], dtype='f4')
-                cmd = DrawCommand(
-                    type=DrawCommandType.LINE,
-                    fill_vertices=np.array([], dtype='f4'),
-                    stroke_vertices=vertices,
-                    color=None,
-                    use_fill=False,
-                    use_stroke=True,
-                    stroke_weight=1.0,  # Always 1 for OpenGL lines
-                    stroke_color=self.stroke_color,
-                    transform=self.transform.matrix,
-                    layer_id=self.active_layer,
-                    draw_order=self.draw_order_counter
-                )
+            # Apply transform
+            p1 = self.transform.matrix * glm.vec4(x1, y1, 0.0, 1.0)
+            p2 = self.transform.matrix * glm.vec4(x2, y2, 0.0, 1.0)
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE,
+                line_start=(p1.x, p1.y),
+                line_end=(p2.x, p2.y),
+                use_stroke=True,
+                stroke_weight=self._stroke_weight,
+                stroke_color=self.stroke_color,
+                transform=glm.mat4(),  # Already applied
+                layer_id=self.active_layer,
+                draw_order=self.draw_order_counter,
+            )
             
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
+    
     
     def flush_batch(self):
         """Execute all queued draw commands in batches"""
@@ -1145,6 +1169,10 @@ class DorothyRenderer:
                     # Stroke state must match for grouping
                     if cmd1.use_stroke != cmd2.use_stroke:
                         return False
+                if cmd1.type == DrawCommandType.LINE and cmd2.type == DrawCommandType.LINE:
+                    # Lines can batch together regardless of stroke color (handled per-instance)
+                    # Only thickness needs to match for thick lines
+                    return True
                 # For 2D and non-instanced types, keep old logic
                 # Fill state must match
                 if cmd1.use_fill != cmd2.use_fill:
@@ -1556,7 +1584,84 @@ class DorothyRenderer:
                     else:
                         # Thin stroke - skip or implement line rendering
                         pass
-        
+        elif first_cmd.type == DrawCommandType.LINE:
+            if first_cmd.stroke_weight <= 1.0:
+                # THIN LINES - use line primitives
+                unit_line_vbo = self._get_unit_line_vbo()
+                
+                # Build instance data
+                instance_data = []
+                for cmd in commands:
+                    color = np.array(self._normalize_color(cmd.stroke_color), dtype='f4')
+                    instance_data.extend([
+                        cmd.line_start[0], cmd.line_start[1],  # start (2f)
+                        cmd.line_end[0], cmd.line_end[1],      # end (2f)
+                        *color                                  # color (4f)
+                    ])
+                
+                if instance_data:
+                    instance_array = np.array(instance_data, dtype='f4')
+                    instance_buffer = self.ctx.buffer(instance_array)
+                    
+                    vao = self.ctx.vertex_array(
+                        self.shader_2d_instanced_line,
+                        [
+                            (unit_line_vbo, '1f', 'in_position'),
+                            (instance_buffer, '2f 2f 4f /i', 'instance_start', 'instance_end', 'instance_color'),
+                        ]
+                    )
+                    
+                    self.shader_2d_instanced_line['projection'].write(self.camera.get_projection_matrix())
+                    self.shader_2d_instanced_line['model'].write(glm.mat4())
+                    
+                    self.ctx.line_width = first_cmd.stroke_weight
+                    vao.render(moderngl.LINES, instances=len(instance_data) // 8)
+                    
+                    vao.release()
+                    instance_buffer.release()
+            
+            else:
+                # THICK LINES - use geometry
+                # Group by thickness
+                lines_by_thickness = {}
+                for cmd in commands:
+                    thickness = cmd.stroke_weight
+                    if thickness not in lines_by_thickness:
+                        lines_by_thickness[thickness] = []
+                    lines_by_thickness[thickness].append(cmd)
+                
+                unit_thick_line_vbo = self._get_unit_thick_line_vbo()
+                
+                for thickness, thick_cmds in lines_by_thickness.items():
+                    # Build instance data
+                    instance_data = []
+                    for cmd in thick_cmds:
+                        color = np.array(self._normalize_color(cmd.stroke_color), dtype='f4')
+                        instance_data.extend([
+                            cmd.line_start[0], cmd.line_start[1],  # start (2f)
+                            cmd.line_end[0], cmd.line_end[1],      # end (2f)
+                            thickness,                              # thickness (1f)
+                            *color                                  # color (4f)
+                        ])
+                    
+                    instance_array = np.array(instance_data, dtype='f4')
+                    instance_buffer = self.ctx.buffer(instance_array)
+                    
+                    vao = self.ctx.vertex_array(
+                        self.shader_2d_instanced_thick_line,
+                        [
+                            (unit_thick_line_vbo, '2f', 'in_position'),
+                            (instance_buffer, '2f 2f 1f 4f /i', 'instance_start', 'instance_end', 'instance_thickness', 'instance_color'),
+                        ]
+                    )
+                    
+                    self.shader_2d_instanced_thick_line['projection'].write(self.camera.get_projection_matrix())
+                    self.shader_2d_instanced_thick_line['model'].write(glm.mat4())
+                    
+                    vao.render(moderngl.TRIANGLES, instances=len(instance_data) // 9)
+                    
+                    vao.release()
+                    instance_buffer.release()
         elif first_cmd.use_fill and first_cmd.color is not None:
             self.shader_2d['projection'].write(self.camera.get_projection_matrix())
             self.shader_2d['model'].write(first_cmd.transform)
