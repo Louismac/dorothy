@@ -1414,14 +1414,6 @@ class DorothyRenderer:
                     self.shader_2d_instanced['model'].write(glm.mat4())
 
                     # In _render_2d_batch for circles, right before rendering:
-                    print(f"Camera mode: {self.camera.mode}")
-                    print(f"Camera width/height: {self.camera.width}, {self.camera.height}")
-                    print(f"First circle center: {commands[0].center}")
-                    print(f"First circle radius: {commands[0].radius}")
-                    print(f"Projection matrix:")
-                    proj = self.camera.get_projection_matrix()
-                    for row in range(4):
-                        print(f"  [{proj[row][0]:8.3f}] [{proj[row][1]:8.3f}] [{proj[row][2]:8.3f}] [{proj[row][3]:8.3f}]")
 
                     fill_vao.render(moderngl.TRIANGLES, instances=len(fill_instance_data) // 7)
                     

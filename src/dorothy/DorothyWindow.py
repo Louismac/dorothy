@@ -8,12 +8,10 @@ class DorothyWindow(mglw.WindowConfig):
     
     gl_version = (3, 3)
     title = "Dorothy - ModernGL"
-    resizable = True
+    # resizable = True
     cursor = True  # Enable cursor tracking
     samples = 4  # Enable MSAA for smoother lines
-    clear_color = None
-    aspect_ratio = None
-    vsync = True
+    # vsync = True
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -26,12 +24,14 @@ class DorothyWindow(mglw.WindowConfig):
         self.dorothy = Dorothy._pending_instance
         self.start_time_millis = int(round(time.time() * 1000))
         # Setup renderer with the context
-        print("window size", self.window_size)
+        fbo_width, fbo_height = self.wnd.fbo.size  # Use framebuffer size!
+
         self.dorothy.renderer = DorothyRenderer(
             self.ctx, 
-            self.window_size[0], 
-            self.window_size[1]
+            fbo_width,  # Not window_size[0]
+            fbo_height  # Not window_size[1]
         )
+ 
         self.dorothy.wnd = self.wnd
         self.dorothy._initialized = True
         self.dorothy.music = Audio()
@@ -54,6 +54,7 @@ class DorothyWindow(mglw.WindowConfig):
         
         self.dorothy.renderer.end_layer()
        
+
 
     def on_render(self, render_time: float, frame_time: float):
         """Called every frame"""
@@ -183,9 +184,17 @@ class DorothyWindow(mglw.WindowConfig):
 
     
     def resize(self, width: int, height: int):
+        print(f"\n=== RESIZE EVENT ===")
+        print(f"Window size: {width}x{height}")
+        print(f"window_size attr: {self.window_size}")
+        print(f"FBO size: {self.wnd.fbo.size}")
+        print(f"Renderer size: {self.dorothy.renderer.width}x{self.dorothy.renderer.height}")
+        print(f"Camera size: {self.dorothy.renderer.camera.width}x{self.dorothy.renderer.camera.height}")
+        print(f"Viewport: {self.ctx.viewport}")
+        fbo_width, fbo_height = self.wnd.fbo.size
         if self.dorothy.renderer:
-            self.dorothy.renderer.width = width
-            self.dorothy.renderer.height = height
-            self.dorothy.renderer.camera.width = width
-            self.dorothy.renderer.camera.height = height
-            self.dorothy.renderer.camera.aspect = width / height
+            self.dorothy.renderer.width = fbo_width
+            self.dorothy.renderer.height = fbo_height
+            self.dorothy.renderer.camera.width = fbo_width
+            self.dorothy.renderer.camera.height = fbo_height
+            self.dorothy.renderer.camera.aspect = fbo_width / fbo_height
