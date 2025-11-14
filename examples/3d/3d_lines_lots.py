@@ -45,8 +45,7 @@ class Example3D:
             for i in range(cube_size):
                 for j in range(cube_size):
                     for k in range(cube_size):
-                        with dot.transform():
-                            self.draw_cube(s,(i*s,j*s,k*s))
+                        self.draw_cube(s,(i*s,j*s,k*s))
 
             
 

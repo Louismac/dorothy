@@ -28,7 +28,7 @@ class DrawCommandType(Enum):
 class DrawCommand:
     """Represents a single draw command"""
     type: DrawCommandType
-    fill_vertices: np.ndarray 
+    fill_vertices: Optional[np.ndarray] = None  
     stroke_vertices: Optional[np.ndarray] = None 
     color: Optional[Tuple[float, float, float, float]] = None
     use_fill: bool = True
@@ -41,6 +41,8 @@ class DrawCommand:
     stroke_as_geometry: bool = False
     texture_layer:dict = None
     is_3d: bool = False 
+    center: Optional[Tuple[float, float]] = None
+    radius: Optional[float] = None
 
 class Transform:
     """Manages transformation matrices""" 
@@ -149,7 +151,10 @@ class DorothyRenderer:
         # Geometry cache
         self._setup_geometry()
         self._circle_geometry_cache = {}
-        self._circle_stroke_cache = {} 
+        self._unit_circle_vbo_cache = {}
+        self._circle_stroke_cache = {}
+        self._unit_circle_stroke_vbo_cache = {} 
+
         
         # Background
         self.background_color = (0, 0, 0, 1)
@@ -199,6 +204,11 @@ class DorothyRenderer:
         self.shader_3d = self.ctx.program(
             vertex_shader=DOTSHADERS.VERT_3D_TEXTURED,
             fragment_shader=DOTSHADERS.FRAG_3D_TEXTURED
+        )
+
+        self.shader_2d_instanced = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_2D_INSTANCED,
+            fragment_shader=DOTSHADERS.FRAG_2D_INSTANCED
         )
         
         # Simple 2D shader
@@ -960,79 +970,46 @@ class DorothyRenderer:
         
         return self._circle_stroke_cache[cache_key]
 
-    def _create_circle_vertices(self, center, radius, segments=32):
-        """Create circle vertices by transforming cached unit circle"""
-        cx, cy = center
+    def _get_unit_circle_vbo(self, segments):
+        """Get cached unit circle VBO"""
+        if segments not in self._unit_circle_vbo_cache:
+            unit_circle = self._get_cached_unit_circle(segments)
+            self._unit_circle_vbo_cache[segments] = self.ctx.buffer(unit_circle)
+        return self._unit_circle_vbo_cache[segments]
+    
+    def _get_unit_circle_stroke_vbo(self, segments, thickness_ratio):
+        """Get cached unit circle stroke VBO (as ring/donut)"""
+        cache_key = (segments, round(thickness_ratio, 3))
         
-        # Get cached unit circle
-        unit_circle = self._get_cached_unit_circle(segments)
-        
-        # Transform: scale by radius, translate to center
-        fill_verts = unit_circle.copy()
-        for i in range(0, len(fill_verts), 2):
-            fill_verts[i] = fill_verts[i] * radius + cx      # x
-            fill_verts[i+1] = fill_verts[i+1] * radius + cy  # y
-        
-        # Stroke vertices
-        if self._stroke_weight > 1.0:
-            # Thick stroke - use cached geometry
-            thickness_ratio = self._stroke_weight / radius  # Thickness relative to radius
+        if cache_key not in self._unit_circle_stroke_vbo_cache:
             unit_stroke = self._get_cached_unit_circle_stroke(segments, thickness_ratio)
-            
-            # Transform unit stroke
-            stroke_verts = unit_stroke.copy()
-            for i in range(0, len(stroke_verts), 2):
-                stroke_verts[i] = stroke_verts[i] * radius + cx      # x
-                stroke_verts[i+1] = stroke_verts[i+1] * radius + cy  # y
-            
-            stroke_as_fill = True
-        else:
-            # Thin stroke - use lines
-            stroke_verts = []
-            for i in range(segments):
-                angle1 = 2 * np.pi * i / segments
-                angle2 = 2 * np.pi * (i + 1) / segments
-                
-                x1 = cx + radius * np.cos(angle1)
-                y1 = cy + radius * np.sin(angle1)
-                x2 = cx + radius * np.cos(angle2)
-                y2 = cy + radius * np.sin(angle2)
-                
-                stroke_verts.extend([x1, y1, x2, y2])
-            
-            stroke_verts = np.array(stroke_verts, dtype='f4')
-            stroke_as_fill = False
-        
-        return fill_verts, stroke_verts, stroke_as_fill
-
+            self._unit_circle_stroke_vbo_cache[cache_key] = self.ctx.buffer(unit_stroke)
+    
+        return self._unit_circle_stroke_vbo_cache[cache_key]
+    
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
-        """Draw a circle (queued for batching)"""
+        """Draw a circle (queued for batching with instancing)"""
         if self.enable_batching:
-            # Adaptive tessellation
-            if radius < 2:
-                segments = 8
-            elif radius < 10:
-                segments = 16
-            elif radius < 50:
-                segments = 32
-            else:
-                segments = 48
+             # Transform the center point by current transform matrix
+            transformed_center = self.transform.matrix * glm.vec4(center[0], center[1], 0.0, 1.0)
+            world_center = (transformed_center.x, transformed_center.y)
             
-            fill_verts, stroke_verts, stroke_as_fill = self._create_circle_vertices(center, radius, segments)
-            
+            # Transform could also scale the radius
+            # Extract scale from transform matrix (assuming uniform scale)
+            scale = glm.length(glm.vec3(self.transform.matrix[0]))
+            world_radius = radius * scale
             cmd = DrawCommand(
                 type=DrawCommandType.CIRCLE,
-                fill_vertices=fill_verts,
-                stroke_vertices=stroke_verts,
+                center=world_center,
+                radius=world_radius,
                 color=self.fill_color if self.use_fill else None,
                 use_fill=self.use_fill,
                 use_stroke=self.use_stroke,
                 stroke_weight=self._stroke_weight,
                 stroke_color=self.stroke_color if self.use_stroke else None,
-                transform=self.transform.matrix,
+                transform=glm.mat4(),
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter,
-                stroke_as_geometry=stroke_as_fill
             )
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
@@ -1174,6 +1151,11 @@ class DorothyRenderer:
                 # Lines can have different transforms (vertices are in world space already)
                 return self._transforms_equal(cmd1.transform, cmd2.transform)
             else:
+                if cmd1.type == DrawCommandType.CIRCLE and cmd2.type == DrawCommandType.CIRCLE:
+                    # Fill state can differ per instance (different colors OK)
+                    # Stroke state must match for grouping
+                    if cmd1.use_stroke != cmd2.use_stroke:
+                        return False
                 # For 2D and non-instanced types, keep old logic
                 # Fill state must match
                 if cmd1.use_fill != cmd2.use_fill:
@@ -1388,10 +1370,118 @@ class DorothyRenderer:
                 # Set up rendering state
         self.ctx.enable(moderngl.BLEND)
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.shader_2d['projection'].write(self.camera.get_projection_matrix())
-        self.shader_2d['model'].write(first_cmd.transform)
+        
         # FILL PASS
-        if first_cmd.use_fill and first_cmd.color is not None:
+        if first_cmd.type == DrawCommandType.CIRCLE:
+            # Determine segments based on max radius
+            max_radius = max(cmd.radius for cmd in commands if cmd.radius)
+            if max_radius < 2:
+                segments = 8
+            elif max_radius < 10:
+                segments = 16
+            elif max_radius < 50:
+                segments = 32
+            else:
+                segments = 48
+            
+            # FILL RENDERING
+            if first_cmd.use_fill:
+                unit_circle_vbo = self._get_unit_circle_vbo(segments)
+                
+                # Build instance data for fills
+                fill_instance_data = []
+                for cmd in commands:
+                    if cmd.use_fill:
+                        color = np.array(self._normalize_color(cmd.color), dtype='f4')
+                        fill_instance_data.extend([
+                            cmd.center[0], cmd.center[1],  # center (2f)
+                            cmd.radius,                     # radius (1f)
+                            *color                          # color (4f)
+                        ])
+                
+                if fill_instance_data:
+                    fill_instance_array = np.array(fill_instance_data, dtype='f4')
+                    fill_instance_buffer = self.ctx.buffer(fill_instance_array)
+                    
+                    fill_vao = self.ctx.vertex_array(
+                        self.shader_2d_instanced,
+                        [
+                            (unit_circle_vbo, '2f', 'in_position'),
+                            (fill_instance_buffer, '2f 1f 4f /i', 'instance_center', 'instance_radius', 'instance_color'),
+                        ]
+                    )
+                    self.shader_2d_instanced['projection'].write(self.camera.get_projection_matrix())
+                    self.shader_2d_instanced['model'].write(glm.mat4())
+
+                    # In _render_2d_batch for circles, right before rendering:
+                    print(f"Camera mode: {self.camera.mode}")
+                    print(f"Camera width/height: {self.camera.width}, {self.camera.height}")
+                    print(f"First circle center: {commands[0].center}")
+                    print(f"First circle radius: {commands[0].radius}")
+                    print(f"Projection matrix:")
+                    proj = self.camera.get_projection_matrix()
+                    for row in range(4):
+                        print(f"  [{proj[row][0]:8.3f}] [{proj[row][1]:8.3f}] [{proj[row][2]:8.3f}] [{proj[row][3]:8.3f}]")
+
+                    fill_vao.render(moderngl.TRIANGLES, instances=len(fill_instance_data) // 7)
+                    
+                    fill_vao.release()
+                    fill_instance_buffer.release()
+            
+            # STROKE RENDERING
+            if first_cmd.use_stroke:
+                # Group by stroke weight (thickness ratio must match for same geometry)
+                strokes_by_weight = {}
+                for cmd in commands:
+                    if cmd.use_stroke:
+                        weight = cmd.stroke_weight
+                        if weight not in strokes_by_weight:
+                            strokes_by_weight[weight] = []
+                        strokes_by_weight[weight].append(cmd)
+                
+                # Render each stroke weight group
+                for stroke_weight, stroke_cmds in strokes_by_weight.items():
+                    if stroke_weight > 1.0:
+                        # Thick stroke - use ring geometry
+                        # Use average radius for thickness ratio (or max)
+                        avg_radius = sum(cmd.radius for cmd in stroke_cmds) / len(stroke_cmds)
+                        thickness_ratio = stroke_weight / avg_radius
+                        
+                        unit_stroke_vbo = self._get_unit_circle_stroke_vbo(segments, thickness_ratio)
+                        
+                        # Build instance data for strokes
+                        stroke_instance_data = []
+                        for cmd in stroke_cmds:
+                            color = np.array(self._normalize_color(cmd.stroke_color), dtype='f4')
+                            stroke_instance_data.extend([
+                                cmd.center[0], cmd.center[1],  # center (2f)
+                                cmd.radius,                     # radius (1f)
+                                *color                          # color (4f)
+                            ])
+                        
+                        stroke_instance_array = np.array(stroke_instance_data, dtype='f4')
+                        stroke_instance_buffer = self.ctx.buffer(stroke_instance_array)
+                        
+                        stroke_vao = self.ctx.vertex_array(
+                            self.shader_2d_instanced,
+                            [
+                                (unit_stroke_vbo, '2f', 'in_position'),
+                                (stroke_instance_buffer, '2f 1f 4f /i', 'instance_center', 'instance_radius', 'instance_color'),
+                            ]
+                        )
+                        self.shader_2d_instanced['projection'].write(self.camera.get_projection_matrix())
+                        self.shader_2d_instanced['model'].write(glm.mat4())
+                        stroke_vao.render(moderngl.TRIANGLES, instances=len(stroke_instance_data) // 7)
+                        
+                        stroke_vao.release()
+                        stroke_instance_buffer.release()
+                    else:
+                        # Thin stroke - use line loop (or implement line instancing)
+                        # For now, fall back to old method or skip
+                        pass
+        elif first_cmd.use_fill and first_cmd.color is not None:
+            self.shader_2d['projection'].write(self.camera.get_projection_matrix())
+            self.shader_2d['model'].write(first_cmd.transform)
             try:
                 all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands 
                                                 if len(cmd.fill_vertices) > 0])

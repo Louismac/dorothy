@@ -146,6 +146,42 @@ class DOTSHADERS:
                 }
         
     '''
+
+    VERT_2D_INSTANCED = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 model;  // Add transform support
+        
+        in vec2 in_position;  // Unit circle vertices
+        
+        // Per-instance attributes
+        in vec2 instance_center;
+        in float instance_radius;
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        
+        void main() {
+            // Transform unit circle to local space
+            vec2 local_pos = in_position * instance_radius + instance_center;
+            
+            // Apply model transform, then projection
+            gl_Position = projection * model * vec4(local_pos, 0.0, 1.0);
+            v_color = instance_color;
+        }
+    '''
+
+    FRAG_2D_INSTANCED = '''
+        #version 330
+        
+        in vec4 v_color;
+        out vec4 fragColor;
+        
+        void main() {
+            fragColor = v_color;
+        }
+    '''
     
     VERT_2D = '''
                 #version 330

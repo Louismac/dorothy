@@ -10,26 +10,13 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
-        self.bg_layer = dot.get_layer()
-        dot.set_stroke_weight(1)
-        #Draw static background once
-        with dot.layer(self.bg_layer):
-            dot.background(dot.black)
-            for i in range(100):
-                dot.fill((100,100,100))
-                dot.circle((random() * 800, random() * 600), 5)
-                dot.fill((0,100,255))
-                dot.circle((random() * 800, random() * 600), 5)
+        dot.fill(dot.blue)
+        dot.no_stroke()
                 
 
-    def draw(self):    
-        print("Start")   
-        # # Draw background layer
-        dot.draw_layer(self.bg_layer)
-        # Draw foreground
-        dot.stroke(dot.green)
-        dot.line((0,0),(dot.mouse_x, dot.mouse_y))
-        dot.no_stroke()
+    def draw(self): 
+        dot.camera_2d()
+        print(f"Transform matrix: {dot.renderer.transform.matrix}")
         pts = np.random.random((1000,2))
         [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2) for pt in pts]            
 
