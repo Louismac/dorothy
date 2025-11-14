@@ -1208,6 +1208,40 @@ class DorothyRenderer:
             
             vao.release()
             instance_buffer.release()
+        else:
+            # Build vertex data with padding
+            all_vertices = []
+            
+            for cmd in commands:
+                # cmd.stroke_vertices is [x1,y1,z1, x2,y2,z2]
+                verts = cmd.stroke_vertices
+                for i in range(0, len(verts), 3):
+                    all_vertices.extend([
+                        verts[i], verts[i+1], verts[i+2],  # position (3f)
+                        0.0, 0.0, 0.0,                      # normal (3f) - dummy
+                        0.0, 0.0                            # texcoord (2f) - dummy
+                    ])
+            
+            vertices_array = np.array(all_vertices, dtype='f4')
+            vbo = self.ctx.buffer(vertices_array)
+            vao = self.ctx.vertex_array(
+                self.shader_3d,
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0')]
+            )
+            
+            # Set uniforms
+            self.shader_3d['model'].write(first_cmd.transform)  # identity - lines already in world space
+            self.shader_3d['view'].write(self.camera.get_view_matrix())
+            self.shader_3d['projection'].write(self.camera.get_projection_matrix())
+            self.shader_3d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+            self.shader_3d['use_lighting'] = False
+            self.shader_3d['use_texture'] = False
+            
+            self.ctx.line_width = first_cmd.stroke_weight
+            vao.render(moderngl.LINES)
+            
+            vao.release()
+            vbo.release()
 
     def _render_2d_batch(self,commands: List[DrawCommand]):
         first_cmd = commands[0]
@@ -1680,29 +1714,10 @@ class DorothyRenderer:
             pos2[0], pos2[1], pos2[2]
         ], dtype='f4')
         
-        # vbo = self.ctx.buffer(vertices)
-        # vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
-        
-        # Enable blending and depth
-        # self.ctx.enable(moderngl.BLEND)
-        # self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        # self.ctx.enable(moderngl.DEPTH_TEST)
         
         # Use shared 3D geometry setup
         self._draw_3d_geometry(vertices, DrawCommandType.LINE_3D)  # Sets uniforms
-        
-        # # Override color to use stroke color instead of fill
-        # self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        # # Disable lighting for lines (just use flat color)
-        # self.shader_3d['use_lighting'] = False
-        
-        # # Draw line
-        # self.ctx.line_width = self._stroke_weight
-        # vao.render(moderngl.LINES)
-        
-        # vao.release()
-        # vbo.release()
+
 
     def polyline_3d(self, points, closed: bool = False):
         """Draw a 3D polyline (connected line segments)
@@ -1723,30 +1738,11 @@ class DorothyRenderer:
             vertices.extend([points[0][0], points[0][1], points[0][2]])
         
         vertices = np.array(vertices, dtype='f4')
-        
-        # vbo = self.ctx.buffer(vertices)
-        # vao = self.ctx.simple_vertex_array(self.shader_3d, vbo, 'in_position')
-        
-        # # Enable blending and depth
-        # self.ctx.enable(moderngl.BLEND)
-        # self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        # self.ctx.enable(moderngl.DEPTH_TEST)
+
         
         # Use shared 3D geometry setup
         self._draw_3d_geometry(vertices ,DrawCommandType.LINE_3D)
-        
-        # # Override color to use stroke color
-        # self.shader_3d['color'].write(glm.vec4(*self._normalize_color(self.stroke_color)))
-        
-        # # Disable lighting for lines
-        # self.shader_3d['use_lighting'] = False
-        
-        # # Draw polyline
-        # self.ctx.line_width = self._stroke_weight
-        # vao.render(moderngl.LINE_STRIP)
-        
-        # vao.release()
-        # vbo.release()
+
 
     def load_obj(self, filepath):
         """Load a Wavefront OBJ file
