@@ -8,7 +8,7 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)           
         
     def setup(self):
-        file_path = "../audio/metronome_90.wav"
+        file_path = "../audio/disco.wav"
         dot.music.start_file_stream(file_path)
         #get object for running average
         self.mean_amp = dot.get_window(20)

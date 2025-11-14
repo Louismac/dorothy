@@ -22,7 +22,7 @@ class MySketch:
         
         rave_id = dot.music.start_rave_stream(
             "models/taylor_vocal/", 
-            latent_dim=latent_dim, output_device=3)
+            latent_dim=latent_dim, output_device=4)
 
         #Explicitly set output device if you are using blackhole to direct audio as
         #a RAVE input (e.g. set this to your speakers to you can hear the output of RAVE)

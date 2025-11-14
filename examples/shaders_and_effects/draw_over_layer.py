@@ -11,8 +11,8 @@ class MySketch:
 
     def setup(self):
         self.bg_layer = dot.get_layer()
-        
-        # Draw static background once
+        dot.set_stroke_weight(1)
+        #Draw static background once
         with dot.layer(self.bg_layer):
             dot.background(dot.black)
             for i in range(100):
@@ -22,7 +22,8 @@ class MySketch:
                 dot.circle((random() * 800, random() * 600), 5)
                 
 
-    def draw(self):       
+    def draw(self):    
+        print("Start")   
         # # Draw background layer
         dot.draw_layer(self.bg_layer)
         # Draw foreground
@@ -30,7 +31,7 @@ class MySketch:
         dot.line((0,0),(dot.mouse_x, dot.mouse_y))
         dot.no_stroke()
         pts = np.random.random((1000,2))
-        [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 1) for pt in pts]            
+        [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2) for pt in pts]            
 
 MySketch()          
 

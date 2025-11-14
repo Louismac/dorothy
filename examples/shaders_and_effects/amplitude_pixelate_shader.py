@@ -8,8 +8,8 @@ class MySketch:
         dot.start_loop(self.setup, self.draw)           
         
     def setup(self):
-        #Listen to mic or internal loop back (e.g. blackhole)
-        dot.music.start_device_stream(2)
+        file_path = "../audio/gospel.wav"
+        dot.music.start_file_stream(file_path, fft_size=512)
         self.pixelate = '''
         #version 330
         uniform sampler2D texture0;
@@ -28,7 +28,7 @@ class MySketch:
     def draw(self):
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
+        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*2))
         dot.apply_shader(self.pixelate, pixelSize=8.0, accumulate=False)
 
 MySketch()   

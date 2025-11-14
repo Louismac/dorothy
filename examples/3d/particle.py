@@ -72,7 +72,7 @@ class MySketch:
             px = 10-(dot.mouse_x/dot.width)*20
             py = 10-(dot.mouse_y/dot.height)*20
             pz = self.emit_position[2]
-            for _ in range(20):
+            for _ in range(10):
                 self.particles.append(Particle3D(px,py,pz))
         
         # Update and draw particles

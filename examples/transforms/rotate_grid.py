@@ -21,7 +21,7 @@ class MySketch:
     def draw(self):
         
         dot.background((22, 208, 165))
-
+        dot.set_stroke_weight(1)
         size = 40
         border = 10
         grid = 5

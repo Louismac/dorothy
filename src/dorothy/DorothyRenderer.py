@@ -122,7 +122,7 @@ class DorothyRenderer:
         # State
         self.fill_color = (255, 255, 255, 255)
         self.stroke_color = (0, 0, 0, 255)
-        self._stroke_weight = 10
+        self._stroke_weight = 1
         self.use_fill = True
         self.use_stroke = False
         # Batching system
@@ -148,6 +148,8 @@ class DorothyRenderer:
         
         # Geometry cache
         self._setup_geometry()
+        self._circle_geometry_cache = {}
+        self._circle_stroke_cache = {} 
         
         # Background
         self.background_color = (0, 0, 0, 1)
@@ -886,76 +888,103 @@ class DorothyRenderer:
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
     
-    def _create_circle_stroke_geometry(self, center, radius, thickness, segments=32):
-        """Create thick stroke geometry for circle as a ring/donut
-        
-        Creates two circles (outer and inner) and connects them with quads
-        """
-        cx, cy = center
-        half_thick = thickness / 2
-        
-        # Outer and inner radii
-        outer_radius = radius + half_thick
-        inner_radius = radius - half_thick
-        
-        vertices = []
-        
-        for i in range(segments):
-            # Current and next angles
-            angle1 = 2 * np.pi * i / segments
-            angle2 = 2 * np.pi * (i + 1) / segments
+    def _get_cached_unit_circle(self, segments):
+        """Get cached unit circle fill (radius=1, center=0,0)"""
+        if segments not in self._circle_geometry_cache:
+            # Generate unit circle once
+            fill_verts = []
+            for i in range(segments):
+                angle1 = 2 * np.pi * i / segments
+                angle2 = 2 * np.pi * (i + 1) / segments
+                
+                x1 = np.cos(angle1)
+                y1 = np.sin(angle1)
+                x2 = np.cos(angle2)
+                y2 = np.sin(angle2)
+                
+                fill_verts.extend([0, 0, x1, y1, x2, y2])
             
-            # Outer circle points
-            outer_x1 = cx + outer_radius * np.cos(angle1)
-            outer_y1 = cy + outer_radius * np.sin(angle1)
-            outer_x2 = cx + outer_radius * np.cos(angle2)
-            outer_y2 = cy + outer_radius * np.sin(angle2)
-            
-            # Inner circle points
-            inner_x1 = cx + inner_radius * np.cos(angle1)
-            inner_y1 = cy + inner_radius * np.sin(angle1)
-            inner_x2 = cx + inner_radius * np.cos(angle2)
-            inner_y2 = cy + inner_radius * np.sin(angle2)
-            
-            # Create quad (2 triangles) connecting inner and outer circles
-            # Triangle 1: outer1 -> outer2 -> inner2
-            vertices.extend([
-                outer_x1, outer_y1,
-                outer_x2, outer_y2,
-                inner_x2, inner_y2,
-            ])
-            
-            # Triangle 2: outer1 -> inner2 -> inner1
-            vertices.extend([
-                outer_x1, outer_y1,
-                inner_x2, inner_y2,
-                inner_x1, inner_y1,
-            ])
+            self._circle_geometry_cache[segments] = np.array(fill_verts, dtype='f4')
         
-        return np.array(vertices, dtype='f4')
+        return self._circle_geometry_cache[segments]
 
+    def _get_cached_unit_circle_stroke(self, segments, thickness_ratio):
+        """Get cached unit circle stroke (radius=1, thickness as ratio of radius)
+        
+        Args:
+            segments: number of segments
+            thickness_ratio: thickness relative to radius (e.g., 0.2 means 20% of radius)
+        """
+        cache_key = (segments, round(thickness_ratio, 3))  # Round to avoid float precision issues
+        
+        if cache_key not in self._circle_stroke_cache:
+            half_thick = thickness_ratio / 2
+            
+            # Outer and inner radii (relative to unit circle)
+            outer_radius = 1.0 + half_thick
+            inner_radius = 1.0 - half_thick
+            
+            vertices = []
+            
+            for i in range(segments):
+                angle1 = 2 * np.pi * i / segments
+                angle2 = 2 * np.pi * (i + 1) / segments
+                
+                # Outer circle points
+                outer_x1 = outer_radius * np.cos(angle1)
+                outer_y1 = outer_radius * np.sin(angle1)
+                outer_x2 = outer_radius * np.cos(angle2)
+                outer_y2 = outer_radius * np.sin(angle2)
+                
+                # Inner circle points
+                inner_x1 = inner_radius * np.cos(angle1)
+                inner_y1 = inner_radius * np.sin(angle1)
+                inner_x2 = inner_radius * np.cos(angle2)
+                inner_y2 = inner_radius * np.sin(angle2)
+                
+                # Triangle 1
+                vertices.extend([
+                    outer_x1, outer_y1,
+                    outer_x2, outer_y2,
+                    inner_x2, inner_y2,
+                ])
+                
+                # Triangle 2
+                vertices.extend([
+                    outer_x1, outer_y1,
+                    inner_x2, inner_y2,
+                    inner_x1, inner_y1,
+                ])
+            
+            self._circle_stroke_cache[cache_key] = np.array(vertices, dtype='f4')
+        
+        return self._circle_stroke_cache[cache_key]
 
     def _create_circle_vertices(self, center, radius, segments=32):
-        """Create circle fill and stroke vertices"""
+        """Create circle vertices by transforming cached unit circle"""
         cx, cy = center
         
-        # Fill vertices (triangles)
-        fill_verts = []
-        for i in range(segments):
-            angle1 = 2 * np.pi * i / segments
-            angle2 = 2 * np.pi * (i + 1) / segments
-            
-            x1 = cx + radius * np.cos(angle1)
-            y1 = cy + radius * np.sin(angle1)
-            x2 = cx + radius * np.cos(angle2)
-            y2 = cy + radius * np.sin(angle2)
-            
-            fill_verts.extend([cx, cy, x1, y1, x2, y2])
+        # Get cached unit circle
+        unit_circle = self._get_cached_unit_circle(segments)
         
-        # Stroke vertices - check weight
+        # Transform: scale by radius, translate to center
+        fill_verts = unit_circle.copy()
+        for i in range(0, len(fill_verts), 2):
+            fill_verts[i] = fill_verts[i] * radius + cx      # x
+            fill_verts[i+1] = fill_verts[i+1] * radius + cy  # y
+        
+        # Stroke vertices
         if self._stroke_weight > 1.0:
-            # Thick stroke - use geometry
-            stroke_verts = self._create_circle_stroke_geometry(center, radius, self._stroke_weight, segments)
+            # Thick stroke - use cached geometry
+            thickness_ratio = self._stroke_weight / radius  # Thickness relative to radius
+            unit_stroke = self._get_cached_unit_circle_stroke(segments, thickness_ratio)
+            
+            # Transform unit stroke
+            stroke_verts = unit_stroke.copy()
+            for i in range(0, len(stroke_verts), 2):
+                stroke_verts[i] = stroke_verts[i] * radius + cx      # x
+                stroke_verts[i+1] = stroke_verts[i+1] * radius + cy  # y
+            
             stroke_as_fill = True
         else:
             # Thin stroke - use lines
@@ -974,13 +1003,22 @@ class DorothyRenderer:
             stroke_verts = np.array(stroke_verts, dtype='f4')
             stroke_as_fill = False
         
-        return np.array(fill_verts, dtype='f4'), stroke_verts, stroke_as_fill
-
+        return fill_verts, stroke_verts, stroke_as_fill
 
     def circle(self, center: Tuple[float, float], radius: float, annotate: bool = False):
         """Draw a circle (queued for batching)"""
         if self.enable_batching:
-            fill_verts, stroke_verts, stroke_as_fill = self._create_circle_vertices(center, radius)
+            # Adaptive tessellation
+            if radius < 2:
+                segments = 8
+            elif radius < 10:
+                segments = 16
+            elif radius < 50:
+                segments = 32
+            else:
+                segments = 48
+            
+            fill_verts, stroke_verts, stroke_as_fill = self._create_circle_vertices(center, radius, segments)
             
             cmd = DrawCommand(
                 type=DrawCommandType.CIRCLE,
@@ -994,7 +1032,7 @@ class DorothyRenderer:
                 transform=self.transform.matrix,
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter,
-                stroke_as_geometry = stroke_as_fill
+                stroke_as_geometry=stroke_as_fill
             )
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
@@ -1044,7 +1082,6 @@ class DorothyRenderer:
             if self._stroke_weight > 1.0:
                 # Thick line - draw as geometry
                 line_verts = self._create_thick_line_geometry(x1, y1, x2, y2, self._stroke_weight)
-                
                 cmd = DrawCommand(
                     type=DrawCommandType.LINE,
                     fill_vertices=line_verts,  # Draw as filled rectangle
@@ -1061,7 +1098,6 @@ class DorothyRenderer:
             else:
                 # Thin line (weight=1) - use regular line rendering
                 vertices = np.array([x1, y1, x2, y2], dtype='f4')
-                
                 cmd = DrawCommand(
                     type=DrawCommandType.LINE,
                     fill_vertices=np.array([], dtype='f4'),
@@ -1078,8 +1114,6 @@ class DorothyRenderer:
             
             self.draw_order_counter += 1
             self.draw_queue.append(cmd)
-        else:
-            self._draw_line_immediate(pos1, pos2)
     
     def flush_batch(self):
         """Execute all queued draw commands in batches"""
@@ -1356,16 +1390,19 @@ class DorothyRenderer:
         self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         self.shader_2d['projection'].write(self.camera.get_projection_matrix())
         self.shader_2d['model'].write(first_cmd.transform)
-        
         # FILL PASS
         if first_cmd.use_fill and first_cmd.color is not None:
-            all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands 
-                                            if len(cmd.fill_vertices) > 0])
+            try:
+                all_fill_verts = np.concatenate([cmd.fill_vertices for cmd in commands 
+                                                if len(cmd.fill_vertices) > 0])
+            except:
+                print("error concatenating verts")
+                return
             
             if len(all_fill_verts) > 0:
                 fill_vbo = self.ctx.buffer(all_fill_verts)
                 fill_vao = self.ctx.simple_vertex_array(self.shader_2d, fill_vbo, 'in_position')
-                
+                # print(f"rendering {len(all_fill_verts)} verts")
                 self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.color)))
                 fill_vao.render(moderngl.TRIANGLES)
                 
@@ -1376,8 +1413,12 @@ class DorothyRenderer:
         if first_cmd.use_stroke and first_cmd.stroke_color is not None:
             if first_cmd.stroke_as_geometry:
                 # Thick stroke - render as filled triangles
-                stroke_verts_list = [cmd.stroke_vertices for cmd in commands 
-                                    if cmd.stroke_vertices is not None and len(cmd.stroke_vertices) > 0]
+                try:
+                    stroke_verts_list = [cmd.stroke_vertices for cmd in commands 
+                                        if cmd.stroke_vertices is not None and len(cmd.stroke_vertices) > 0]
+                except:
+                    print("error concatenating verts")
+                    return
                 
                 if stroke_verts_list:
                     all_stroke_verts = np.concatenate(stroke_verts_list)
@@ -1401,7 +1442,6 @@ class DorothyRenderer:
                     stroke_vbo = self.ctx.buffer(all_stroke_verts)
                     stroke_vao = self.ctx.simple_vertex_array(self.shader_2d, stroke_vbo, 'in_position')
                     
-                    self.ctx.line_width = 1.0  # Always 1 for OpenGL lines
                     self.shader_2d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
                     stroke_vao.render(moderngl.LINES)
                     

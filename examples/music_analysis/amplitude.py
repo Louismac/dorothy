@@ -14,7 +14,7 @@ class MySketch:
     def draw(self):
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*10))
+        dot.circle((dot.width//2,dot.height//2),int(dot.music.amplitude()*dot.height*2))
 
 MySketch()   
     

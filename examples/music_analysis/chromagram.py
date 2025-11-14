@@ -1,7 +1,6 @@
 from dorothy import Dorothy 
 import librosa
 import numpy as np
-from cv2 import line
 from utils import sine_step
 
 dot = Dorothy(1200,300) 
