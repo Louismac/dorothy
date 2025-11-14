@@ -11,6 +11,7 @@ class Example3D:
         print("3D Setup!")
         dot.camera_3d()
         dot.set_camera((5, 5, 5), (0, 0, 0))
+        dot.set_stroke_weight(10)
     
     def draw_cube(self,size):
         s = size / 2

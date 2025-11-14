@@ -1345,6 +1345,61 @@ class DorothyRenderer:
                 vao.render(moderngl.LINE_STRIP)
                 vao.release()
                 vbo.release()
+
+    def _draw_thick_stroke(self, vertices, closed=False):
+        """Draw thick lines as quads instead of using line_width
+        
+        Args:
+            vertices: np.array of [x1, y1, x2, y2, ...] coordinates
+            closed: If True, connect last point to first
+        """
+        if self._stroke_weight <= 1.0:
+            # Use regular lines for weight 1
+            return None  # Signal to use regular line rendering
+        
+        thickness = self._stroke_weight
+        points = vertices.reshape(-1, 2)
+        
+        if len(points) < 2:
+            return None
+        
+        # If closed, add first point at end
+        if closed:
+            points = np.vstack([points, points[0:1]])
+        
+        # Build quad strip for thick line
+        quad_vertices = []
+        
+        for i in range(len(points) - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            
+            # Calculate perpendicular direction
+            dx = x2 - x1
+            dy = y2 - y1
+            length = np.sqrt(dx*dx + dy*dy)
+            
+            if length < 0.001:
+                continue
+            
+            # Normalize and get perpendicular
+            dx /= length
+            dy /= length
+            px = -dy * thickness / 2
+            py = dx * thickness / 2
+            
+            # Add quad for this segment
+            quad_vertices.extend([
+                x1 + px, y1 + py,
+                x1 - px, y1 - py,
+                x2 + px, y2 + py,
+                x2 - px, y2 - py,
+            ])
+        
+        if not quad_vertices:
+            return None
+        
+        return np.array(quad_vertices, dtype='f4')
                 
     def polygon(self, points):
         """Draw a filled polygon with proper triangulation
