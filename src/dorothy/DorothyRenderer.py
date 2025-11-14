@@ -19,6 +19,7 @@ class DrawCommandType(Enum):
     LINE = "line"
     TRIANGLE = "triangle"
     LINE_3D = "3dline"
+    POLYLINE_3D = "3dpolyline"
     SPHERE = "sphere"
 
 @dataclass
@@ -1238,7 +1239,7 @@ class DorothyRenderer:
             self.shader_3d['use_texture'] = False
             
             self.ctx.line_width = first_cmd.stroke_weight
-            vao.render(moderngl.LINES)
+            vao.render(moderngl.LINES if first_cmd.type == DrawCommandType.LINE_3D else moderngl.LINE_STRIP)
             
             vao.release()
             vbo.release()
@@ -1741,7 +1742,7 @@ class DorothyRenderer:
 
         
         # Use shared 3D geometry setup
-        self._draw_3d_geometry(vertices ,DrawCommandType.LINE_3D)
+        self._draw_3d_geometry(vertices,DrawCommandType.POLYLINE_3D)
 
 
     def load_obj(self, filepath):
