@@ -163,6 +163,14 @@ class DorothyRenderer:
         """Draw a line"""
         self.primitives_2d.line(pos1, pos2)
     
+    def polyline(self, points, closed: bool = False):
+        """Draw a polyline"""
+        self.primitives_2d.polyline(points, closed)
+
+    def polygon(self, points):
+        """Draw a polygon"""
+        self.primitives_2d.polygon(points)
+    
     # ===== 3D Drawing Methods (delegate to Primitives3D) =====
     
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):
@@ -182,6 +190,7 @@ class DorothyRenderer:
     def polyline_3d(self, points, closed: bool = False):
         """Draw a 3D polyline"""
         self.primitives_3d.polyline_3d(points, closed)
+        
     
     # ===== Layer Methods (delegate to LayerManager) =====
     
