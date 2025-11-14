@@ -21,6 +21,7 @@ class DrawCommandType(Enum):
     LINE_3D = "3dline"
     POLYLINE_3D = "3dpolyline"
     SPHERE = "sphere"
+    THICK_LINE_3D = "3dthickline"
 
 @dataclass
 class DrawCommand:
@@ -1209,6 +1210,28 @@ class DorothyRenderer:
             
             vao.release()
             instance_buffer.release()
+    
+        elif first_cmd.type == DrawCommandType.THICK_LINE_3D:
+            # Concatenate all line geometry
+            all_vertices = np.concatenate([cmd.stroke_vertices for cmd in commands])
+            
+            vbo = self.ctx.buffer(all_vertices)
+            vao = self.ctx.vertex_array(
+                self.shader_3d,
+                [(vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0')]
+            )
+            
+            self.shader_3d['model'].write(first_cmd.transform)
+            self.shader_3d['view'].write(self.camera.get_view_matrix())
+            self.shader_3d['projection'].write(self.camera.get_projection_matrix())
+            self.shader_3d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
+            self.shader_3d['use_lighting'] = True  # Lines can now have lighting!
+            self.shader_3d['use_texture'] = False
+            
+            vao.render(moderngl.TRIANGLES)
+            
+            vao.release()
+            vbo.release()
         else:
             # Build vertex data with padding
             all_vertices = []
@@ -1238,7 +1261,6 @@ class DorothyRenderer:
             self.shader_3d['use_lighting'] = False
             self.shader_3d['use_texture'] = False
             
-            self.ctx.line_width = first_cmd.stroke_weight
             vao.render(moderngl.LINES if first_cmd.type == DrawCommandType.LINE_3D else moderngl.LINE_STRIP)
             
             vao.release()
@@ -1758,6 +1780,94 @@ class DorothyRenderer:
         
         return faces_data
 
+    def _create_3d_line_geometry(self, pos1, pos2, thickness=0.05):
+        """Create a rectangular tube between two points
+        
+        Returns vertices for a box oriented along the line direction
+        """
+        p1 = np.array(pos1, dtype='f4')
+        p2 = np.array(pos2, dtype='f4')
+        
+        # Direction vector
+        direction = p2 - p1
+        length = np.linalg.norm(direction)
+        if length < 0.0001:
+            return np.array([], dtype='f4')
+        
+        direction = direction / length
+        
+        # Find perpendicular vectors to create the rectangle cross-section
+        # Use up vector (0,1,0) unless line is vertical
+        if abs(direction[1]) > 0.99:
+            up = np.array([1.0, 0.0, 0.0], dtype='f4')
+        else:
+            up = np.array([0.0, 1.0, 0.0], dtype='f4')
+        
+        # Cross products to get perpendicular axes
+        right = np.cross(direction, up)
+        right = right / np.linalg.norm(right) * (thickness / 2)
+        up = np.cross(right, direction)
+        up = up / np.linalg.norm(up) * (thickness / 2)
+        
+        # 8 corners of the rectangular tube
+        corners = [
+            p1 - right - up,  # 0
+            p1 + right - up,  # 1
+            p1 + right + up,  # 2
+            p1 - right + up,  # 3
+            p2 - right - up,  # 4
+            p2 + right - up,  # 5
+            p2 + right + up,  # 6
+            p2 - right + up,  # 7
+        ]
+        
+        # Create triangles for 6 faces (2 triangles per face)
+        # Format: position (3f), normal (3f), texcoord (2f)
+        vertices = []
+        
+        # Helper to add a quad (2 triangles)
+        def add_quad(i1, i2, i3, i4, normal):
+            for idx in [i1, i2, i3, i1, i3, i4]:
+                vertices.extend(corners[idx])     # position
+                vertices.extend(normal)            # normal
+                vertices.extend([0.0, 0.0])       # texcoord (dummy)
+        
+        # Front face (at p1)
+        add_quad(0, 1, 2, 3, -direction)
+        # Back face (at p2)
+        add_quad(5, 4, 7, 6, direction)
+        # Four side faces
+        add_quad(0, 4, 5, 1, -up)           # bottom
+        add_quad(2, 6, 7, 3, up)            # top
+        add_quad(1, 5, 6, 2, right)         # right
+        add_quad(4, 0, 3, 7, -right)        # left
+        
+        return np.array(vertices, dtype='f4')
+
+    def _create_3d_polyline_geometry(self, points, thickness=0.05, closed=False):
+        """Create geometry for a polyline"""
+        if len(points) < 2:
+            return np.array([], dtype='f4')
+        
+        all_vertices = []
+        
+        # Create geometry for each segment
+        for i in range(len(points) - 1):
+            segment_verts = self._create_3d_line_geometry(points[i], points[i+1], thickness)
+            if len(segment_verts) > 0:
+                all_vertices.append(segment_verts)
+        
+        # Close the loop if needed
+        if closed and len(points) > 2:
+            segment_verts = self._create_3d_line_geometry(points[-1], points[0], thickness)
+            if len(segment_verts) > 0:
+                all_vertices.append(segment_verts)
+        
+        if len(all_vertices) == 0:
+            return np.array([], dtype='f4')
+        
+        return np.concatenate(all_vertices)
+
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
         """Draw a line in 3D space
         
@@ -1765,14 +1875,21 @@ class DorothyRenderer:
             pos1: (x, y, z) start point
             pos2: (x, y, z) end point
         """
-        vertices = np.array([
-            pos1[0], pos1[1], pos1[2],
-            pos2[0], pos2[1], pos2[2]
-        ], dtype='f4')
-        
-        
-        # Use shared 3D geometry setup
-        self._draw_3d_geometry(vertices, DrawCommandType.LINE_3D)  # Sets uniforms
+
+        if self._stroke_weight == 1:
+
+            vertices = np.array([
+                pos1[0], pos1[1], pos1[2],
+                pos2[0], pos2[1], pos2[2]
+            ], dtype='f4')
+
+            self._draw_3d_geometry(vertices, DrawCommandType.LINE_3D)  # Sets uniforms
+        else:
+            thickness = self._stroke_weight * 0.01  # Scale stroke weight appropriately
+            vertices = self._create_3d_line_geometry(pos1, pos2, thickness)
+            
+            if len(vertices) > 0:
+                self._draw_3d_geometry(vertices, DrawCommandType.THICK_LINE_3D)
 
 
     def polyline_3d(self, points, closed: bool = False):
@@ -1785,19 +1902,29 @@ class DorothyRenderer:
         if len(points) < 2:
             return
         
-        # Create vertices
-        vertices = []
-        for x, y, z in points:
-            vertices.extend([x, y, z])
+        if self._stroke_weight == 1:
         
-        if closed:
-            vertices.extend([points[0][0], points[0][1], points[0][2]])
-        
-        vertices = np.array(vertices, dtype='f4')
+            # Create vertices
+            vertices = []
+            for x, y, z in points:
+                vertices.extend([x, y, z])
+            
+            if closed:
+                vertices.extend([points[0][0], points[0][1], points[0][2]])
+            
+            vertices = np.array(vertices, dtype='f4')
 
+            
+            # Use shared 3D geometry setup
+            self._draw_3d_geometry(vertices,DrawCommandType.POLYLINE_3D)
         
-        # Use shared 3D geometry setup
-        self._draw_3d_geometry(vertices,DrawCommandType.POLYLINE_3D)
+        else:
+
+            thickness = self._stroke_weight * 0.01
+            vertices = self._create_3d_polyline_geometry(points, thickness, closed)
+            
+            if len(vertices) > 0:
+                self._draw_3d_geometry(vertices, DrawCommandType.THICK_LINE_3D)
 
 
     def load_obj(self, filepath):

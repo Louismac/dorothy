@@ -39,7 +39,7 @@ class MySketch:
         
         # draw polyline
         dot.stroke(dot.green)
-        dot.set_stroke_weight(2)
+        dot.set_stroke_weight(5)
         dot.no_fill()
         dot.polyline(draw_points, closed=False)
 

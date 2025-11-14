@@ -11,7 +11,7 @@ class Example3D:
         print("3D Setup!")
         dot.camera_3d()
         dot.set_camera((5, 5, 5), (0, 0, 0))
-        dot.set_stroke_weight(10)
+        
     
     def draw_cube(self,size):
         s = size / 2
@@ -38,6 +38,7 @@ class Example3D:
             dot.rotate(dot.frames * 0.01, 1, 0, 0)  # Rotate around X
         
             # Draw cube edges
+            dot.set_stroke_weight(10)
             self.draw_cube(2)
 
             dot.rotate(dot.frames * 0.05, 0, 1, 0)  # Rotate around Y
@@ -53,6 +54,7 @@ class Example3D:
                 points.append((x, y, z))
 
             dot.stroke((255, 255, 0))
+            dot.set_stroke_weight(1)
             dot.polyline_3d(points)
 
     
