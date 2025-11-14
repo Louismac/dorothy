@@ -17,7 +17,7 @@ class Example3D:
         self.top_layer = dot.get_layer()
         self.bottom_layer = dot.get_layer()
         dot.camera_3d()
-        dot.set_camera((40, 40, 40), (0, 0, 0))
+        dot.set_camera((10, 10, 10), (0, 0, 0))
         self.mario = Image.open('../images/space.jpg')
 
     def draw(self):
@@ -54,7 +54,7 @@ class Example3D:
             dot.rotate(dot.frames * 0.01, 0, 1, 0)
             dot.rotate(dot.frames * 0.005, 1, 0, 0)
             
-            dot.box((20, 20, 20), texture_layers={
+            dot.box((2, 2, 2), texture_layers={
                 'front': self.front_layer,
                 'back': self.back_layer,
                 'right': self.right_layer,
@@ -63,8 +63,8 @@ class Example3D:
                 'bottom': self.bottom_layer
             })
             angle = dot.frames * 0.05
-            x = 30 * np.cos(angle)
-            z = 30 * np.sin(angle)
-            dot.box((10, 10, 10),(x,1,z), texture_layers=self.front_layer)
+            x = 10 * np.cos(angle)
+            z = 10 * np.sin(angle)
+            dot.box((1, 1, 1),(x,1,z), texture_layers=self.front_layer)
         
 Example3D()

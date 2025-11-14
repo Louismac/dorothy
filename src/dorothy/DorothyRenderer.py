@@ -22,6 +22,7 @@ class DrawCommandType(Enum):
     POLYLINE_3D = "3dpolyline"
     SPHERE = "sphere"
     THICK_LINE_3D = "3dthickline"
+    BOX = "box"
 
 @dataclass
 class DrawCommand:
@@ -38,6 +39,7 @@ class DrawCommand:
     layer_id: Optional[int] = None
     draw_order: int = 0 
     stroke_as_geometry: bool = False
+    texture_layer:dict = None
     is_3d: bool = False 
 
 class Transform:
@@ -1096,7 +1098,7 @@ class DorothyRenderer:
         self.draw_queue.clear()
     
     def _group_commands_into_batches(self):
-        """Group commands by state AND transform"""
+        """Group commands by state - transforms can differ for instanced 3D"""
         if not self.draw_queue:
             return []
         
@@ -1110,23 +1112,51 @@ class DorothyRenderer:
             if cmd1.type != cmd2.type:
                 return False
             
-            # Fill state must match
-            if cmd1.use_fill != cmd2.use_fill:
-                return False
-            if cmd1.use_fill and cmd1.color != cmd2.color:
-                return False
-            
-            # Stroke state must match
-            if cmd1.use_stroke != cmd2.use_stroke:
-                return False
-            if cmd1.use_stroke:
-                if cmd1.stroke_color != cmd2.stroke_color:
+            # For 3D instanced types, transforms DON'T need to match
+            if cmd1.type in [DrawCommandType.SPHERE,
+                            DrawCommandType.BOX]:
+                # These use instancing - different transforms are OK
+                # Only check geometry/texture compatibility
+                
+                if cmd1.type == DrawCommandType.BOX:
+                    # Same box dimensions?
+                    if cmd1.fill_vertices.shape != cmd2.fill_vertices.shape:
+                        return False
+                    # Same texture?
+                    if getattr(cmd1, 'texture_layer', None) != getattr(cmd2, 'texture_layer', None):
+                        return False
+                
+                # Spheres always batch together
+                # Colors can differ (handled per-instance)
+                return True
+            # For lines (concatenated, not instanced), check stroke state
+            elif cmd1.type in [DrawCommandType.LINE_3D, DrawCommandType.THICK_LINE_3D, DrawCommandType.POLYLINE_3D]:
+                if cmd1.use_stroke != cmd2.use_stroke:
+                    return False
+                if cmd1.use_stroke and cmd1.stroke_color != cmd2.stroke_color:
                     return False
                 if abs(cmd1.stroke_weight - cmd2.stroke_weight) > 0.01:
                     return False
+                # Lines can have different transforms (vertices are in world space already)
+                return self._transforms_equal(cmd1.transform, cmd2.transform)
+            else:
+                # For 2D and non-instanced types, keep old logic
+                # Fill state must match
+                if cmd1.use_fill != cmd2.use_fill:
+                    return False
+                if cmd1.use_fill and cmd1.color != cmd2.color:
+                    return False
+                
+                # Stroke state must match
+                if cmd1.use_stroke != cmd2.use_stroke:
+                    return False
+                if cmd1.use_stroke:
+                    if cmd1.stroke_color != cmd2.stroke_color:
+                        return False
+                    if abs(cmd1.stroke_weight - cmd2.stroke_weight) > 0.01:
+                        return False
             
-            # Transform must match
-            return self._transforms_equal(cmd1.transform, cmd2.transform)
+                return self._transforms_equal(cmd1.transform, cmd2.transform)
         
         prev_cmd = sorted_cmds[0]
         
@@ -1134,11 +1164,13 @@ class DorothyRenderer:
             if state_matches(prev_cmd, cmd):
                 current_batch.append(cmd)
             else:
+                # print(f"new batch size {len(current_batch)}")
                 batches.append(current_batch)
                 current_batch = [cmd]
                 prev_cmd = cmd
         
         if current_batch:
+            # print(f"new batch size {len(current_batch)}")
             batches.append(current_batch)
         
         return batches
@@ -1188,7 +1220,6 @@ class DorothyRenderer:
             # Create instance buffer
             instance_buffer = self.ctx.buffer(instance_array)
             
-                        
             vao = self.ctx.vertex_array(
                 self.shader_3d_instanced,
                 [
@@ -1210,6 +1241,51 @@ class DorothyRenderer:
             
             vao.release()
             instance_buffer.release()
+
+        elif first_cmd.type == DrawCommandType.BOX:
+            # Similar to mesh batching
+            box_vertices = first_cmd.fill_vertices
+            box_vbo = self.ctx.buffer(box_vertices)
+            
+            # Collect instance data
+            instance_data = []
+            for cmd in commands:
+                matrix_flat = np.array(cmd.transform, dtype='f4').T.flatten()
+                colour = np.array(self._normalize_color(cmd.color), dtype='f4')
+                instance_data.append(np.concatenate([matrix_flat, colour]))
+            
+            instance_array = np.array(instance_data, dtype='f4')
+            instance_buffer = self.ctx.buffer(instance_array)
+            
+            vao = self.ctx.vertex_array(
+                self.shader_3d_instanced,
+                [
+                    (box_vbo, '3f 3f 2f', 'in_position', 'in_normal', 'in_texcoord_0'),
+                    (instance_buffer, '16f 4f /i', 'instance_model', 'instance_color'),
+                ]
+            )
+            
+            # Set uniforms (similar to sphere/mesh)
+            self.shader_3d_instanced['view'].write(self.camera.get_view_matrix())
+            self.shader_3d_instanced['projection'].write(self.camera.get_projection_matrix())
+            self.shader_3d_instanced['light_pos'].write(glm.vec3(self.light_pos))
+            self.shader_3d_instanced['camera_pos'].write(self.camera.position)
+            self.shader_3d_instanced['use_lighting'] = True
+            
+            # Handle texture (only works if all boxes use same texture)
+            if first_cmd.texture_layer and first_cmd.texture_layer in self.layers:
+                texture = self.layers[first_cmd.texture_layer]['fbo'].color_attachments[0]
+                texture.use(0)
+                self.shader_3d_instanced['texture0'] = 0
+                self.shader_3d_instanced['use_texture'] = True
+            else:
+                self.shader_3d_instanced['use_texture'] = False
+            
+            vao.render(moderngl.TRIANGLES, instances=len(commands))
+            
+            vao.release()
+            instance_buffer.release()
+            box_vbo.release()
     
         elif first_cmd.type == DrawCommandType.THICK_LINE_3D:
             # Concatenate all line geometry
@@ -1632,31 +1708,17 @@ class DorothyRenderer:
     
     def box(self, size: Tuple[float, float, float] = (0, 0, 0), 
             position: Tuple[float, float, float] = (0, 0, 0),
-        texture_layers=None):
-        """Draw a box with optional textures (same on all faces or different per face)
+            texture_layers=None):
+        """Queue a box for batched rendering"""
         
-        Args:
-            width, height, depth: Box dimensions
-            texture_layers: Layer ID (int) for all faces, or dict like:
-                        {'front': layer1, 'back': layer2, 'right': layer3,
-                            'left': layer4, 'top': layer5, 'bottom': layer6}
-                        None for solid color
-        """
         w, h, d = size
         
-        # Normalize texture_layers to dict format
+        # Normalize texture_layers
         if isinstance(texture_layers, int):
-            # Single texture for all faces
-            tex_dict = {
-                'front': texture_layers,
-                'back': texture_layers,
-                'right': texture_layers,
-                'left': texture_layers,
-                'top': texture_layers,
-                'bottom': texture_layers
-            }
+            # Single texture for all faces - batchable!
+            tex_dict = {face: texture_layers for face in ['front', 'back', 'right', 'left', 'top', 'bottom']}
+            uniform_texture = texture_layers
         elif isinstance(texture_layers, dict):
-            # Use provided dict, fill in missing faces with None
             tex_dict = {
                 'front': texture_layers.get('front'),
                 'back': texture_layers.get('back'),
@@ -1665,28 +1727,47 @@ class DorothyRenderer:
                 'top': texture_layers.get('top'),
                 'bottom': texture_layers.get('bottom')
             }
+            # Check if all faces use same texture
+            unique_textures = set(tex_dict.values())
+            if len(unique_textures) == 1:
+                uniform_texture = list(unique_textures)[0]
+            else:
+                # Different textures per face - can't batch efficiently
+                # Fall back to immediate rendering for now
+                self._draw_box_immediate(w, h, d, position, tex_dict)
+                return
         else:
-            # No texture, all None
+            # No texture
             tex_dict = {face: None for face in ['front', 'back', 'right', 'left', 'top', 'bottom']}
+            uniform_texture = None
         
+        faces_data = self._create_box_faces(w, h, d)
         
-        faces_data = self._create_box_faces(w,h,d)
+        # Combine all faces into one mesh
+        all_vertices = np.concatenate(list(faces_data.values()))
         
-        # Enable blending and depth
-        self.ctx.enable(moderngl.BLEND)
-        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(moderngl.DEPTH_TEST)
-
         self.transform.push()
         self.transform.translate(position[0], position[1], position[2])
         
-        # Always use textured shader, just set use_texture flag
+        self._draw_3d_geometry(all_vertices, DrawCommandType.BOX, texture_layer=uniform_texture)
+        
+        self.transform.pop()
+        
+    def _draw_box_immediate(self, w, h, d, position, tex_dict):
+        """Render a box with per-face textures immediately (can't batch)"""
+        faces_data = self._create_box_faces(w, h, d)
+        
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.enable(moderngl.DEPTH_TEST)
+        
+        self.transform.push()
+        self.transform.translate(position[0], position[1], position[2])
+        
         for face_name, vertices in faces_data.items():
             layer_id = tex_dict[face_name]
             
             vbo = self.ctx.buffer(vertices)
-            
-            # ALWAYS use textured shader (data format matches)
             shader = self.shader_3d
             vao = self.ctx.vertex_array(
                 shader,
@@ -1697,28 +1778,26 @@ class DorothyRenderer:
             shader['projection'].write(self.camera.get_projection_matrix())
             shader['view'].write(self.camera.get_view_matrix())
             shader['model'].write(self.transform.matrix)
+            
             # Texture or solid color
             if layer_id is not None and layer_id in self.layers:
                 texture = self.layers[layer_id]['fbo'].color_attachments[0]
                 texture.use(0)
                 shader['texture0'] = 0
                 shader['use_texture'] = True
-                shader['use_lighting'] = self.use_lighting
-                shader['light_pos'].write(glm.vec3(self.light_pos))
             else:
                 shader['use_texture'] = False
-                shader['use_lighting'] = self.use_lighting
-                shader['light_pos'].write(glm.vec3(self.light_pos))
                 shader['color'].write(glm.vec4(*self._normalize_color(self.fill_color)))
             
-            # Render
+            shader['use_lighting'] = self.use_lighting
+            shader['light_pos'].write(glm.vec3(self.light_pos))
+            shader['camera_pos'].write(self.camera.position)
+            
             vao.render(moderngl.TRIANGLES)
             vao.release()
             vbo.release()
         
-        #resetting transform from translate for position
         self.transform.pop()
-        
 
     def _create_box_faces(self, w, h, d):
         """Create box face geometry - returns dict of interleaved vertex data"""
@@ -2058,12 +2137,14 @@ class DorothyRenderer:
         vao.release()
         vbo.release()
         
-    def _draw_3d_geometry(self, geom, type):
+    def _draw_3d_geometry(self, geom, type, texture_layer=None):
+
+        filled = type==DrawCommandType.SPHERE or type==DrawCommandType.BOX
 
         cmd = DrawCommand(
                 type=type,
-                fill_vertices=geom if type==DrawCommandType.SPHERE else None,
-                stroke_vertices=None if type==DrawCommandType.SPHERE else geom,
+                fill_vertices=geom if filled else None,
+                stroke_vertices=None if filled else geom,
                 color=self.fill_color if self.use_fill else None,
                 use_fill=self.use_fill,
                 use_stroke=self.use_stroke,
@@ -2072,7 +2153,8 @@ class DorothyRenderer:
                 transform=self.transform.matrix,
                 layer_id=self.active_layer,
                 draw_order=self.draw_order_counter,
-                is_3d=True
+                is_3d=True,
+                texture_layer=texture_layer
             )
             
         self.draw_order_counter += 1

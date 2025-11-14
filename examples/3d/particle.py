@@ -39,19 +39,18 @@ class Particle3D:
         # Set color with life-based alpha
         dot.fill((255*(self.life*2),0,255,255*(self.life*2)))
         
-        # Position and draw sphere
-        with dot.transform():
-            # print(self.x, self.y, self.z)
-            # print(self.vx, self.vy, self.vz)
-            dot.translate(self.x, self.y, self.z)
-            dot.sphere(2 + self.size*self.life*dot.music.amplitude()*5)
+        size = 1 + self.size*self.life*dot.music.amplitude()*5
+        dot.sphere(size,(self.x, self.y, self.z))
+        # size = size / 2
+        # dot.box((size,size,size),(self.x, self.y, self.z))
 
 class MySketch:
     def __init__(self):
         dot.start_loop(self.setup, self.draw)
     
     def setup(self):
-        dot.music.start_file_stream("../audio/hiphop.wav")
+        # dot.music.start_file_stream("../audio/hiphop.wav")
+        dot.music.start_device_stream(2)
         dot.background(dot.red)
         dot.camera_3d()
         self.particles = []
@@ -73,7 +72,8 @@ class MySketch:
             px = 10-(dot.mouse_x/dot.width)*20
             py = 10-(dot.mouse_y/dot.height)*20
             pz = self.emit_position[2]
-            self.particles.append(Particle3D(px,py,pz))
+            for _ in range(20):
+                self.particles.append(Particle3D(px,py,pz))
         
         # Update and draw particles
         alive_particles = []
