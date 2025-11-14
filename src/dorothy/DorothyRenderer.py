@@ -1270,7 +1270,7 @@ class DorothyRenderer:
             self.shader_3d_instanced['projection'].write(self.camera.get_projection_matrix())
             self.shader_3d_instanced['light_pos'].write(glm.vec3(self.light_pos))
             self.shader_3d_instanced['camera_pos'].write(self.camera.position)
-            self.shader_3d_instanced['use_lighting'] = True
+            self.shader_3d_instanced['use_lighting'] = self.use_lighting
             
             # Handle texture (only works if all boxes use same texture)
             if first_cmd.texture_layer and first_cmd.texture_layer in self.layers:
@@ -1301,7 +1301,7 @@ class DorothyRenderer:
             self.shader_3d['view'].write(self.camera.get_view_matrix())
             self.shader_3d['projection'].write(self.camera.get_projection_matrix())
             self.shader_3d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))
-            self.shader_3d['use_lighting'] = True  # Lines can now have lighting!
+            self.shader_3d['use_lighting'] = self.use_lighting  # Lines can now have lighting!
             self.shader_3d['use_texture'] = False
             
             vao.render(moderngl.TRIANGLES)
@@ -1330,7 +1330,7 @@ class DorothyRenderer:
             )
             
             # Set uniforms
-            self.shader_3d['model'].write(first_cmd.transform)  # identity - lines already in world space
+            self.shader_3d['model'].write(first_cmd.transform) 
             self.shader_3d['view'].write(self.camera.get_view_matrix())
             self.shader_3d['projection'].write(self.camera.get_projection_matrix())
             self.shader_3d['color'].write(glm.vec4(*self._normalize_color(first_cmd.stroke_color)))

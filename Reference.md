@@ -217,12 +217,40 @@ dot.polygon(points)
 
 ### 3D Shapes
 
-#### sphere(radius=1.0)
+#### camera_3d()
+
+Must be called before drawing anything in 3d. Call `camera_2d()` to go back to 2D
+
+#### set_camera(eye=(1,1,1), target = (0,0,0))
+**Parameters:**
+- `eye` (Tuple): Where the camera is
+- `target` (Tuple): What its looking at
+
+**Example:**
+```python
+angle = dot.frames * 0.01
+x = 5 * math.cos(angle)
+z = 5 * math.sin(angle)
+dot.set_camera((x, 2, z), (0, 0, 0))
+```
+
+#### dot.renderer.light_pos = (x, y, z)
+
+#### use_lighting(bool=True)
+
+**Example:**
+```python
+if dot.frames%20==0:
+    dot.use_lighting(not dot.renderer.use_lighting)
+```
+
+#### sphere(radius=1.0, pos = (0,0,0))
 
 Draw a 3D sphere (requires 3D camera mode).
 
 **Parameters:**
 - `radius` (float): Sphere radius (default: 1.0)
+- `pos` (Tuple): position of sphere (default: 0,0,0)
 
 **Example:**
 ```python
@@ -232,36 +260,35 @@ dot.fill((255, 100, 100))
 dot.sphere(1.0)
 ```
 
-#### box(width=1.0, height=1.0, depth=1.0, texture_layers= int or {} )
+#### box(size=(1,1,1), pos = (0,0,0), texture_layers= int or {} )
 
 Draw a 3D box (requires 3D camera mode).
 
 **Parameters:**
-- `width` (float): Box width (default: 1.0)
-- `height` (float): Box height (default: 1.0)
-- `depth` (float): Box depth (default: 1.0)
+- `size` (Tuple): size of sphere (default: 1,1,1)
+- `pos` (Tuple): position of sphere (default: 0,0,0)
 - `texture_layers` (dict or layer): A pointer to a layer for all 6 sides (stretched to fit), or a dictionary of layers for each side 
 
 **Example:**
 ```python
 dot.camera_3d()
 dot.fill((100, 100, 255))
-dot.box(2.0, 1.0, 1.5)
+dot.box((2.0, 1.0, 1.5))
 ```
 
 **Example:**
 ```python
 dot.camera_3d()
 dot.fill((100, 100, 255))
-dot.box(2.0, 1.0, 1.5)
+dot.box((2.0, 1.0, 1.5),(10,10,2))
 ```
 
 ```python
-dot.box(20, 20, 20,self.front_layer)
+dot.box((20, 20, 20),texture_layers = self.front_layer)
 ```
 
 ```python
-dot.box(20, 20, 20, 
+dot.box((20, 20, 20), 
     texture_layers={
     'front': self.front_layer,
     'back': self.back_layer,
@@ -1107,6 +1134,30 @@ dot.on_mouse_press = mouse_pressed
 
 See [Examples](examples/interaction/key_press.py)
 
+### Buttons!
+
+**Example:**
+```python
+def setup(self):
+    # Create a simple button
+    def on_button_click(btn):
+        print(f"Button '{btn.text}' was clicked!")
+    
+    def on_hover(btn):
+        print(f"Button '{btn.text}' was hovered!")
+    
+    dot.create_button(300, 250, 200, 50, 
+                    text="Click Me",
+                    id="button1",
+                    on_release=on_button_click, on_hover=on_hover)
+
+def draw(self):
+    dot.background((40, 40, 50))
+    
+    # Update and draw buttons
+    dot.update_buttons()
+    dot.draw_buttons()
+```
 ---
 
 ## Color Constants

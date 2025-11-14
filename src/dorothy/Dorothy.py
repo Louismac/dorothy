@@ -129,6 +129,17 @@ class Dorothy:
             f"'{type(self).__name__}' object has no attribute '{name}'"
         )
     
+
+    @property
+    def canvas(self):
+        """Backward compatible canvas access"""
+        return self.get_pixels()
+
+    @canvas.setter
+    def canvas(self, value):
+        """Allow dot.canvas = new_pixels"""
+        self.paste(value)
+
         # Screen capture
     def get_pixels(self) -> np.ndarray:
         """Get current screen pixels as numpy array (for recording/screenshots)
