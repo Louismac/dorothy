@@ -401,7 +401,7 @@ class BatchManager:
                 line_data = []
                 for cmd in thick_cmds:
                     color = self.renderer._normalize_color(cmd.stroke_color)
-                    scaled_thickness = thickness * 0.01  # Scale appropriately
+                    scaled_thickness = thickness * 0.1  # Scale appropriately
                     line_data.extend([
                         cmd.line_start[0], cmd.line_start[1], cmd.line_start[2],  # start (3f)
                         cmd.line_end[0], cmd.line_end[1], cmd.line_end[2],        # end (3f)

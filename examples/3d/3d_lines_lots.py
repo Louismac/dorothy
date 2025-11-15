@@ -36,7 +36,7 @@ class Example3D:
 
     def draw(self):
         dot.background((0,0,0))
-        dot.set_stroke_weight(1)
+        dot.set_stroke_weight(10)
         s = 7
         with dot.transform():
             dot.rotate(dot.millis//30 * 0.02, 0, 1, 0)  # Rotate around Y

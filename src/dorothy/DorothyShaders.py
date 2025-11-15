@@ -207,14 +207,14 @@ class DOTSHADERS:
         }
     '''
 
-    # For thick 3D lines
+        # For thick 3D lines
     VERT_3D_INSTANCED_THICK_LINE = '''
         #version 330
         
         uniform mat4 projection;
         uniform mat4 view;
         
-        in vec3 in_position;  // Unit thick line geometry
+        in vec3 in_position;  // Unit tube geometry (x from 0-1, yz from -0.5 to 0.5)
         in vec3 in_normal;
         
         // Per-instance attributes
@@ -227,28 +227,45 @@ class DOTSHADERS:
         out vec3 v_normal;
         
         void main() {
-            // Calculate line direction and perpendicular
+            // Calculate line direction
             vec3 direction = instance_end - instance_start;
-            float length = length(direction);
-            direction = direction / length;
+            float line_length = length(direction);
+            direction = normalize(direction);
             
-            // Find perpendicular vectors
+            // Find perpendicular vectors for the tube cross-section
             vec3 up = abs(direction.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
-            vec3 right = normalize(cross(direction, up)) * (instance_thickness / 2.0);
-            up = normalize(cross(right, direction)) * (instance_thickness / 2.0);
+            vec3 right = normalize(cross(direction, up));
+            up = normalize(cross(right, direction));
             
-            // Transform vertex
-            // in_position.x is along line (0 to 1)
-            // in_position.y is perpendicular offset (-0.5 to 0.5 for right)
-            // in_position.z is perpendicular offset (-0.5 to 0.5 for up)
+            // Scale the cross-section by thickness
+            right *= instance_thickness;
+            up *= instance_thickness;
+            
+            // Transform the unit tube vertex to world space
+            // in_position.x goes from 0 to 1 along the line
+            // in_position.y and in_position.z are the cross-section offsets
             vec3 world_pos = instance_start 
-                        + direction * (in_position.x * length)
-                        + right * (in_position.y * instance_thickness)
-                        + up * (in_position.z * instance_thickness);
+                        + direction * (in_position.x * line_length)
+                        + right * in_position.y
+                        + up * in_position.z;
             
             gl_Position = projection * view * vec4(world_pos, 1.0);
             v_color = instance_color;
-            v_normal = in_normal;  // Could transform this too for lighting
+            
+            // Transform normal (simplified - for proper lighting would need full transform)
+            v_normal = in_normal.x * direction + in_normal.y * normalize(right) + in_normal.z * normalize(up);
+        }
+    '''
+
+    FRAG_3D_INSTANCED_THICK_LINE = '''
+        #version 330
+        
+        in vec4 v_color;
+        in vec3 v_normal;
+        out vec4 fragColor;
+        
+        void main() {
+            fragColor = v_color;
         }
     '''
 
