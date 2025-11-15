@@ -16,6 +16,57 @@ class GeometryCache:
         self._unit_thick_line_vbo = None
         self.sphere_vbo = None
         self.sphere_ibo = None
+
+    def get_unit_line_3d_vbo(self):
+        """Get cached unit 3D line VBO (two points: 0 and 1)"""
+        if not hasattr(self, '_unit_line_3d_vbo'):
+            self._unit_line_3d_vbo = self.ctx.buffer(np.array([0.0, 1.0], dtype='f4'))
+        return self._unit_line_3d_vbo
+
+    def get_unit_thick_line_3d_vbo(self):
+        """Get cached unit thick 3D line geometry (rectangular tube)"""
+        if not hasattr(self, '_unit_thick_line_3d_vbo'):
+            # Rectangular tube from 0 to 1 along X axis
+            # 8 vertices forming a box
+            half = 0.5
+            vertices = []
+            
+            # Format: x, y, z for each vertex
+            # Box corners at x=0 and x=1
+            corners = [
+                # At x=0
+                [0.0, -half, -half],  # 0
+                [0.0,  half, -half],  # 1
+                [0.0,  half,  half],  # 2
+                [0.0, -half,  half],  # 3
+                # At x=1
+                [1.0, -half, -half],  # 4
+                [1.0,  half, -half],  # 5
+                [1.0,  half,  half],  # 6
+                [1.0, -half,  half],  # 7
+            ]
+            
+            # Create triangles for 6 faces
+            def add_quad(i1, i2, i3, i4, normal):
+                # Triangle 1
+                for idx in [i1, i2, i3]:
+                    vertices.extend(corners[idx])
+                    vertices.extend(normal)
+                # Triangle 2
+                for idx in [i1, i3, i4]:
+                    vertices.extend(corners[idx])
+                    vertices.extend(normal)
+            
+            # 6 faces
+            add_quad(0, 1, 2, 3, [-1, 0, 0])  # Front (at x=0)
+            add_quad(5, 4, 7, 6, [1, 0, 0])   # Back (at x=1)
+            add_quad(0, 4, 5, 1, [0, 0, -1])  # Bottom
+            add_quad(2, 6, 7, 3, [0, 0, 1])   # Top
+            add_quad(1, 5, 6, 2, [0, 1, 0])   # Right
+            add_quad(4, 0, 3, 7, [0, -1, 0])  # Left
+            
+            self._unit_thick_line_3d_vbo = self.ctx.buffer(np.array(vertices, dtype='f4'))
+        return self._unit_thick_line_3d_vbo
     
     def get_unit_circle(self, segments):
         """Get cached unit circle (radius=1, center=0,0)"""

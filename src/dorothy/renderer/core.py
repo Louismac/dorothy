@@ -68,6 +68,16 @@ class DorothyRenderer:
             vertex_shader=DOTSHADERS.VERT_3D_TEXTURED,
             fragment_shader=DOTSHADERS.FRAG_3D_TEXTURED
         )
+
+        self.shader_3d_instanced_line = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_3D_INSTANCED_LINE,
+            fragment_shader=DOTSHADERS.FRAG_3D_INSTANCED_LINE
+        )
+        
+        self.shader_3d_instanced_thick_line = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_3D_INSTANCED_THICK_LINE,
+            fragment_shader=DOTSHADERS.FRAG_3D_INSTANCED_LINE
+        )
         
         # 2D instanced shaders
         self.shader_2d_instanced = self.ctx.program(

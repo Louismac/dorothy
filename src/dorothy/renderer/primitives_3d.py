@@ -52,33 +52,70 @@ class Primitives3D:
     
     def line_3d(self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]):
         """Draw a line in 3D space"""
-        if self.renderer._stroke_weight == 1:
-            vertices = np.array([pos1[0], pos1[1], pos1[2], pos2[0], pos2[1], pos2[2]], dtype='f4')
-            self._draw_3d_geometry(vertices, DrawCommandType.LINE_3D)
-        else:
-            thickness = self.renderer._stroke_weight * 0.01
-            vertices = self._create_3d_line_geometry(pos1, pos2, thickness)
-            if len(vertices) > 0:
-                self._draw_3d_geometry(vertices, DrawCommandType.THICK_LINE_3D)
-    
+        if self.renderer.enable_batching:
+            # Apply transform to both endpoints
+            p1 = self.renderer.transform.matrix * glm.vec4(pos1[0], pos1[1], pos1[2], 1.0)
+            p2 = self.renderer.transform.matrix * glm.vec4(pos2[0], pos2[1], pos2[2], 1.0)
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE_3D,
+                line_start=(p1.x, p1.y, p1.z),  # Use transformed positions
+                line_end=(p2.x, p2.y, p2.z),
+                use_stroke=True,
+                stroke_weight=self.renderer._stroke_weight,
+                stroke_color=self.renderer.stroke_color,
+                transform=glm.mat4(),  # Identity - already applied
+                layer_id=self.renderer.active_layer,
+                draw_order=self.renderer.draw_order_counter,
+                is_3d=True
+            )
+            self.renderer.draw_order_counter += 1
+            self.renderer.draw_queue.append(cmd)
+
     def polyline_3d(self, points, closed: bool = False):
         """Draw a 3D polyline"""
         if len(points) < 2:
             return
         
-        if self.renderer._stroke_weight == 1:
-            vertices = []
-            for x, y, z in points:
-                vertices.extend([x, y, z])
-            if closed:
-                vertices.extend([points[0][0], points[0][1], points[0][2]])
-            vertices = np.array(vertices, dtype='f4')
-            self._draw_3d_geometry(vertices, DrawCommandType.POLYLINE_3D)
-        else:
-            thickness = self.renderer._stroke_weight * 0.01
-            vertices = self._create_3d_polyline_geometry(points, thickness, closed)
-            if len(vertices) > 0:
-                self._draw_3d_geometry(vertices, DrawCommandType.THICK_LINE_3D)
+        # Transform all points
+        transformed_points = []
+        for x, y, z in points:
+            p = self.renderer.transform.matrix * glm.vec4(x, y, z, 1.0)
+            transformed_points.append((p.x, p.y, p.z))
+        
+        # Create line segments
+        for i in range(len(transformed_points) - 1):
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE_3D,
+                line_start=transformed_points[i],
+                line_end=transformed_points[i + 1],
+                use_stroke=True,
+                stroke_weight=self.renderer._stroke_weight,
+                stroke_color=self.renderer.stroke_color,
+                transform=glm.mat4(),
+                layer_id=self.renderer.active_layer,
+                draw_order=self.renderer.draw_order_counter,
+                is_3d=True
+            )
+            self.renderer.draw_order_counter += 1
+            self.renderer.draw_queue.append(cmd)
+        
+        # Close the loop if needed
+        if closed and len(transformed_points) > 2:
+            cmd = DrawCommand(
+                type=DrawCommandType.LINE_3D,
+                line_start=transformed_points[-1],
+                line_end=transformed_points[0],
+                use_stroke=True,
+                stroke_weight=self.renderer._stroke_weight,
+                stroke_color=self.renderer.stroke_color,
+                transform=glm.mat4(),
+                layer_id=self.renderer.active_layer,
+                draw_order=self.renderer.draw_order_counter,
+                is_3d=True
+            )
+            self.renderer.draw_order_counter += 1
+            self.renderer.draw_queue.append(cmd)
     
     def _draw_3d_geometry(self, geom, type, texture_layer=None):
         """Queue 3D geometry for rendering"""

@@ -49,8 +49,19 @@ class BatchManager:
                     return False
             return True
         
-        # 3D lines - check stroke state
-        if cmd1.type in [DrawCommandType.LINE_3D, DrawCommandType.THICK_LINE_3D, DrawCommandType.POLYLINE_3D]:
+        # 3D lines - NOW INSTANCED, can batch together
+        if cmd1.type == DrawCommandType.LINE_3D:
+            # Lines can batch regardless of position/color (handled per-instance)
+            # Just check stroke weight matches (thin vs thick use different rendering)
+            if cmd1.stroke_weight <= 1.0 and cmd2.stroke_weight <= 1.0:
+                return True
+            if cmd1.stroke_weight > 1.0 and cmd2.stroke_weight > 1.0:
+                # Thick lines batch together (grouped by weight later)
+                return True
+            return False
+        
+        # Old 3D line types (if still used)
+        if cmd1.type in [DrawCommandType.THICK_LINE_3D, DrawCommandType.POLYLINE_3D]:
             if cmd1.use_stroke != cmd2.use_stroke:
                 return False
             if cmd1.use_stroke and cmd1.stroke_color != cmd2.stroke_color:
@@ -325,7 +336,7 @@ class BatchManager:
                     vbo.release()
             except:
                 pass
-    
+        
     def _render_3d_batch(self, commands: List[DrawCommand]):
         """Render 3D batch"""
         self.ctx.enable(moderngl.BLEND)
@@ -338,10 +349,85 @@ class BatchManager:
             self._render_sphere_batch(commands)
         elif first_cmd.type == DrawCommandType.BOX:
             self._render_box_batch(commands)
+        elif first_cmd.type == DrawCommandType.LINE_3D:
+            self._render_line_3d_batch_instanced(commands)
         elif first_cmd.type == DrawCommandType.THICK_LINE_3D:
             self._render_thick_line_3d_batch(commands)
         else:
             self._render_line_3d_batch(commands)
+
+    def _render_line_3d_batch_instanced(self, commands: List[DrawCommand]):
+        """Render instanced 3D lines"""
+        first_cmd = commands[0]
+        
+        if first_cmd.stroke_weight <= 1.0:
+            # Thin lines
+            line_data = []
+            for cmd in commands:
+                color = self.renderer._normalize_color(cmd.stroke_color)
+                line_data.extend([
+                    cmd.line_start[0], cmd.line_start[1], cmd.line_start[2],  # start (3f)
+                    cmd.line_end[0], cmd.line_end[1], cmd.line_end[2],        # end (3f)
+                    *color                                                      # color (4f)
+                ])
+            
+            if line_data:
+                instance_array = np.array(line_data, dtype='f4')
+                instance_buffer = self.ctx.buffer(instance_array)
+                
+                vao = self.ctx.vertex_array(
+                    self.renderer.shader_3d_instanced_line,
+                    [
+                        (self.renderer.geometry.get_unit_line_3d_vbo(), '1f', 'in_position'),
+                        (instance_buffer, '3f 3f 4f /i', 'instance_start', 'instance_end', 'instance_color'),
+                    ]
+                )
+                
+                self.renderer.shader_3d_instanced_line['view'].write(self.renderer.camera.get_view_matrix())
+                self.renderer.shader_3d_instanced_line['projection'].write(self.renderer.camera.get_projection_matrix())
+                
+                self.ctx.line_width = first_cmd.stroke_weight
+                vao.render(moderngl.LINES, instances=len(line_data) // 10)
+                
+                vao.release()
+                instance_buffer.release()
+        else:
+            # Thick lines - group by thickness
+            lines_by_thickness = {}
+            for cmd in commands:
+                lines_by_thickness.setdefault(cmd.stroke_weight, []).append(cmd)
+            
+            for thickness, thick_cmds in lines_by_thickness.items():
+                line_data = []
+                for cmd in thick_cmds:
+                    color = self.renderer._normalize_color(cmd.stroke_color)
+                    scaled_thickness = thickness * 0.01  # Scale appropriately
+                    line_data.extend([
+                        cmd.line_start[0], cmd.line_start[1], cmd.line_start[2],  # start (3f)
+                        cmd.line_end[0], cmd.line_end[1], cmd.line_end[2],        # end (3f)
+                        scaled_thickness,                                          # thickness (1f)
+                        *color                                                      # color (4f)
+                    ])
+                
+                if line_data:
+                    instance_array = np.array(line_data, dtype='f4')
+                    instance_buffer = self.ctx.buffer(instance_array)
+                    
+                    vao = self.ctx.vertex_array(
+                        self.renderer.shader_3d_instanced_thick_line,
+                        [
+                            (self.renderer.geometry.get_unit_thick_line_3d_vbo(), '3f 3f', 'in_position', 'in_normal'),
+                            (instance_buffer, '3f 3f 1f 4f /i', 'instance_start', 'instance_end', 'instance_thickness', 'instance_color'),
+                        ]
+                    )
+                    
+                    self.renderer.shader_3d_instanced_thick_line['view'].write(self.renderer.camera.get_view_matrix())
+                    self.renderer.shader_3d_instanced_thick_line['projection'].write(self.renderer.camera.get_projection_matrix())
+                    
+                    vao.render(moderngl.TRIANGLES, instances=len(line_data) // 11)
+                    
+                    vao.release()
+                    instance_buffer.release()
     
     def _render_sphere_batch(self, commands: List[DrawCommand]):
         """Render instanced spheres"""

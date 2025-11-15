@@ -172,6 +172,86 @@ class DOTSHADERS:
         }
     '''
 
+
+    VERT_3D_INSTANCED_LINE = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 view;
+        
+        in float in_position;  // 0.0 or 1.0
+        
+        // Per-instance attributes
+        in vec3 instance_start;
+        in vec3 instance_end;
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        
+        void main() {
+            // Interpolate between start and end
+            vec3 world_pos = mix(instance_start, instance_end, in_position);
+            gl_Position = projection * view * vec4(world_pos, 1.0);
+            v_color = instance_color;
+        }
+    '''
+
+    FRAG_3D_INSTANCED_LINE = '''
+        #version 330
+        
+        in vec4 v_color;
+        out vec4 fragColor;
+        
+        void main() {
+            fragColor = v_color;
+        }
+    '''
+
+    # For thick 3D lines
+    VERT_3D_INSTANCED_THICK_LINE = '''
+        #version 330
+        
+        uniform mat4 projection;
+        uniform mat4 view;
+        
+        in vec3 in_position;  // Unit thick line geometry
+        in vec3 in_normal;
+        
+        // Per-instance attributes
+        in vec3 instance_start;
+        in vec3 instance_end;
+        in float instance_thickness;
+        in vec4 instance_color;
+        
+        out vec4 v_color;
+        out vec3 v_normal;
+        
+        void main() {
+            // Calculate line direction and perpendicular
+            vec3 direction = instance_end - instance_start;
+            float length = length(direction);
+            direction = direction / length;
+            
+            // Find perpendicular vectors
+            vec3 up = abs(direction.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+            vec3 right = normalize(cross(direction, up)) * (instance_thickness / 2.0);
+            up = normalize(cross(right, direction)) * (instance_thickness / 2.0);
+            
+            // Transform vertex
+            // in_position.x is along line (0 to 1)
+            // in_position.y is perpendicular offset (-0.5 to 0.5 for right)
+            // in_position.z is perpendicular offset (-0.5 to 0.5 for up)
+            vec3 world_pos = instance_start 
+                        + direction * (in_position.x * length)
+                        + right * (in_position.y * instance_thickness)
+                        + up * (in_position.z * instance_thickness);
+            
+            gl_Position = projection * view * vec4(world_pos, 1.0);
+            v_color = instance_color;
+            v_normal = in_normal;  // Could transform this too for lighting
+        }
+    '''
+
     FRAG_2D_INSTANCED = '''
         #version 330
         

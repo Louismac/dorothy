@@ -41,6 +41,7 @@ class DrawCommand:
     line_start: Optional[Tuple[float, float]] = None
     line_end: Optional[Tuple[float, float]] = None
 
+
 class Transform:
     """Manages transformation matrices""" 
     def __init__(self):
@@ -78,7 +79,7 @@ class Camera:
         self.aspect = width / height
         self.near = 0.1
         self.far = 100.0
-        self.mode = '3d'
+        self.mode = '2d'
         self.width = width
         self.height = height
     
