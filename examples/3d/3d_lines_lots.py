@@ -10,11 +10,12 @@ class Example3D:
     def setup(self):
         print("3D Setup!")
         dot.camera_3d()
-        self.camera_pos = (3,3,-45)
+        self.camera_pos = (3,3,-55)
         self.s = 10  # spacing between cubes
         self.cube_size = 7  # grid dimensions
+        self.thick = np.ones((self.cube_size, self.cube_size,self.cube_size+1))
         self.z = 0
-        self.speed = 1  # movement speed
+        self.speed = 8  # movement speed
         self.dir_x = 0.02
         self.angle_x = 0
         self.dir_y = 0.02
@@ -55,12 +56,18 @@ class Example3D:
         if np.random.random()>0.98:
             self.dir_x = -self.dir_x
         x = 8 * np.cos(self.angle_x)
-        y = 6 * np.sin(self.angle_y)
+        y = 10 * np.sin(self.angle_y)
         dot.set_camera(self.camera_pos,(x, y, 0))
         
         # Wrap z when it exceeds one cube spacing
         if self.z <= self.s*4:
             self.z += self.s
+            self.thick = np.ones((self.cube_size, self.cube_size,self.cube_size+1))
+            for i in range(self.cube_size):
+                for j in range(self.cube_size):
+                    for k in range(self.cube_size + 1):
+                        if np.random.random()>0.95:
+                            self.thick[i][j][k] = 4 if self.thick[i][j][k] == 1 else 1 
         
         with dot.transform():
             offset = (self.s * self.cube_size) / 2
@@ -68,8 +75,8 @@ class Example3D:
             # Draw grid of cubes with wrapping in Z
             for i in range(self.cube_size):
                 for j in range(self.cube_size):
-                    for k in range(self.cube_size + 1):  # Extra layer for seamless wrapping
-                        dot.set_stroke_weight(1 if np.random.random()<0.97 else 2)
+                    for k in range(self.cube_size + 1):  # Extra layer for seamless wrappingß
+                        dot.set_stroke_weight(self.thick[i][j][k])
                         # Calculate base position
                         x = (i * self.s) - offset
                         y = (j * self.s) - offset
