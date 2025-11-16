@@ -11,6 +11,14 @@ class Example3D:
         print("3D Setup!")
         dot.camera_3d()
         dot.set_camera((5, 5, 5), (0, 0, 0))
+        self.points = []
+        for i in range(100):
+            angle = i * 0.2
+            radius = 1
+            x = np.cos(angle) * radius
+            z = np.sin(angle) * radius
+            y = i / 100
+            self.points.append((x, y, z))
         
     
     def draw_cube(self,size):
@@ -38,24 +46,15 @@ class Example3D:
             dot.rotate(dot.frames * 0.01, 1, 0, 0)  # Rotate around X
         
             # Draw cube edges
-            dot.set_stroke_weight(10)
+            dot.set_stroke_weight(1)
             self.draw_cube(2)
 
             dot.rotate(dot.frames * 0.05, 0, 1, 0)  # Rotate around Y
             dot.rotate(dot.frames * 0.05, 1, 0, 0)  # Rotate around X
 
-            points = []
-            for i in range(100):
-                angle = i * 0.2
-                radius = 1
-                x = np.cos(angle) * radius
-                z = np.sin(angle) * radius
-                y = i / 100
-                points.append((x, y, z))
-
             dot.stroke((255, 255, 0))
-            dot.set_stroke_weight(1)
-            dot.polyline_3d(points)
+            dot.set_stroke_weight(2)
+            dot.polyline_3d(self.points)
 
     
         
