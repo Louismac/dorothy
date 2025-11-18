@@ -1,6 +1,6 @@
 from dorothy import Dorothy
 
-dot = Dorothy()
+dot = Dorothy(800,800)
 
 class MySketch:
 
@@ -12,11 +12,12 @@ class MySketch:
         
     def draw(self):
         dot.stroke((255, 0, 0))
-        dot.no_fill()
+        dot.background(dot.black)
+        # dot.no_fill()
         # Try different weights
-        for i in range(1, 11):
-            dot.set_stroke_weight(i)
-            dot.rectangle((300, 50 + i*20), (750, 50 + i*60))
+        for i in range(1, 2):
+            dot.set_stroke_weight(3)
+            dot.rectangle((50, 51), (dot.mouse_x, dot.mouse_y))
             # dot.circle((50+ i*20, 50 + i*20), (100))
             # dot.line((50, 50 + i*20), (250, 50 + i*20))
             

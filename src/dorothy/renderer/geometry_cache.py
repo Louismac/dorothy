@@ -134,24 +134,56 @@ class GeometryCache:
         return self._unit_rect_vbo
     
     def get_unit_rectangle_stroke_vbo(self, thickness_ratio):
-        """Get cached unit rectangle stroke VBO"""
+        """Get cached unit rectangle stroke VBO
+        
+        Args:
+            thickness_ratio: absolute thickness (not ratio)
+        """
         cache_key = round(thickness_ratio, 3)
+        
+        if not hasattr(self, '_unit_rect_stroke_cache'):
+            self._unit_rect_stroke_cache = {}
+        
         if cache_key not in self._unit_rect_stroke_cache:
+            # Use absolute thickness, not ratio
             half_thick = thickness_ratio / 2
+            
+            # Outer rectangle (expanded outward from 0,0 to 1,1)
             outer_x1, outer_y1 = -half_thick, -half_thick
             outer_x2, outer_y2 = 1.0 + half_thick, 1.0 + half_thick
+            
+            # Inner rectangle (shrunk inward)
             inner_x1, inner_y1 = half_thick, half_thick
             inner_x2, inner_y2 = 1.0 - half_thick, 1.0 - half_thick
+            
             vertices = []
-            # Top, Right, Bottom, Left edges
-            for coords in [
-                [outer_x1, outer_y1, outer_x2, outer_y1, inner_x2, inner_y1, outer_x1, outer_y1, inner_x2, inner_y1, inner_x1, inner_y1],
-                [outer_x2, outer_y1, outer_x2, outer_y2, inner_x2, inner_y2, outer_x2, outer_y1, inner_x2, inner_y2, inner_x2, inner_y1],
-                [outer_x2, outer_y2, outer_x1, outer_y2, inner_x1, inner_y2, outer_x2, outer_y2, inner_x1, inner_y2, inner_x2, inner_y2],
-                [outer_x1, outer_y2, outer_x1, outer_y1, inner_x1, inner_y1, outer_x1, outer_y2, inner_x1, inner_y1, inner_x1, inner_y2]
-            ]:
-                vertices.extend(coords)
+            
+            # Top edge quad
+            vertices.extend([
+                outer_x1, outer_y1, outer_x2, outer_y1, inner_x2, inner_y1,
+                outer_x1, outer_y1, inner_x2, inner_y1, inner_x1, inner_y1,
+            ])
+            
+            # Right edge quad
+            vertices.extend([
+                outer_x2, outer_y1, outer_x2, outer_y2, inner_x2, inner_y2,
+                outer_x2, outer_y1, inner_x2, inner_y2, inner_x2, inner_y1,
+            ])
+            
+            # Bottom edge quad
+            vertices.extend([
+                outer_x2, outer_y2, outer_x1, outer_y2, inner_x1, inner_y2,
+                outer_x2, outer_y2, inner_x1, inner_y2, inner_x2, inner_y2,
+            ])
+            
+            # Left edge quad
+            vertices.extend([
+                outer_x1, outer_y2, outer_x1, outer_y1, inner_x1, inner_y1,
+                outer_x1, outer_y2, inner_x1, inner_y1, inner_x1, inner_y2,
+            ])
+            
             self._unit_rect_stroke_cache[cache_key] = self.ctx.buffer(np.array(vertices, dtype='f4'))
+        
         return self._unit_rect_stroke_cache[cache_key]
     
     def get_unit_line_vbo(self):

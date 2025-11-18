@@ -15,7 +15,9 @@ class MySketch:
     def draw(self): 
         dot.background(dot.black)
         pts = np.random.random((5000,2))
-        [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2) for pt in pts]            
+        # [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2) for pt in pts] 
+        pt = pts[0]
+        dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2)           
 
 MySketch()          
 

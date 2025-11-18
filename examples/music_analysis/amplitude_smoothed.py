@@ -18,7 +18,7 @@ class MySketch:
         r = self.mean_amp.add(dot.music.amplitude())
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),int(r*dot.height))
+        dot.circle((dot.width//2,dot.height//2),1+int(r*dot.height))
 
 MySketch()   
     

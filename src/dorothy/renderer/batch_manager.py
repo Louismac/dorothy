@@ -134,6 +134,7 @@ class BatchManager:
     def _render_circle_batch(self, commands: List[DrawCommand]):
         """Render instanced circles"""
         first_cmd = commands[0]
+        print(commands)
         max_radius = max(cmd.radius for cmd in commands if cmd.radius)
         segments = 8 if max_radius < 2 else 16 if max_radius < 10 else 32 if max_radius < 50 else 48
         
@@ -206,34 +207,72 @@ class BatchManager:
                 )
         
         # Stroke
+        # In the stroke rendering section:
         if first_cmd.use_stroke:
+            # Group by stroke weight
             strokes_by_weight = {}
             for cmd in commands:
                 if cmd.use_stroke:
                     strokes_by_weight.setdefault(cmd.stroke_weight, []).append(cmd)
             
-            for weight, stroke_cmds in strokes_by_weight.items():
-                if weight >= 1.0:
-                    avg_width = sum(abs(cmd.rect_pos2[0] - cmd.rect_pos1[0]) for cmd in stroke_cmds) / len(stroke_cmds)
-                    avg_height = sum(abs(cmd.rect_pos2[1] - cmd.rect_pos1[1]) for cmd in stroke_cmds) / len(stroke_cmds)
-                    thickness_ratio = weight / ((avg_width + avg_height) / 2)
+            for stroke_weight, stroke_cmds in strokes_by_weight.items():
+                if stroke_weight >= 1.0:
+                    # Calculate thickness as absolute value relative to unit rectangle
+                    # For each rectangle, normalize thickness by its dimensions
+                    stroke_instance_data = []
                     
-                    stroke_data = []
+                    # Create separate cache entries based on actual thickness
+                    # Use a normalized thickness value
+                    min_dimension = min(
+                        min(abs(cmd.rect_pos2[0] - cmd.rect_pos1[0]), 
+                            abs(cmd.rect_pos2[1] - cmd.rect_pos1[1])) 
+                        for cmd in stroke_cmds
+                    )
+                    
+                    # Thickness ratio relative to smallest dimension
+                    thickness_ratio = stroke_weight / max(min_dimension, 1.0)
+                    
+                    # Clamp to prevent issues with very thin rectangles
+                    thickness_ratio = min(thickness_ratio, 0.4)
+                    
+                    unit_stroke_vbo = self.renderer.geometry.get_unit_rectangle_stroke_vbo(thickness_ratio)
+                    
+                    # Build instance data
                     for cmd in stroke_cmds:
                         x1, y1 = cmd.rect_pos1
                         x2, y2 = cmd.rect_pos2
+                        width = x2 - x1
+                        height = y2 - y1
+                        
                         color = self.renderer._normalize_color(cmd.stroke_color)
-                        stroke_data.extend([x1, y1, x2 - x1, y2 - y1, *color])
+                        stroke_instance_data.extend([
+                            x1, y1,           # position (2f)
+                            width, height,    # size (2f)
+                            *color            # color (4f)
+                        ])
                     
-                    if stroke_data:
-                        self._render_instanced_geometry(
-                            self.renderer.geometry.get_unit_rectangle_stroke_vbo(thickness_ratio),
-                            np.array(stroke_data, dtype='f4'),
+                    if stroke_instance_data:
+                        stroke_instance_array = np.array(stroke_instance_data, dtype='f4')
+                        stroke_instance_buffer = self.ctx.buffer(stroke_instance_array)
+                        
+                        stroke_vao = self.ctx.vertex_array(
                             self.renderer.shader_2d_instanced_rect,
-                            '2f', '2f 2f 4f /i',
-                            ['in_position'], ['instance_pos', 'instance_size', 'instance_color'],
-                            len(stroke_data) // 8
+                            [
+                                (unit_stroke_vbo, '2f', 'in_position'),
+                                (stroke_instance_buffer, '2f 2f 4f /i', 'instance_pos', 'instance_size', 'instance_color'),
+                            ]
                         )
+                        
+                        self.renderer.shader_2d_instanced_rect['projection'].write(self.renderer.camera.get_projection_matrix())
+                        self.renderer.shader_2d_instanced_rect['model'].write(glm.mat4())
+                        
+                        stroke_vao.render(moderngl.TRIANGLES, instances=len(stroke_instance_data) // 8)
+                        
+                        stroke_vao.release()
+                        stroke_instance_buffer.release()
+                else:
+                    # Thin stroke
+                    pass
     
     def _render_line_batch(self, commands: List[DrawCommand]):
         """Render instanced lines"""
