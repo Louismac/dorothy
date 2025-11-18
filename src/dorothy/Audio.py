@@ -1251,7 +1251,7 @@ class RAVEPlayer(AudioDevice):
                     self.hooks["lfo"][layer_name] = [None for _ in range(res_dict["n_clusters"])]
                     self.cluster_results[layer_name] = result
     
-    def _get_layer(self, layer_name: str) -> nn.Module:
+    def _get_layer(self, layer_name: str):
         """Get layer module by name"""
         decoder = self.model.decoder
         for name, module in decoder.named_modules():

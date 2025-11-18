@@ -66,7 +66,7 @@ class Example3D:
                 for j in range(self.cube_size):
                     for k in range(self.cube_size + 1):
                         if np.random.random()>0.95:
-                            self.thick[i][j][k] = 5
+                            self.thick[i][j][k] = 10
         
         with dot.transform():
             offset = (self.s * self.cube_size) / 2
