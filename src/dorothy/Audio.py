@@ -1376,10 +1376,10 @@ class SamplePlayer(AudioDevice):
 
     def check_onset(self, *args, **kwargs) -> bool:
         """Check if a onset has occurred since last call."""
-        if len(self.onsets) == 0:
+        if len(self.onsets) == 0 or self.onset_ptr >= len(self.onsets):
             return False
         
-        next_onset = self.onsets[self.onset_ptr % len(self.onsets)]
+        next_onset = self.onsets[self.onset_ptr]
         if next_onset < self.current_sample:
             self.onset_ptr += 1
             return True
@@ -1388,16 +1388,28 @@ class SamplePlayer(AudioDevice):
     
     def check_beat(self) -> bool:
         """Check if a beat has occurred since last call."""
-        if len(self.beats) == 0:
+        if len(self.beats) == 0 or self.beat_ptr >= len(self.beats):
             return False
         
-        next_beat = self.beats[self.beat_ptr % len(self.beats)]
+        next_beat = self.beats[self.beat_ptr]
         
         if next_beat < self.current_sample:
             self.beat_ptr += 1
             return True
         
         return False
+    
+    def reset_ptrs(self):
+        self.onset_ptr = 0
+        self.beat_ptr = 0
+    
+    def on_loop(self, audio_buffer):
+        self.reset_ptrs()
+        wrap_ptr = self.current_sample - self.y.shape[1]
+        wrap_signal = self.y[:, :wrap_ptr]
+        audio_buffer = np.concatenate((audio_buffer, wrap_signal), axis=1)
+        self.current_sample = wrap_ptr
+        return audio_buffer
     
     def audio_callback(self) -> npt.NDArray[np.float32]:
         """Generate audio samples from stored audio."""
@@ -1410,12 +1422,9 @@ class SamplePlayer(AudioDevice):
         # Advance playhead
         self.current_sample += self.buffer_size
         
-        # Handle wrapping
+        # Handle wrapping (if we go off the end)
         if self.current_sample >= self.y.shape[1]:
-            wrap_ptr = self.current_sample - self.y.shape[1]
-            wrap_signal = self.y[:, :wrap_ptr]
-            audio_buffer = np.concatenate((audio_buffer, wrap_signal), axis=1)
-            self.current_sample = wrap_ptr
+           audio_buffer = self.on_loop(audio_buffer)
         
         # Store for analysis (use first channel)
         self.audio_buffer = audio_buffer[0, :] if audio_buffer.shape[0] > 0 else audio_buffer

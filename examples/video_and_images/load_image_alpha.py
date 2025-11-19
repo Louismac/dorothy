@@ -15,7 +15,5 @@ class MySketch:
     def draw(self):
         dot.paste(self.space, (0,0))
         dot.paste(self.mario, (0,0))
-
-        
           
 MySketch()
