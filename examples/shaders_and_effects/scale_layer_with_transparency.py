@@ -40,7 +40,7 @@ class MySketch:
             #clear pattern layer to transparent
             dot.background((0,0,0,0))
             dot.stroke((255, 37, 21))
-            dot.set_stroke_weight(4)
+            dot.set_stroke_weight(1)
             size = 30
             for i in range(dot.width//size):
                 for j in range(dot.height//size):

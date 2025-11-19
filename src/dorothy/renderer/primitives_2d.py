@@ -13,7 +13,7 @@ class Primitives2D:
     
     def circle(self, center: Tuple[float, float], radius: float):
         """Draw a circle"""
-        if self.renderer.enable_batching:
+        if self.renderer.enable_batching and radius > 0:
             transformed_center = self.renderer.transform.matrix * glm.vec4(center[0], center[1], 0.0, 1.0)
             world_center = (transformed_center.x, transformed_center.y)
             scale = glm.length(glm.vec3(self.renderer.transform.matrix[0]))

@@ -216,8 +216,8 @@ class Dorothy:
         def new_init(self):
             print("Overridden init")
         sketch_module.MySketch.__init__ = new_init
-        my_sketch = sketch_module.MySketch()
-        
+        self.my_sketch = sketch_module.MySketch()
+        print(self.my_sketch)
         self.was_error = False
         self.reload_requested = False
         self.reload_count = 0
@@ -232,10 +232,6 @@ class Dorothy:
                 """Catch ALL events - modified, created, moved, etc."""
                 self.event_count += 1
                 
-                # Debug: Print ALL file events
-                print(f"🔍 DEBUG [{self.event_count}]: {event.event_type} event!")
-                print(f"   Path: {event.src_path}")
-                print(f"   Is directory: {event.is_directory}")
                 
                 if event.is_directory:
                     print(f"   ⏭️  Skipping (directory)")
@@ -244,23 +240,16 @@ class Dorothy:
                 # Check if this is our sketch file (by name, not full path)
                 file_path = Path(event.src_path)
                 
-                print(f"   File name: {file_path.name}")
-                print(f"   Target name: {sketch_file.name}")
-                print(f"   Match by name: {file_path.name == sketch_file.name}")
-                
                 # Match by filename (more robust for editor saves)
                 if file_path.name == sketch_file.name and file_path.suffix == '.py':
                     current_time = time.time()
                     time_since_last = current_time - self.last_modified
-                    
-                    print(f"   ⏱️  Time since last reload: {time_since_last:.2f}s")
-                    
+                                        
                     # Debounce
                     if time_since_last < 0.5:
                         print(f"   ⏭️  DEBOUNCED (too soon, need 0.5s)")
                         return
                     
-                    print(f"   ✅ SETTING reload_requested = True")
                     self.last_modified = current_time
                     self.dorothy.reload_requested = True
                 else:
@@ -271,28 +260,12 @@ class Dorothy:
             try:
                 print(f"📝 Reloading {sketch_file.name}...")
                 self.reload_count += 1
-                print(f"🔍 DEBUG: Reload count: {self.reload_count}")
-                
                 # Clear any cached modules
                 if sketch_module.__name__ in sys.modules:
                     print(f"🔍 DEBUG: Removing {sketch_module.__name__} from sys.modules")
-                
-                # Reload the module
                 importlib.reload(sketch_module)
                 new_class = sketch_module.MySketch
-                
-                print(f"🔍 DEBUG: Old class: {my_sketch.__class__}")
-                print(f"🔍 DEBUG: New class: {new_class}")
-                
-                # Update the class
-                my_sketch.__class__ = new_class
-                
-                print(f"🔍 DEBUG: Updated class, calling setup()...")
-                
-                # Re-run setup
-                my_sketch.setup()
-                
-                print(f"✅ Reloaded successfully!")
+                self.my_sketch.__class__ = new_class
                 self.was_error = False
                 
             except Exception:
@@ -305,7 +278,7 @@ class Dorothy:
             """Initial setup"""
             print(f"🔍 DEBUG: setup_wrapper called")
             try:
-                my_sketch.setup()
+                self.my_sketch.setup()
                 self.was_error = False
             except Exception:
                 if not self.was_error:
@@ -315,33 +288,37 @@ class Dorothy:
         
         def draw_wrapper():
             """Draw loop with reload checking"""
-            # Debug every 120 frames (every 2 seconds at 60fps)
-            if self.frames % 120 == 0:
-                print(f"🔍 DEBUG: Frame {self.frames}, reload_requested = {self.reload_requested}")
             
             # Check if reload was requested
             if self.reload_requested:
-                print(f"\n🔥 DEBUG: RELOAD REQUESTED! Calling reload_sketch()")
                 self.reload_requested = False
+                print("self.my_sketch", self.my_sketch)
                 reload_sketch()
+                
+                if hasattr(self.my_sketch, 'run_once'):
+                    new_class = self.my_sketch.__class__
+                    func_key = inspect.getsource(new_class.run_once)
+                    
+                    if not hasattr(self.my_sketch, 'old_once_func'):
+                        self.my_sketch.old_once_func = func_key
+                    elif self.my_sketch.old_once_func != func_key:
+                        print(f"run_once changed after reload, will execute new version")
+                        self.my_sketch.once_ran = False
+                        self.my_sketch.old_once_func = func_key
             
             try:
                 # Handle run_once function
-                if hasattr(my_sketch, 'run_once'):
-                    func_key = inspect.getsource(my_sketch.run_once)
-                    if not hasattr(my_sketch, 'old_once_func'):
-                        my_sketch.old_once_func = func_key
-                    if my_sketch.old_once_func != func_key:
-                        my_sketch.once_ran = False
-                        my_sketch.old_once_func = func_key
-                    if not getattr(my_sketch, 'once_ran', False):
-                        my_sketch.run_once()
-                        my_sketch.once_ran = True
+                if hasattr(self.my_sketch, 'run_once'):
+                    if not getattr(self.my_sketch, 'once_ran', False):
+                        # Get the CURRENT version from the class
+                        self.my_sketch.run_once()
+                        print("running once")
+                        self.my_sketch.once_ran = True
                 
                 # Call draw
-                my_sketch.draw()
+                self.my_sketch.draw()
                 self.was_error = False
-                
+        
             except Exception:
                 if not self.was_error:
                     print("❌ Error in draw:")
@@ -354,11 +331,6 @@ class Dorothy:
         observer = Observer()
         observer.schedule(event_handler, path=str(sketch_file.parent), recursive=False)
         observer.start()
-        print(f"🔍 DEBUG: Observer started successfully")
-        
-        print(f"\n👀 Watching {sketch_file.name} for changes...")
-        print(f"💡 Edit and save {sketch_file.name} to see live updates!")
-        print(f"🎨 Press Q or ESC to quit\n")  
         
         try:
             # This is the ONLY start_loop call

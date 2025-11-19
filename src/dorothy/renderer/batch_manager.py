@@ -134,7 +134,7 @@ class BatchManager:
     def _render_circle_batch(self, commands: List[DrawCommand]):
         """Render instanced circles"""
         first_cmd = commands[0]
-        max_radius = max(cmd.radius for cmd in commands if cmd.radius)
+        max_radius = max([cmd.radius for cmd in commands if cmd.radius])
         segments = 8 if max_radius < 2 else 16 if max_radius < 10 else 32 if max_radius < 50 else 48
         
         # Fill

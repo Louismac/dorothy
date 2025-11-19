@@ -17,7 +17,6 @@ class MySketch:
         # print(sd.query_devices())
         #o = dot.music.start_device_stream(1)
 
-        dot.music.audio_outputs[o].onset_detector.threshold = 0.5 
         dot.music.audio_outputs[o].analyse_onsets = True
         dot.music.audio_outputs[o].analyse_beats = True
 
