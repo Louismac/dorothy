@@ -12,6 +12,8 @@ from .primitives_3d import Primitives3D
 from .layers import LayerManager
 from .effects import EffectsManager
 from ..DorothyShaders import DOTSHADERS
+import os
+import struct
 
 class DorothyRenderer:
     """Core rendering engine - delegates to specialized components"""
@@ -120,6 +122,12 @@ class DorothyRenderer:
         self.shader_texture_2d = self.ctx.program(
             vertex_shader=DOTSHADERS.VERT_TEXTURE_2D,
             fragment_shader=DOTSHADERS.FRAG_TEXTURE_2D
+        )
+
+         # Create shader program
+        self.text_program = self.ctx.program(
+            vertex_shader=DOTSHADERS.VERT_TEXT,
+            fragment_shader=DOTSHADERS.FRAG_TEXT
         )
         
         # Create fullscreen quad for texture rendering
@@ -409,3 +417,138 @@ class DorothyRenderer:
         vao.render(moderngl.TRIANGLES)
         vao.release()
         vbo.release()
+
+    def test_single_glyph(self):
+        """Test rendering a single glyph to debug UVs"""
+        if not hasattr(self, 'text_vao'):
+            self._setup_text_rendering()
+        
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        
+        # Get 'H' glyph
+        glyph = self.font_atlas['H']
+        print(f"H glyph: {glyph}")
+        
+        # Single instance data
+        instances = [
+            200.0, 200.0,  # position
+            1.0, 0.0, 0.0, 1.0,  # red color
+            *glyph['uv']  # UV coords
+        ]
+        
+        self.text_instance_buffer.write(struct.pack('10f', *instances))
+        
+        self.text_program['projection'].write(self.camera.get_projection_matrix())
+        self.text_program['glyph_size'] = (200.0, 200.0)  # Giant glyph
+        self.text_program['sdf_texture'] = 0
+        
+        self.sdf_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.sdf_texture.use(location=0)
+        
+        self.text_vao.render(moderngl.TRIANGLE_STRIP, instances=1)
+
+    def render_text(self, text, x, y, font_size=24, color=(1, 1, 1, 1)):
+        if not hasattr(self, 'text_vao'):
+            self._setup_text_rendering()
+        
+        if not text:
+            return
+        
+        self.ctx.enable(moderngl.BLEND)
+        self.ctx.blend_func = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        
+        instances = []
+        cursor_x = x
+        
+        # Update instance data to include actual glyph size
+        for char in text:
+            if char not in self.font_atlas:
+                continue
+            
+            glyph = self.font_atlas[char]
+            
+            # Calculate scaled glyph dimensions
+            scale = font_size / self.font_base_size
+            glyph_width = glyph['size'][0] * scale
+            glyph_height = glyph['size'][1] * scale
+            
+            # Apply vertical offset for baseline alignment
+            glyph_y = y + glyph['offset'][1] * scale
+            
+            instances.extend([
+                cursor_x, glyph_y,  # Use offset Y position
+                *color,
+                *glyph['uv'],
+                glyph_width,
+                glyph_height,
+            ])
+            
+            cursor_x += glyph['advance'] * scale
+
+        num_chars = len(instances) // 12  # Now 12 floats per instance
+        
+        self.text_instance_buffer.write(struct.pack(f'{len(instances)}f', *instances))
+        
+        self.text_program['projection'].write(self.camera.get_projection_matrix())
+        self.text_program['in_glyph_size'] = (font_size, font_size)
+        self.text_program['sdf_texture'] = 0
+        
+        self.sdf_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.sdf_texture.use(location=0)
+        
+        self.text_vao.render(moderngl.TRIANGLE_STRIP, instances=num_chars)
+
+
+    def _setup_text_rendering(self):
+        """Initialize text rendering resources."""
+        # Create quad vertices (two triangles as strip)
+        quad_vertices = np.array([
+            # pos          # texcoord
+            0.0, 0.0,     0.0, 0.0,  # bottom-left
+            1.0, 0.0,     1.0, 0.0,  # bottom-right
+            0.0, 1.0,     0.0, 1.0,  # top-left
+            1.0, 1.0,     1.0, 1.0,  # top-right
+        ], dtype='f4')
+        
+        # Create buffers
+        self.text_vertex_buffer = self.ctx.buffer(quad_vertices.tobytes())
+        self.text_instance_buffer = self.ctx.buffer(reserve=10 * 4 * 1024)  # 1024 chars max
+        
+       
+        # Create VAO
+        self.text_vao = self.ctx.vertex_array(
+            self.text_program,
+            [
+                (self.text_vertex_buffer, '2f 2f', 'in_position', 'in_texcoord'),
+                (self.text_instance_buffer, '2f 4f 4f 2f/i', 'in_offset', 'in_color', 'in_glyph_uv', 'in_glyph_size'),
+            ]
+        )
+        
+        self._load_font_atlas('font_atlas.png', 'font_atlas.json')
+
+
+    def _load_font_atlas(self, texture_path, metadata_path):
+        """Load SDF font atlas texture and metadata."""
+        import json
+        from PIL import Image
+        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        texture_path = os.path.join(script_dir, texture_path)
+        metadata_path = os.path.join(script_dir, metadata_path)
+        # Load texture (MSDF is RGB, standard SDF is single channel)
+        img = Image.open(texture_path).convert('L')
+        img_array = np.array(img)
+        print(f"Texture min/max values: {img_array.min()}/{img_array.max()}")
+        print(f"Non-zero pixels: {np.count_nonzero(img_array)}")
+        self.sdf_texture = self.ctx.texture(img.size, 1, img.tobytes())
+        self.sdf_texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        
+        # Load metadata
+        with open(metadata_path) as f:
+            data = json.load(f)
+            self.font_atlas = data['glyphs']
+            self.font_base_size = data['size']
+            self.atlas_size = data['atlas_size']

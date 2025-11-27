@@ -498,7 +498,45 @@ class DOTSHADERS:
                         fragColor = vec4(texColor.rgb, texColor.a * alpha);
                     }
                 '''
-    
+        
+    VERT_TEXT = '''
+        #version 330
+        in vec2 in_position;
+        in vec2 in_texcoord;
+        in vec2 in_offset;
+        in vec4 in_color;
+        in vec4 in_glyph_uv;
+        in vec2 in_glyph_size;  // Per-instance actual size
+
+        out vec2 v_texcoord;
+        out vec4 v_color;
+
+        uniform mat4 projection;
+
+        void main() {
+            vec2 pos = in_position * in_glyph_size + in_offset;  // Use per-glyph size
+            gl_Position = projection * vec4(pos, 0.0, 1.0);
+            
+            vec2 uv = in_texcoord;
+            v_texcoord = mix(in_glyph_uv.xy, in_glyph_uv.zw, uv);
+            v_color = in_color;
+        }
+    '''
+
+    FRAG_TEXT = '''
+        #version 330
+        in vec2 v_texcoord;
+        in vec4 v_color;
+        out vec4 fragColor;
+        uniform sampler2D sdf_texture;
+        
+        void main() {
+            float alpha = texture(sdf_texture, v_texcoord).r;
+            fragColor = vec4(v_color.rgb, v_color.a * alpha);
+        }
+    '''
+
+
     PIXELATE = '''
     #version 330
     uniform sampler2D texture0;

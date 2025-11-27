@@ -587,3 +587,4 @@ class BatchManager:
         vao.render(mode)
         vao.release()
         vbo.release()
+
