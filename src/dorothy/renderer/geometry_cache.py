@@ -1,5 +1,7 @@
 """Cached geometry generation for Dorothy renderer"""
 import numpy as np
+import os
+import moderngl
 
 class GeometryCache:
     """Manages cached geometry for efficient rendering"""
@@ -16,6 +18,14 @@ class GeometryCache:
         self._unit_thick_line_vbo = None
         self.sphere_vbo = None
         self.sphere_ibo = None
+        #text
+        self.text_vertex_buffer = None
+        self.text_instance_buffer = None
+        self.text_vao = None
+        self.sdf_texture = None
+        self.font_atlas = None
+        self.font_base_size = None
+        self.atlas_size = None
 
     def get_unit_line_3d_vbo(self):
         """Get cached unit 3D line VBO (two points: 0 and 1)"""
@@ -238,3 +248,54 @@ class GeometryCache:
             vertex_data.extend(texcoords[i*2:i*2+2])
         self.sphere_vbo = self.ctx.buffer(np.array(vertex_data, dtype='f4'))
         self.sphere_ibo = None
+
+    
+    def setup_text_rendering(self,text_program):
+        """Initialize text rendering resources."""
+        # Create quad vertices (two triangles as strip)
+        quad_vertices = np.array([
+            # pos          # texcoord
+            0.0, 0.0,     0.0, 0.0,  # bottom-left
+            1.0, 0.0,     1.0, 0.0,  # bottom-right
+            0.0, 1.0,     0.0, 1.0,  # top-left
+            1.0, 1.0,     1.0, 1.0,  # top-right
+        ], dtype='f4')
+        
+        # Create buffers
+        self.text_vertex_buffer = self.ctx.buffer(quad_vertices.tobytes())
+        self.text_instance_buffer = self.ctx.buffer(reserve=10 * 4 * 1024)  # 1024 chars max
+        
+        # Create VAO
+        self.text_vao = self.ctx.vertex_array(
+            text_program,
+            [
+                (self.text_vertex_buffer, '2f 2f', 'in_position', 'in_texcoord'),
+                (self.text_instance_buffer, '2f 4f 4f 2f/i', 'in_offset', 'in_color', 'in_glyph_uv', 'in_glyph_size'),
+            ]
+        )
+        
+        self._load_font_atlas('font_atlas.png', 'font_atlas.json')
+
+
+    def _load_font_atlas(self, texture_path, metadata_path):
+        """Load SDF font atlas texture and metadata."""
+        import json
+        from PIL import Image
+        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        texture_path = os.path.join(script_dir, texture_path)
+        metadata_path = os.path.join(script_dir, metadata_path)
+        # Load texture (MSDF is RGB, standard SDF is single channel)
+        img = Image.open(texture_path).convert('L')
+        img_array = np.array(img)
+        print(f"Texture min/max values: {img_array.min()}/{img_array.max()}")
+        print(f"Non-zero pixels: {np.count_nonzero(img_array)}")
+        self.sdf_texture = self.ctx.texture(img.size, 1, img.tobytes())
+        self.sdf_texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        
+        # Load metadata
+        with open(metadata_path) as f:
+            data = json.load(f)
+            self.font_atlas = data['glyphs']
+            self.font_base_size = data['size']
+            self.atlas_size = data['atlas_size']

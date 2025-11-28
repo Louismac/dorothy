@@ -39,6 +39,10 @@ class BatchManager:
         """Check if two commands can be batched together"""
         if cmd1.type != cmd2.type:
             return False
+    
+        # Text can always batch together
+        if cmd1.type == DrawCommandType.TEXT:
+            return True
         
         # 3D instanced types - transforms can differ
         if cmd1.type in [DrawCommandType.SPHERE, DrawCommandType.BOX]:
@@ -128,9 +132,77 @@ class BatchManager:
             self._render_rectangle_batch(commands)
         elif first_cmd.type == DrawCommandType.LINE:
             self._render_line_batch(commands)
+        elif first_cmd.type == DrawCommandType.TEXT:
+            self._render_text_batch(commands)  
         else:
             self._render_legacy_2d_batch(commands)
     
+    def _render_text_batch(self, commands: List[DrawCommand]):
+        """Render batched text"""
+        instances = []
+        
+        for cmd in commands:
+            if not cmd.text:
+                continue
+            
+            cursor_x = cmd.text_position[0]
+            y = cmd.text_position[1]
+            scale = cmd.font_size / self.renderer.geometry.font_base_size
+            color = self.renderer._normalize_color(cmd.text_color)
+            
+            for char in cmd.text:
+                if char not in self.renderer.geometry.font_atlas:
+                    continue
+                
+                glyph = self.renderer.geometry.font_atlas[char]
+                glyph_width = glyph['size'][0] * scale
+                glyph_height = glyph['size'][1] * scale
+                glyph_y = y + glyph['offset'][1] * scale
+                
+                instances.extend([
+                    cursor_x, glyph_y,     # position (2f)
+                    *color,                # color (4f)
+                    *glyph['uv'],          # UV coords (4f)
+                    glyph_width,           # width (1f)
+                    glyph_height,          # height (1f)
+                ])
+                
+                cursor_x += glyph['advance'] * scale
+        
+        if not instances:
+            return
+        
+        num_chars = len(instances) // 12
+        instance_array = np.array(instances, dtype='f4')
+        
+        # Dynamically resize buffer if needed
+        required_size = instance_array.nbytes
+        if self.renderer.geometry.text_instance_buffer.size < required_size:
+            self.renderer.geometry.text_instance_buffer.release()
+            self.renderer.geometry.text_instance_buffer = self.ctx.buffer(reserve=required_size * 2)  # Double for headroom
+            # Recreate VAO with new buffer
+            self.renderer.geometry.text_vao.release()
+            self.renderer.geometry.text_vao = self.ctx.vertex_array(
+                self.renderer.text_program,
+                [
+                    (self.renderer.geometry.text_vertex_buffer, '2f 2f', 'in_position', 'in_texcoord'),
+                    (self.renderer.geometry.text_instance_buffer, '2f 4f 4f 2f/i', 'in_offset', 'in_color', 'in_glyph_uv', 'in_glyph_size'),
+                ]
+            )
+        
+        self.renderer.geometry.text_instance_buffer.write(instance_array)
+            
+        # Disable depth test for text
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        
+        # Set uniforms and render
+        self.renderer.text_program['projection'].write(self.renderer.camera.get_projection_matrix())
+        self.renderer.text_program['sdf_texture'] = 0
+        
+        self.renderer.geometry.sdf_texture.use(location=0)
+        self.renderer.geometry.text_vao.render(moderngl.TRIANGLE_STRIP, instances=num_chars)
+        
+
     def _render_circle_batch(self, commands: List[DrawCommand]):
         """Render instanced circles"""
         first_cmd = commands[0]

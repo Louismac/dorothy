@@ -716,47 +716,8 @@ class Dorothy:
 
     def text(self, text_str, position, font_size=24, font='HERSHEY_SIMPLEX', 
             align='left', color=None):
-        """Draw text
-        
-        Args:
-            text_str: Text to draw
-            position: (x, y) position
-            font_size: Font size in pixels (default: 24)
-            font: Font name - options:
-                'HERSHEY_SIMPLEX' (default, clean sans-serif)
-                'HERSHEY_PLAIN' (small, simple)
-                'HERSHEY_DUPLEX' (more complex serif)
-                'HERSHEY_COMPLEX' (complex serif)
-                'HERSHEY_TRIPLEX' (bold serif)
-                'HERSHEY_SCRIPT_SIMPLEX' (handwriting)
-                'HERSHEY_SCRIPT_COMPLEX' (fancy handwriting)
-            align: 'left', 'center', or 'right'
-            color: Text color (uses current fill color if None)
-        
-        Example:
-            dot.fill((255, 255, 255))
-            dot.text("Hello World", (400, 300), font_size=32, align='center')
-        """
         self._ensure_renderer()
-        self.renderer.text(text_str, position, font_size, font, align, color)
-
-    def text_size(self, text_str, font_size=24, font='HERSHEY_SIMPLEX'):
-        """Get text dimensions without rendering
-        
-        Args:
-            text_str: Text to measure
-            font_size: Font size in pixels
-            font: Font name
-        
-        Returns:
-            (width, height) tuple
-        
-        Example:
-            width, height = dot.text_size("Hello", font_size=32)
-            dot.text("Hello", (400 - width//2, 300))  # Manual centering
-        """
-        self._ensure_renderer()
-        return self.renderer.text_size(text_str, font_size, font)
+        self.renderer
     
     # 2D shapes
     def circle(self, center: Tuple[float, float], radius: float):
@@ -783,6 +744,10 @@ class Dorothy:
         """Draw a circle"""
         self._ensure_renderer()
         self.renderer.polygon(points)
+    
+    def text(self, text_str: str, x: float, y: float, size: float = 24):
+        self._ensure_renderer()
+        self.renderer.text(text_str, x, y, size)
 
    # 3D shapes
     def sphere(self, radius: float = 1.0, position: Tuple[float, float, float] = (0, 0, 0)):

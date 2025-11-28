@@ -181,6 +181,29 @@ class Primitives2D:
         vao.release()
         vbo.release()
     
+    def text(self, text_str: str, x: float, y: float, size: float = 24):
+        """Draw text"""
+        if self.renderer.enable_batching and text_str:
+            # Apply transform to position
+            transformed_pos = self.renderer.transform.matrix * glm.vec4(x, y, 0.0, 1.0)
+            
+            # Use fill color or default to white
+            color = self.renderer.fill_color if self.renderer.use_fill else (1, 1, 1, 1)
+            
+            cmd = DrawCommand(
+                type=DrawCommandType.TEXT,
+                text=text_str,
+                text_position=(transformed_pos.x, transformed_pos.y),
+                font_size=size,
+                text_color=color,
+                transform=glm.mat4(),
+                layer_id=self.renderer.active_layer,
+                draw_order=self.renderer.draw_order_counter,
+            )
+            
+            self.renderer.draw_order_counter += 1
+            self.renderer.draw_queue.append(cmd)
+
     def _draw_thick_stroke(self, vertices, closed=False):
         """Draw thick lines as quads instead of using line_width"""
         if self.renderer._stroke_weight <= 1.0:

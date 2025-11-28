@@ -15,6 +15,7 @@ class DrawCommandType(Enum):
     SPHERE = "sphere"
     THICK_LINE_3D = "3dthickline"
     BOX = "box"
+    TEXT = "text"
 
 @dataclass
 class DrawCommand:
@@ -40,6 +41,10 @@ class DrawCommand:
     rect_pos2: Optional[Tuple[float, float]] = None
     line_start: Optional[Tuple[float, float]] = None
     line_end: Optional[Tuple[float, float]] = None
+    text: Optional[str] = None
+    text_position: Optional[Tuple[float, float]] = None
+    font_size: Optional[float] = None
+    text_color: Optional[Tuple[float, float, float, float]] = None
 
 
 class Transform:
