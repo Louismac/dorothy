@@ -215,6 +215,21 @@ dot.fill(dot.red)
 dot.polygon(points)  
 ```
 
+
+#### text (text, x, y, size)
+
+**Parameters:**
+- `text` (str): Text to render
+- `x` (int): x coordinate
+- `y` (int): y coordinate
+- `size` (int): font size
+
+**Example:**
+
+```python
+dot.text("hello world"), 100, 200, 36)
+```
+
 ### 3D Shapes
 
 #### camera_3d()
