@@ -114,19 +114,17 @@ class Button:
 
         dot.rectangle((self.x, self.y), (self.x + self.width, self.y + self.height))
         
-        # # Draw text (centered)
-        # if self.text:
-        #     # Calculate font size based on button height
-        #     font_size = int(self.height * 0.2)  # 40% of button height
+        # Draw text (centered)
+        if self.text:
+            # Calculate font size based on button height
+            font_size = int(self.height * 0.4)  # 40% of button height
+            dot.fill(self.text_color)
+            # Center text
+            text_x = self.x + self.width // 2 - (font_size * len(self.text)/3)
+            text_y = self.y + self.height // 2 - font_size // 3  # Adjust for visual centering
             
-        #     # Center text
-        #     text_x = self.x + self.width // 2
-        #     text_y = self.y + self.height // 2 - font_size // 3  # Adjust for visual centering
-            
-        #     dot.text(self.text, (text_x, text_y), 
-        #             font_size=font_size, 
-        #             align='center',
-        #             color=self.text_color)
+            dot.text(self.text, text_x, text_y, 
+                    font_size)
     
     def _draw_rounded_rect(self, dot):
         """Draw a rounded rectangle (simplified)"""
