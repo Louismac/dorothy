@@ -945,6 +945,7 @@ dot.apply_shader(shader_code, accumulate=True, **uniforms)
 
 uniform sampler2D texture0;  // The canvas texture (always available)
 uniform vec2 resolution;      // Canvas size in pixels (optional)
+uniform float my_parameter;   // Add any user defined paramters (uniforms)
 
 in vec2 v_texcoord;          // Texture coordinates (0-1)
 out vec4 fragColor;          // Output color
@@ -955,6 +956,11 @@ void main() {
     fragColor = color;
 }
 ```
+
+```python
+dot.apply_shader(shader_code, accumulate=True, my_parameter=1.0)
+```
+
 
 ## Accumulating vs Non-Accumulating
 

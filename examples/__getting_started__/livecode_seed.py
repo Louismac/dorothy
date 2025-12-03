@@ -16,7 +16,7 @@ class MySketch:
         dot.fill(dot.red)
         dot.rectangle((0,dot.frames%40),(400,100))
 
-#Start live code loop, updates whenever file
+#Start live code loop, updates whenever file saved
 if __name__ == '__main__':
     import __main__
     dot.start_livecode_loop(__main__)
