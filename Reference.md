@@ -1731,37 +1731,47 @@ dot.music.play()
 
 ## Live Coding
 
-### Setup
+You can set up Dorothy to update the sketch everytime you save the file
 
-Create two files in the same directory, and make sure you are in this directory when you run the code:
+The main changes are 
 
-**main.py** (run this):
+1. No `__init__()` function in the `MySketch` class
+
+2. Don't make an instance of the `MySketch` class
+
+3. Instead, run the `start_livecode_loop()` function
+
+
 ```python
-from dorothy import Dorothy
-import my_sketch
-
-dot = Dorothy()
-dot.start_livecode_loop(my_sketch)
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)
 ```
 
-**my_sketch.py** (edit this while running):
+### Example
+
 ```python
+from dorothy import Dorothy
+
+dot = Dorothy()
+
 class MySketch:
     def setup(self):
-        print("Setup - runs on reload")
-        self.color = (255, 0, 0)
-    
-    def draw(self):
-        dot.background((30, 30, 40))
-        dot.fill(self.color)
-        dot.circle((dot.mouse_x, dot.mouse_y), 50)
-    
+        self.col = (0,255,0)
+        print("start")
+
     def run_once(self):
-        # Optional: runs once when code changes
-        print("Code updated!")
-        self.color = (random.randint(0, 255), 
-                     random.randint(0, 255), 
-                     random.randint(0, 255))
+        print("run once")
+        self.col = (0,0,0)
+                
+    def draw(self):
+        dot.background(self.col)
+        dot.fill(dot.blue)
+        dot.rectangle((0,dot.frames%40),(400,100))
+
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)
 ```
 
 Now edit `my_sketch.py` and save - changes appear instantly!
