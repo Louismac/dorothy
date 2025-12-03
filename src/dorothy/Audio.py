@@ -1771,8 +1771,8 @@ class StreamingOnsetDetector:
         
         # Update sample counter (account for multiple frames if averaged)
         self.total_samples_processed += self.hop_length * num_frames
-        if onset_detected:
-            print("onset")
+        # if onset_detected:
+        #     print("onset")
         return onset_detected
     
     def has_onset_in_range(self, n_samples):

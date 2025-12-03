@@ -204,13 +204,18 @@ class Dorothy:
         import inspect
         from pathlib import Path
         import time
+        import sys
         
-        sketch_file = Path(sketch_module.__file__)
+        # Handle __main__ module case
+        if sketch_module.__name__ == '__main__':
+            sketch_file = Path(sys.argv[0]).resolve()
+        else:
+            sketch_file = Path(sketch_module.__file__)
         
         # Debug: Print the file we're watching
         print(f"🔍 DEBUG: Watching file: {sketch_file}")
         print(f"🔍 DEBUG: File exists: {sketch_file.exists()}")
-        print(f"🔍 DEBUG: Watching dikrectory: {sketch_file.parent}")
+        print(f"🔍 DEBUG: Watching directory: {sketch_file.parent}")
         
         #Override the init in case someone is start_loop-ing by mistake
         def new_init(self):
@@ -260,12 +265,23 @@ class Dorothy:
             try:
                 print(f"📝 Reloading {sketch_file.name}...")
                 self.reload_count += 1
-                # Clear any cached modules
-                if sketch_module.__name__ in sys.modules:
-                    print(f"🔍 DEBUG: Removing {sketch_module.__name__} from sys.modules")
-                importlib.reload(sketch_module)
-                new_class = sketch_module.MySketch
-                self.my_sketch.__class__ = new_class
+                
+                # For __main__, we need to re-execute the file
+                if sketch_module.__name__ == '__main__':
+                    import runpy
+                    # Use runpy to execute the file and get the namespace
+                    file_globals = runpy.run_path(str(sketch_file), run_name='__live_reload__')
+                    # Update the MySketch class from the reloaded module
+                    new_class = file_globals['MySketch']
+                    self.my_sketch.__class__ = new_class
+                else:
+                    # Clear any cached modules
+                    if sketch_module.__name__ in sys.modules:
+                        print(f"🔍 DEBUG: Removing {sketch_module.__name__} from sys.modules")
+                    importlib.reload(sketch_module)
+                    new_class = sketch_module.MySketch
+                    self.my_sketch.__class__ = new_class
+                
                 self.was_error = False
                 
             except Exception:
@@ -340,7 +356,7 @@ class Dorothy:
             observer.stop()
             observer.join()
             print(f"🔍 DEBUG: Observer stopped")
-    
+        
     def create_button(self, x, y, width, height, text="", id=None,
                      on_press=None, on_hover=None, on_release=None):
         """Create a button

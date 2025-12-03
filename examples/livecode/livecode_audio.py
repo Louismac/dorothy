@@ -1,10 +1,9 @@
-#RUN livecode.py FIRST!
-#Changes you make and then save this file will be reflected in the window
 import numpy as np
 import librosa
 from dorothy import Dorothy
 
 dot = Dorothy()
+
 class MySketch:
 
     def setup(self):
@@ -28,7 +27,7 @@ class MySketch:
         #Audio Callback function
         def get_frame(size):
             #Get parameters from mouse
-            frequency = 700
+            frequency = dot.mouse_x
             amplitude = dot.mouse_y/dot.height
             #Get increments
             delta = 2 * np.pi * frequency / self.sr 
@@ -42,8 +41,12 @@ class MySketch:
         dot.music.audio_outputs[0].get_frame = get_frame
 
         #draw chromagram
-        dot.background(dot.red)
+        dot.background(dot.white)
         for i,c in enumerate(self.chroma):
             x = (dot.width//12)*i
             y = int(dot.height - (dot.height*c))
             dot.line((x, dot.height), (x, y))
+
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

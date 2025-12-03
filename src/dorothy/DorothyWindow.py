@@ -3,24 +3,25 @@ import moderngl_window as mglw
 import time
 import traceback
 
+
 class DorothyWindow(mglw.WindowConfig):
     """Internal window configuration for moderngl-window"""
     
     gl_version = (3, 3)
     title = "Dorothy - ModernGL"
-    # resizable = True
-    cursor = True  # Enable cursor tracking
+    resizable = True
+    # cursor = True  # Enable cursor tracking
     samples = 4  # Enable MSAA for smoother lines
-    # vsync = True
+    vsync = True
     
     def __init__(self, **kwargs):
+        
         super().__init__(**kwargs)
+
         from .renderer import DorothyRenderer
 
         from .Dorothy import Dorothy
         from .Audio import Audio
-
-        
         # Get the Dorothy instance that's waiting for us
         self.dorothy = Dorothy._pending_instance
         self.start_time_millis = int(round(time.time() * 1000))
@@ -54,7 +55,10 @@ class DorothyWindow(mglw.WindowConfig):
             self.dorothy.setup_fn()
         
         self.dorothy.renderer.end_layer()
-       
+        self._resize_pending = False
+        self._last_resize = (0, 0)
+
+
 
 
     def on_render(self, render_time: float, frame_time: float):
@@ -111,6 +115,19 @@ class DorothyWindow(mglw.WindowConfig):
             self.dorothy.exit()  
 
     def end_render(self):
+
+        # Use the actual resized dimensions, not the FBO size
+        if self._resize_pending:
+            width, height = self._last_resize
+            if self.dorothy.renderer:
+                print(f"Window resize finished, updating to {width} x {height}")
+                self.dorothy.renderer.width = width
+                self.dorothy.renderer.height = height
+                self.dorothy.renderer.camera.width = width
+                self.dorothy.renderer.camera.height = height
+                self.dorothy.renderer.camera.aspect = width / height
+                self.ctx.viewport = (0, 0, width, height)
+            self._resize_pending = False
         
         self.dorothy.frames += 1
         self.dorothy.update_lfos()
@@ -181,20 +198,13 @@ class DorothyWindow(mglw.WindowConfig):
             except Exception as e:
                 print(f"Error in on_close callback: {e}")
         self.dorothy.exit()  
-
     
-    def resize(self, width: int, height: int):
-        print(f"\n=== RESIZE EVENT ===")
-        print(f"Window size: {width}x{height}")
-        print(f"window_size attr: {self.window_size}")
-        print(f"FBO size: {self.wnd.fbo.size}")
-        print(f"Renderer size: {self.dorothy.renderer.width}x{self.dorothy.renderer.height}")
-        print(f"Camera size: {self.dorothy.renderer.camera.width}x{self.dorothy.renderer.camera.height}")
-        print(f"Viewport: {self.ctx.viewport}")
-        fbo_width, fbo_height = self.wnd.fbo.size
-        if self.dorothy.renderer:
-            self.dorothy.renderer.width = fbo_width
-            self.dorothy.renderer.height = fbo_height
-            self.dorothy.renderer.camera.width = fbo_width
-            self.dorothy.renderer.camera.height = fbo_height
-            self.dorothy.renderer.camera.aspect = fbo_width / fbo_height
+    
+    def on_resize(self, width: int, height: int):
+        
+        # Store the resize but don't process immediately during drag
+        print(f"Window was resized to {width} x {height}")
+        self._last_resize = (width, height)
+        self._resize_pending = True
+            
+        
