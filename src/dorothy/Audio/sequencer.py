@@ -27,10 +27,14 @@ class Clock:
         self.play_thread: Optional[threading.Thread] = None
 
         # Callback
-        self.on_tick: Callable[[], None] = lambda: None
+        self.on_tick_fns = []
 
         # Initialize timing
         self.set_bpm(120)
+
+    def on_tick(self):
+        for fn in self.on_tick_fns:
+            fn()
 
     def play(self) -> None:
         """Start the clock."""
@@ -186,14 +190,22 @@ class Sequence:
     # Connection
     # ------------------------------------------------------------------
 
+    def all_notes_off(self) -> None:
+        """Immediately send note_off for every note currently pending release."""
+        if self._synth is not None:
+            for _off_tick, freq in self._pending_offs:
+                self._synth.note_off(freq)
+        self._pending_offs = []
+
     def connect(self, clock: 'Clock', synth: 'PolySynth') -> None:
         """Attach this sequence to *clock* and *synth*, replacing the
         clock's ``on_tick`` callback.  Call before ``clock.play()``."""
+        self.all_notes_off()
         self._synth = synth
         self._tick_ctr = 0
         self._current_step = 0
         self._pending_offs = []
-        clock.on_tick = self._on_tick
+        clock.on_tick_fns.append(self._on_tick)
 
     # ------------------------------------------------------------------
     # Tick handler
@@ -215,6 +227,11 @@ class Sequence:
             self._current_step = (self._tick_ctr // self.ticks_per_step) % self.steps
             for note in self._pattern[self._current_step]:
                 if self._synth is not None:
+                    # Cancel any stale pending-off for this freq so it won't
+                    # kill the new voice after it is triggered.
+                    self._pending_offs = [
+                        (t, f) for t, f in self._pending_offs if f != note.freq
+                    ]
                     self._synth.note_on(
                         note.freq, note.vel,
                         attack=note.attack, decay=note.decay,
@@ -268,6 +285,7 @@ class Sequence:
             raise ValueError(
                 f"Pattern length {len(pattern)} doesn't match steps {self.steps}"
             )
+        self.all_notes_off()
         # Replace each step in-place so _current_step indices remain valid
         for i, notes in enumerate(pattern):
             self._pattern[i] = list(notes)

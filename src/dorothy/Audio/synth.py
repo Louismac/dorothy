@@ -457,6 +457,11 @@ class PolySynth(AudioDevice):
         """Schedule a note-off event.  Safe to call from any thread."""
         self._note_queue.put(('off', freq))
 
+    def all_notes_off(self) -> None:
+        """Schedule note-off for every currently active note.  Safe to call from any thread."""
+        for freq in list(self._active_notes.keys()):
+            self._note_queue.put(('off', freq))
+
     # ------------------------------------------------------------------
     # Internal helpers (called from audio callback thread)
     # ------------------------------------------------------------------
@@ -515,6 +520,11 @@ class PolySynth(AudioDevice):
         pwm: Optional[float],
     ) -> None:
         args = (attack, decay, sustain, release, waveform, fm_ratio, fm_index, detune, n_oscs, pwm)
+        # If this freq is already playing, release the old voice first so it
+        # doesn't get stuck in sustain while the new one takes over.
+        if freq in self._active_notes:
+            self.voices[self._active_notes[freq]].note_off()
+            del self._active_notes[freq]
         # 1. Prefer idle (silent) voices
         for i, voice in enumerate(self.voices):
             if not voice.active:
