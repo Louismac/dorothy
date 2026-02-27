@@ -1,6 +1,6 @@
-from dorothy.Audio import Sampler
 from dorothy import Dorothy
 import numpy as np
+from dorothy.Audio import Sequence, Note
 
 dot = Dorothy()
 
@@ -15,34 +15,21 @@ class MySketch:
             "../audio/snare2.wav",
             "../audio/meow.wav",
         ]
-        self.sampler = Sampler(dot.music)
-        self.sampler.load(paths)
-        
-        self.clock = dot.music.get_clock()
-        self.clock.set_bpm(80)
-        
-        self.sequence = [2,0,2,0,0,0,0,1,0,0,0,0,0,0,0]
-        self.clock.on_tick = self.on_tick
-        self.clock.play()
-        
-        self.grid = np.linspace(0,dot.width,len(self.sequence))
+        sampler_idx = dot.music.start_sampler_stream(paths)
+        self.sampler = dot.music.audio_outputs[sampler_idx]
+        self.clock = dot.music.get_clock(bpm=120)
+        self.clock.set_tpb(4) 
+        seq = Sequence(steps=16, ticks_per_step=1)
+        seq[0] = Note(0, vel=1.0)          
+        seq[4] = Note(1, vel=0.8)            
+        seq[8] = Note(0, vel=0.9)          
+        seq[12] = [Note(1, vel=0.8), Note(2, vel=0.5)]  
 
-    def on_tick(self):
-        n = len(self.sequence)
-        note = self.sequence[self.clock.tick_ctr % n]
-        if note > 0:
-            self.sampler.trigger(note-1)
+        seq.connect(self.clock, self.sampler)
+        self.clock.play()
         
     def draw(self):
         dot.background(dot.darkblue)
-        y = dot.height/2
-        for x in self.grid:
-            dot.fill(dot.white)
-            dot.circle((x, y), 10)
-        #Loop around      
-        n = len(self.sequence)
-        x = self.grid[self.clock.tick_ctr % n]
-        dot.fill(dot.red)
-        dot.circle((x, y), 10)
+       
         
 MySketch() 

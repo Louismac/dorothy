@@ -37,10 +37,7 @@ class MySketch:
                     self.seq[i] = []
 
     def draw(self):
-        
         dot.background(dot.darkblue)
-       
-
 
 if __name__ == '__main__':
     import __main__

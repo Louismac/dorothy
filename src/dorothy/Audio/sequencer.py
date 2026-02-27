@@ -5,7 +5,7 @@ Clock and Sequence classes for timing-based operations.
 import threading
 import time
 import warnings
-from typing import Optional, Callable, List
+from typing import Optional, List
 
 from .config import AudioConfig
 from .synth import Note, PolySynth
@@ -193,7 +193,7 @@ class Sequence:
     def all_notes_off(self) -> None:
         """Immediately send note_off for every note currently pending release."""
         if self._synth is not None:
-            for _off_tick, freq in self._pending_offs:
+            for _, freq in self._pending_offs:
                 self._synth.note_off(freq)
         self._pending_offs = []
 
@@ -212,26 +212,34 @@ class Sequence:
     # ------------------------------------------------------------------
 
     def _on_tick(self) -> None:
+        is_step = (self._tick_ctr % self.ticks_per_step == 0)
+
+        # Pre-compute which freqs fire this step so we can skip note_off for
+        # those (legato: voice stays in sustain instead of dipping to release).
+        step_freqs: set = set()
+        if is_step:
+            next_step = (self._tick_ctr // self.ticks_per_step) % self.steps
+            for note in self._pattern[next_step]:
+                step_freqs.add(note.freq)
+
         # --- Release notes whose duration has elapsed --------------------
         still_pending = []
         for off_tick, freq in self._pending_offs:
             if self._tick_ctr >= off_tick:
-                if self._synth is not None:
+                if self._synth is not None and freq not in step_freqs:
+                    # Only send note_off if the same freq isn't being
+                    # retriggered this tick (avoids the brief release click).
                     self._synth.note_off(freq)
+                # else: retriggered this step — note_on below handles it
             else:
                 still_pending.append((off_tick, freq))
         self._pending_offs = still_pending
 
         # --- Advance to next step if on a step boundary ------------------
-        if self._tick_ctr % self.ticks_per_step == 0:
-            self._current_step = (self._tick_ctr // self.ticks_per_step) % self.steps
+        if is_step:
+            self._current_step = next_step
             for note in self._pattern[self._current_step]:
                 if self._synth is not None:
-                    # Cancel any stale pending-off for this freq so it won't
-                    # kill the new voice after it is triggered.
-                    self._pending_offs = [
-                        (t, f) for t, f in self._pending_offs if f != note.freq
-                    ]
                     self._synth.note_on(
                         note.freq, note.vel,
                         attack=note.attack, decay=note.decay,

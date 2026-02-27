@@ -28,6 +28,8 @@ from .sequencer import Clock, Sequence
 
 from .sampler import Sampler
 
+from .granular import GranularSynth
+
 from .engine import Audio
 
 __all__ = [
@@ -48,5 +50,6 @@ __all__ = [
     "Clock",
     "Sequence",
     "Sampler",
+    "GranularSynth",
     "Audio",
 ]

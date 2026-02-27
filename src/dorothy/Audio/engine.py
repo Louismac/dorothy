@@ -18,6 +18,7 @@ from .ml_players import MAGNetPlayer, RAVEPlayer, ClusterResult, TORCH_AVAILABLE
 from .synth import Note, SynthVoice, PolySynth
 from .sequencer import Clock, Sequence
 from .sampler import Sampler
+from .granular import GranularSynth
 
 
 class Audio:
@@ -285,6 +286,97 @@ class Audio:
             output_device=output_device,
         )
         return self._register_and_play(device)
+
+    def start_sampler_stream(
+        self,
+        paths: Optional[List[str]] = None,
+        sr: int = 44100,
+        buffer_size: int = 512,
+        output_device: Optional[int] = None,
+    ) -> int:
+        """Start a sample player stream compatible with the Sequence/Note API.
+
+        Connect the returned device to a :class:`Sequence` just like a
+        :class:`PolySynth`.  ``Note.midi`` selects the sample slot and
+        ``Note.vel`` scales the volume.
+
+        Args:
+            paths:         Audio file paths to pre-load (slot 0 = paths[0], etc.).
+            sr:            Sample rate.  Samples are resampled on load.
+            buffer_size:   Audio buffer size in samples.
+            output_device: Output device index (None = system default).
+
+        Returns:
+            Index of the device in ``audio_outputs``.
+        """
+        device = Sampler(
+            sr=sr,
+            buffer_size=buffer_size,
+            output_device=output_device,
+        )
+        idx = self._register_and_play(device)
+        if paths:
+            self.audio_outputs[idx].load(paths)
+        return idx
+
+    def start_granular_stream(
+        self,
+        path: Optional[str] = None,
+        position: float = 0.5,
+        spread: float = 0.1,
+        grain_size: float = 80.0,
+        density: float = 8.0,
+        attack: float = 0.3,
+        decay: float = 0.3,
+        n_grains: int = 32,
+        pitch: float = 0.0,
+        pitch_spread: float = 0.0,
+        sr: int = 44100,
+        buffer_size: int = 512,
+        output_device: Optional[int] = None,
+    ) -> int:
+        """Start a granular synthesizer stream compatible with the Sequence/Note API.
+
+        ``Note.midi`` 69 (A4) = original file pitch; other values shift
+        pitch proportionally.  ``Note.vel`` scales the voice volume.
+
+        Args:
+            path:         Source audio file to load immediately (optional).
+            position:     Initial read position, normalised 0–1.
+            spread:       Random position scatter per grain (0–1 fraction of file).
+            grain_size:   Grain duration in milliseconds.
+            density:      Grains spawned per second per active voice.
+            attack:       Fraction of grain length for the fade-in.
+            decay:        Fraction of grain length for the fade-out.
+            n_grains:     Maximum simultaneous grains across all voices.
+            pitch:        Global pitch shift in semitones.
+            pitch_spread: Per-grain random pitch jitter in semitones (std dev).
+            sr:           Sample rate.
+            buffer_size:  Audio buffer size in samples.
+            output_device: Output device index (None = system default).
+
+        Returns:
+            Index of the device in ``audio_outputs``.  Load or swap the
+            source file at any time via ``audio.audio_outputs[idx].load(path)``.
+        """
+        device = GranularSynth(
+            sr=sr,
+            buffer_size=buffer_size,
+            position=position,
+            spread=spread,
+            grain_size=grain_size,
+            density=density,
+            attack=attack,
+            decay=decay,
+            n_grains=n_grains,
+            pitch=pitch,
+            pitch_spread=pitch_spread,
+            output_device=output_device,
+        )
+        idx = self._register_and_play(device)
+        if path:
+            self.audio_outputs[idx].load(path)
+        return idx
 
     def start_sample_stream(
         self,

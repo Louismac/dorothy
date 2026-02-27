@@ -1257,131 +1257,255 @@ dsp_id = dot.music.start_dsp_stream(
 
 ### Audio Sequencing Reference
 
-Sequence and trigger audio samples with the Sampler and Clock classes.
-
-#### Sampler
-
-The Sampler class loads and triggers audio samples.
-
-##### Creating a Sampler
+`Note`, `Sequence`, `Clock`, and audio devices (`PolySynth`, `Sampler`, `GranularSynth`) form a unified sequencing system. A `Sequence` is connected to a `Clock` and an audio device; the clock drives the sequence which fires `note_on` / `note_off` on the device.
 
 ```python
-from dorothy.Audio import Sampler
+from dorothy.Audio import Sequence, Note
 
 def setup(self):
-    self.sampler = Sampler(dot)
-    # Load multiple samples
-    paths = [
-        "../audio/kick.wav",
-        "../audio/snare.wav",
-        "../audio/hihat.wav"
-    ]
-    self.sampler.load(paths)
-# Samples are indexed 0, 1, 2, etc.
+    self.clock = dot.music.get_clock(bpm=120)
+    self.clock.set_tpb(4)                        # 4 ticks per beat
+
+    idx = dot.music.start_poly_synth_stream()
+    self.synth = dot.music.audio_outputs[idx]
+
+    self.seq = Sequence(steps=8, ticks_per_step=4)
+    self.seq[0] = Note(60)
+    self.seq.connect(self.clock, self.synth)
+    self.clock.play()
 ```
 
-##### Triggering Samples
+---
+
+#### Note
+
+`Note` is a dataclass representing a single step event.
+
 ```python
-# Trigger by index
-self.sampler.trigger(0)  # Play first sample (kick)
-self.sampler.trigger(1)  # Play second sample (snare)
-
-# Samples play polyphonically (overlapping is fine)
+Note(
+    midi,            # MIDI note number (0-127). Middle C = 60, A4 = 69
+    vel=0.8,         # Velocity 0.0–1.0
+    duration=1,      # Duration in steps before note_off fires
+    # Per-note ADSR overrides (None = use device default)
+    attack=None,
+    decay=None,
+    sustain=None,
+    release=None,
+    # Per-note oscillator overrides (PolySynth only)
+    waveform=None,   # 'sine'|'saw'|'triangle'|'noise'|'supersaw'|'fm'|'pwm'
+    fm_ratio=None,
+    fm_index=None,
+    detune=None,
+    n_oscs=None,
+    pwm=None,
+)
 ```
+
+```python
+note.freq   # Read-only: MIDI → Hz (440 * 2**((midi-69)/12))
+```
+
+---
 
 #### Clock
 
-The Clock class provides tempo-synced timing for sequencing.
+Provides tempo-synced timing. Runs in a background thread.
 
 ##### Creating a Clock
 ```python
-def setup(self):
-    self.clock = dot.music.get_clock()
-    self.clock.set_bpm(120)  # Set tempo (default: 80)
+self.clock = dot.music.get_clock(bpm=120)
+self.clock.set_tpb(4)   # ticks per beat (default 4)
 ```
 
-###### Clock Callbacks
+##### Properties
 ```python
-def setup(self):
-    self.clock = dot.music.get_clock()
-    self.clock.set_bpm(120)
-    
-    # Called on every tick
-    self.clock.on_tick = self.on_tick
-    
-    # Start the clock
-    self.clock.play()
-
-def on_tick(self):
-    # This runs at each clock tick
-    print(f"Tick: {self.clock.tick_ctr}")
+self.clock.tick_ctr       # Current tick count (increments before callbacks fire)
+self.clock.bpm            # Current BPM
+self.clock.ticks_per_beat # Subdivisions per beat
+self.clock.playing        # True if running
+self.clock.tick_length    # Milliseconds per tick
 ```
 
-##### Clock Properties
+##### Methods
 ```python
-self.clock.tick_ctr          # Current tick number (starts at 0, increments each tick)
-self.clock.bpm               # Current BPM
-self.clock.ticks_per_beat    # Subdivisions per beat (default: 4 = 16th notes)
-self.clock.playing           # True if clock is running
-self.clock.tick_length       # Milliseconds between ticks (calculated from BPM)
+self.clock.play()              # Start (resets tick_ctr to 0)
+self.clock.stop()              # Stop
+self.clock.set_bpm(120)        # Change tempo
+self.clock.set_tpb(4)         # Change tick subdivision
+
+# Register callbacks — multiple callbacks are supported
+self.clock.on_tick_fns.append(self.my_fn)
 ```
 
-##### Clock Methods
-###### play()
-Start the clock. Resets tick_ctr to 0.
+##### Timing grid
 ```python
-self.clock.play()
-```
-###### stop()
-Stop the clock.
-```python
-self.clock.stop()
-```
-###### set_bpm(bpm)
-Set the tempo in beats per minute.
-```python
-self.clock.set_bpm(120)  # 120 BPM
-self.clock.set_bpm(80)   # Slower
-self.clock.set_bpm(180)  # Faster
-```
-###### set_tpb(ticks_per_beat)
-Set the tick subdivision per beat.
-```python
-self.clock.set_tpb(4)   # 16th notes (default)
-self.clock.set_tpb(2)   # 8th notes
-self.clock.set_tpb(8)   # 32nd notes
-self.clock.set_tpb(1)   # Quarter notes
+# 4/4 — 16th-note steps
+self.clock.set_tpb(4)   # 4 ticks/beat → ticks_per_step=1 → 16th notes
+                         #              → ticks_per_step=4 → quarter notes
+
+# Tip: set_tpb() after set_bpm() so tick_length recalculates correctly
 ```
 
-Note: Call set_tpb() AFTER set_bpm() to ensure tick length is calculated correctly.
+---
 
+#### Sequence
 
-#### Tips
+Step sequencer that drives any compatible audio device.
 
-* BPM range: Typical range is 60-180 BPM
-
-* Tick resolution: Default is 4 ticks per beat (16th notes). Adjust with set_tpb()
-  
-* Timing precision: Clock runs in a separate thread with ~1ms precision
-  
-* Stop before restarting: Call clock.stop() before creating a new Clock or calling play() again
-  
-* Polyphony: Sampler plays samples polyphonically - multiple samples can overlap
-  
-* File formats: Supports WAV
-  
-* Performance: Pre-load all samples in setup() for best performance
-
-#### Common Patterns
-4/4 Time Signature
+##### Creating and connecting
 ```python
-self.clock.set_tpb(4)  # 16th notes
-sequence_length = 16   # 4 beats × 4 ticks
+seq = Sequence(steps=16, ticks_per_step=1)
+seq.connect(clock, synth)   # registers tick callback; call before clock.play()
 ```
-3/4 Time Signature (Waltz)
+
+##### Step editing
 ```python
-self.clock.set_tpb(4)
-sequence_length = 12   # 3 beats × 4 ticks
+seq[i] = Note(60)              # single note
+seq[i] = [Note(60), Note(64)]  # chord
+seq[i] = []                    # rest
+note = seq[i]                  # read a step
+
+seq.steps = 32                 # resize (current_step wraps into new range)
+seq.ticks_per_step = 2         # change step resolution live
+```
+
+##### Pattern methods
+```python
+seq.clear()          # empty all steps
+seq.clear(i)         # empty one step
+seq.set_pattern([    # replace all steps atomically; sends all_notes_off first
+    [Note(60)],
+    [],
+    [Note(64), Note(67)],
+    [],
+])
+seq.all_notes_off()  # immediately release all pending notes
+```
+
+---
+
+#### PolySynth
+
+Polyphonic synthesizer AudioDevice. Up to `n_voices` simultaneous notes.
+
+##### Creating
+```python
+idx = dot.music.start_poly_synth_stream(
+    n_voices=8,
+    n_harmonics=4,
+    attack=0.01,    decay=0.1,    sustain=0.7,    release=0.3,
+    waveform='sine',             # default oscillator shape
+    buffer_size=512,
+    sr=44100,
+)
+synth = dot.music.audio_outputs[idx]
+```
+
+##### Waveforms
+`'sine'` · `'saw'` · `'triangle'` · `'noise'` · `'supersaw'` · `'fm'` · `'pwm'`
+
+##### Default parameters (read/write)
+```python
+synth.attack        # ADSR attack (seconds)
+synth.decay         # ADSR decay (seconds)
+synth.sustain       # ADSR sustain level 0–1
+synth.release       # ADSR release (seconds)
+synth.waveform      # Default oscillator shape
+synth.fm_ratio      # FM: modulator = fm_ratio × carrier (default 2.0)
+synth.fm_index      # FM: modulation depth in radians (default 1.0)
+synth.detune        # Supersaw: total semitone spread (default 0.2)
+synth.n_oscs        # Supersaw: oscillator count (default 7)
+synth.pwm           # PWM: duty cycle 0–1 (default 0.5 = square)
+```
+
+##### Direct API (thread-safe)
+```python
+synth.note_on(freq, vel=0.8, waveform='saw', attack=0.05, ...)
+synth.note_off(freq)
+synth.all_notes_off()
+```
+
+Per-note overrides in `note_on` apply to that note only; `None` falls back to the synth default. Notes passed through a `Sequence` carry overrides from their `Note` fields.
+
+---
+
+#### Sampler
+
+Sample player AudioDevice. `Note.midi` is used as the slot index; `Note.vel` scales volume.
+
+##### Creating
+```python
+idx = dot.music.start_sampler_stream(
+    paths=["kick.wav", "snare.wav", "hat.wav"],  # optional pre-load
+    sr=44100,
+    buffer_size=512,
+)
+sampler = dot.music.audio_outputs[idx]
+sampler.load(["kick.wav", "snare.wav"])   # load or swap samples at any time
+```
+
+Slot 0 = `paths[0]`, slot 1 = `paths[1]`, etc.
+
+##### Sequence usage
+```python
+seq[0] = Note(0, vel=1.0)   # trigger slot 0
+seq[2] = Note(1, vel=0.8)   # trigger slot 1
+seq.connect(clock, sampler)
+```
+
+Samples play to their natural end; `note_off` is a no-op (one-shots always complete).
+
+##### Direct API (thread-safe)
+```python
+sampler.trigger(0, vel=1.0)   # trigger by slot index directly
+sampler.all_notes_off()        # stop all playing voices immediately
+```
+
+---
+
+#### GranularSynth
+
+Granular synthesis AudioDevice. Loads one audio file and plays it as overlapping short grains.
+
+`Note.midi` 69 (A4, 440 Hz) = original file pitch. Other values shift pitch by semitone distance from A4. `Note.vel` scales voice volume.
+
+##### Creating
+```python
+idx = dot.music.start_granular_stream(
+    path="texture.wav",     # optional pre-load
+    position=0.5,           # initial read position 0–1
+    spread=0.1,
+    grain_size=80.0,        # ms
+    density=8.0,            # grains/sec/voice
+    attack=0.3,    decay=0.3,
+    n_grains=32,
+    pitch=0.0,              # semitones
+    pitch_spread=0.0,       # per-grain jitter (semitones std dev)
+    sr=44100,
+    buffer_size=512,
+)
+gran = dot.music.audio_outputs[idx]
+gran.load("texture.wav")    # load or swap source at any time
+```
+
+##### Parameters (read/write at any time)
+```python
+gran.position      # 0–1, read head centre in source file
+gran.spread        # 0–1, random position scatter (fraction of file)
+gran.grain_size    # ms per grain
+gran.density       # grains per second per active voice
+gran.attack        # fraction of grain for fade-in
+gran.decay         # fraction of grain for fade-out
+gran.n_grains      # max simultaneous grains
+gran.pitch         # global semitone shift
+gran.pitch_spread  # per-grain pitch jitter (Gaussian std dev, semitones)
+```
+
+##### Direct API (thread-safe)
+```python
+gran.note_on(freq, vel=0.8)   # start grain cloud at pitch/volume
+gran.note_off(freq)            # stop spawning; active grains play out
+gran.all_notes_off()           # silence immediately, clear all grains
 ```
 
 ### Stream Samples 
