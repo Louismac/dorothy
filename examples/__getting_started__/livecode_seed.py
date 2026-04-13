@@ -9,9 +9,10 @@ class MySketch:
 
     def run_once(self):
         print("run once")
-        self.col = (0,0,255)
+        self.col = (255,5,200)
                 
     def draw(self):
+        self.once_ran = True
         dot.background(self.col)
         dot.fill(dot.red)
         dot.rectangle((0,dot.frames%40),(400,100))

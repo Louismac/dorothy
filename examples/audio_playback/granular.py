@@ -1,4 +1,4 @@
-from dorothy.Audio import Sequence, Note
+from dorothy.Audio import Sequence, Note, HighPassFilter, Reverb
 from dorothy import Dorothy
 from numpy.random import random
 
@@ -22,15 +22,16 @@ class MySketch:
         self.gran.position = 0.7
         self.gran.spread = 0.1
         self.gran.grain_size = 200.0
+        # self.gran.add_effect(Reverb(wet=0.25))
 
     def draw(self):
-        self.gran.spread = 0.05
+        self.gran.spread = 0.03
         self.gran.grain_size = 500.0
-        self.gran.n_grains = 12
-        self.gran.attack = 0.9
+        self.gran.n_grains = 1
+        self.gran.attack = 0.1
         self.gran.decay = 0.1
         dot.background(dot.darkblue)
-        if dot.frames % 500 == 0:
+        if dot.frames % 1 == 0:
            self.gran.position = random()
 
 if __name__ == '__main__':

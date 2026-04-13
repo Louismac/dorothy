@@ -19,6 +19,7 @@ from .DorothyShaders import DOTSHADERS
 from .livecode import LiveCodeLoop
 import signal
 from .Button import Button, ButtonManager
+from .Slider import Slider, SliderManager
 
 
 class Dorothy:
@@ -74,6 +75,7 @@ class Dorothy:
         self.mouse_pressed = False
         self.mouse_button = None
         self.buttons = ButtonManager()
+        self.sliders = SliderManager()
         self.frames = 0
         self.start_time = time.time()
         self.lfos = []
@@ -230,6 +232,42 @@ class Dorothy:
     def draw_buttons(self):
         """Draw all buttons (call in draw loop)"""
         self.buttons.draw(self)
+
+    def create_slider(self, x, y, width, height, min_val=0.0, max_val=1.0,
+                      value=None, label="", id=None,
+                      on_change=None, on_press=None, on_hover=None, on_release=None):
+        """Create a horizontal slider
+
+        Args:
+            x, y: Position (top-left)
+            width, height: Slider dimensions
+            min_val: Minimum value
+            max_val: Maximum value
+            value: Initial value (defaults to min_val)
+            label: Optional text label
+            id: Optional identifier
+            on_change: Callback(slider, value) when value changes
+            on_press: Callback(slider) when handle is grabbed
+            on_hover: Callback(slider) when mouse enters
+            on_release: Callback(slider) when handle is released
+
+        Returns:
+            Slider instance
+        """
+        return self.sliders.create(x, y, width, height, min_val, max_val, value, label, id,
+                                   on_change, on_press, on_hover, on_release)
+
+    def update_sliders(self):
+        """Update all sliders (call in draw loop)
+
+        Returns:
+            Dict mapping each slider to its current value
+        """
+        return self.sliders.update(self.mouse_x, self.mouse_y, self.mouse_pressed)
+
+    def draw_sliders(self):
+        """Draw all sliders (call in draw loop)"""
+        self.sliders.draw(self)
 
     def draw_playhead(self, audio_output=0):
         if audio_output < len(self.music.audio_outputs):

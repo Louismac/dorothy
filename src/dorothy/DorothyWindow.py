@@ -155,9 +155,10 @@ class DorothyWindow(mglw.WindowConfig):
         self.dorothy.mouse_y = int(y)
 
     def on_mouse_drag_event(self, x, y, dx, dy):
+        self.dorothy.mouse_x = int(x)
+        self.dorothy.mouse_y = int(y)
         if self.dorothy.on_mouse_drag is not None:
             self.dorothy.on_mouse_drag(x,y,dx,dy)
-            print("Mouse drag:", x, y, dx, dy)
 
     def on_mouse_scroll_event(self, x_offset: float, y_offset: float):
         if self.dorothy.on_scroll is not None:

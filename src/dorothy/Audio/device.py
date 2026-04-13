@@ -16,6 +16,7 @@ import psutil
 
 from .config import AudioConfig
 from .analysis import StreamingOnsetDetector, StreamingBeatTracker
+from .effects import AudioFX
 
 
 class AudioDevice:
@@ -62,6 +63,9 @@ class AudioDevice:
         self.pause_event = threading.Event()
         self._shutdown_event = threading.Event()
         self.play_thread: Optional[threading.Thread] = None
+
+        # Effects chain
+        self.effects: List[AudioFX] = []
 
         # Callbacks
         self.on_new_frame = on_new_frame
@@ -258,6 +262,11 @@ class AudioDevice:
                         # Get audio from callback
                         audio_data = self.audio_callback()
 
+                        # Apply effects chain (mono signal, before channel expansion)
+                        for fx in self.effects:
+                            if fx.enabled:
+                                audio_data = fx.process(audio_data)
+
                         # Ensure 2D array
                         if audio_data.ndim == 1:
                             audio_data = audio_data[np.newaxis, :]
@@ -326,6 +335,25 @@ class AudioDevice:
         if self.recording_buffer:
             return np.concatenate(self.recording_buffer, axis=0)
         return np.array([])
+
+    def add_effect(self, fx: AudioFX) -> AudioFX:
+        """Add an effect to this device's post-processing chain.
+
+        Initialises *fx* with the device's sample rate and buffer size, appends
+        it to :attr:`effects`, and returns *fx* so you can keep a reference::
+
+            lpf = synth.add_effect(LowPassFilter(800))
+            lpf.cutoff = 400   # adjust live from draw()
+
+        Args:
+            fx: An :class:`AudioFX` instance to append.
+
+        Returns:
+            The same *fx* object (for assignment chaining).
+        """
+        fx._init(self.sr, self.buffer_size)
+        self.effects.append(fx)
+        return fx
 
     def play(self) -> None:
         """Start audio playback."""

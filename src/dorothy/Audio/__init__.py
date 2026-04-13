@@ -18,6 +18,18 @@ from .analysis import StreamingOnsetDetector, StreamingBeatTracker
 
 from .device import AudioDevice
 
+from .effects import (
+    AudioFX,
+    LowPassFilter,
+    HighPassFilter,
+    BandPassFilter,
+    Gain,
+    Distortion,
+    Delay,
+    Reverb,
+    Chorus,
+)
+
 from .players import SamplePlayer, CustomPlayer, AudioCapture
 
 from .ml_players import MAGNetPlayer, RAVEPlayer, ClusterResult, TORCH_AVAILABLE
@@ -37,6 +49,15 @@ __all__ = [
     "StreamingOnsetDetector",
     "StreamingBeatTracker",
     "AudioDevice",
+    "AudioFX",
+    "LowPassFilter",
+    "HighPassFilter",
+    "BandPassFilter",
+    "Gain",
+    "Distortion",
+    "Delay",
+    "Reverb",
+    "Chorus",
     "SamplePlayer",
     "CustomPlayer",
     "AudioCapture",
