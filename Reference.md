@@ -117,9 +117,17 @@ The most-used APIs, grouped by what you're trying to do. Follow the links for fu
 - [Baked vs display filter](#baked-vs-display-filter)
 - [Custom GLSL shaders](#custom-glsl-shaders)
 
-**Audio** — [jump to section](#audio)
-- Sources · Analysis · Sequencing · Instruments · Playback · Troubleshooting
-
+**Audio** 
+- [Audio sources](#audio-sources) — file, device (mic), DSP callback, samples, RAVE, MAGNet
+- [Analysis](#audio-analysis) — amplitude, FFT, onset, beat detection
+- [Signal smoothing](#signal-smoothing)
+- [Playback control](#playback-control)
+- [Sequencing](#audio-sequencing) — Clock, Sequence, Note
+- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth
+- [Advanced](#advanced-audio-features) — RAVE timbre transfer, callbacks, gain
+- [Performance tips](#audio-performance-tips)
+- [Troubleshooting](#audio-troubleshooting)
+  
 **Live coding**
 - [Hot-reload loop](#live-coding)
 
