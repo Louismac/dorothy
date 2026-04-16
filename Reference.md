@@ -1,36 +1,12 @@
 # Dorothy API Reference
 
-Complete reference for Dorothy - A Creative Computing Python Library with ModernGL backend
+Dorothy is a creative computing Python library with a ModernGL (GPU-accelerated) backend. It's built for sketches, live visuals, audio-reactive art, and live coding — think Processing/p5.js but in Python, with first-class audio, 3D, and shader support.
 
-## Table of Contents
-
-- [Getting Started](#getting-started)
-- [Main Classes](#main-classes)
-- [Drawing Functions](#drawing-functions)
-- [LFO Controls](#oscillators-reference)
-- [Transform Functions](#transform-functions)
-- [Layer System](#layer-system)
-- [Image Functions](#image-functions)
-- [Camera Functions](#camera-functions)
-- [Video Effects](#video-effects)
-- [Custom Shaders](#custom-shaders-reference)
-- [Properties](#properties)
-- [Color Constants](#color-constants)
-- [Audio Integration](#audio-integration)
-- [Live Coding](#live-coding)
-  
-
----
-
-## Getting Started
-
-### Installation
+## Quick start
 
 ```bash
 pip install dorothy-cci
 ```
-
-### Basic Template
 
 ```python
 from dorothy import Dorothy
@@ -40,10 +16,10 @@ dot = Dorothy(width=800, height=600, title="My Sketch")
 class MySketch:
     def __init__(self):
         dot.start_loop(self.setup, self.draw)
-    
+
     def setup(self):
         print("Setup runs once")
-    
+
     def draw(self):
         dot.background((30, 30, 40))
         dot.fill((255, 100, 100))
@@ -54,39 +30,147 @@ MySketch()
 
 ---
 
-## Main Classes
+## Cheat sheet
 
-### Dorothy
+The most-used APIs, grouped by what you're trying to do. Follow the links for full details.
 
-Main class for creating Dorothy applications.
+### Drawing
+| Signature | Does |
+|---|---|
+| `dot.background(color)` | Clear screen to a color |
+| `dot.fill(color)` / `dot.no_fill()` | Set / disable shape fill |
+| `dot.stroke(color)` / `dot.no_stroke()` | Set / disable shape outline |
+| `dot.set_stroke_weight(w)` | Line width in pixels |
+| `dot.circle(center, radius)` | Draw a circle |
+| `dot.rectangle(pos1, pos2)` | Draw a rectangle |
+| `dot.line(pos1, pos2)` | Draw a line |
+| `dot.polyline(pts, closed=False)` | Multi-point line |
+| `dot.polygon(pts)` | Filled polygon |
+| `dot.text(txt, x, y, size)` | Render text |
 
-#### Constructor
+### Animation & state
+| Signature | Does |
+|---|---|
+| `dot.frames` | Frame counter |
+| `dot.millis` | Milliseconds since start |
+| `dot.mouse_x`, `dot.mouse_y` | Current mouse position |
+| `dot.get_lfo(osc, freq, range)` | Create an oscillator |
+| `dot.lfo_value(id)` | Read its current value |
+
+### Transforms
+| Signature | Does |
+|---|---|
+| `with dot.transform():` | Scope transforms to a block |
+| `dot.translate(x, y, z=0)` | Move origin |
+| `dot.rotate(angle, x=0, y=0, z=1)` | Rotate (radians) |
+| `dot.scale(s, y=None, z=None)` | Scale |
+
+### Effects & images
+| Signature | Does |
+|---|---|
+| `dot.paste(img, position)` | Draw a NumPy image |
+| `dot.blur()` / `dot.pixelate(n)` / `dot.invert()` | Built-in effects |
+| `dot.feedback(zoom)` | Zoom-trail feedback |
+| `dot.apply_shader(code, bake=...)` | Custom GLSL shader |
+
+### Audio
+| Signature | Does |
+|---|---|
+| `dot.music.start_file_stream(path)` | Play audio file |
+| `dot.music.amplitude()` | Current volume |
+| `dot.music.fft()` | Current FFT spectrum |
+| `dot.music.is_beat()` / `is_onset()` | Beat / onset detection |
+
+### Lifecycle
+| Signature | Does |
+|---|---|
+| `dot.start_loop(setup, draw)` | Standard main loop |
+| `dot.start_livecode_loop(module)` | Hot-reload on file save |
+
+---
+
+## Table of contents
+
+**Getting started**
+- [Installation & first sketch](#installation--first-sketch)
+- [The Dorothy class](#the-dorothy-class)
+
+**Drawing**
+- [2D shapes](#2d-shapes)
+- [3D shapes](#3d-shapes)
+- [Style: fill, stroke, background](#style-fill-stroke-background)
+- [Text](#text)
+- [Cameras (2D/3D)](#cameras)
+
+**Animation, input, and state**
+- [Properties (frames, mouse, time)](#properties)
+- [LFOs / oscillators](#lfos--oscillators)
+- [Interaction callbacks](#interaction-callbacks)
+
+**Composition**
+- [Transforms](#transforms)
+- [Layers](#layers)
+- [Images](#images)
+
+**Effects & shaders**
+- [Built-in effects](#built-in-effects)
+- [Baked vs display filter](#baked-vs-display-filter)
+- [Custom GLSL shaders](#custom-glsl-shaders)
+
+**Audio** — [jump to section](#audio)
+- Sources · Analysis · Sequencing · Instruments · Playback · Troubleshooting
+
+**Live coding**
+- [Hot-reload loop](#live-coding)
+
+**Appendix**
+- [Color constants](#color-constants)
+- [Key constants](#key-constants)
+- [Troubleshooting](#troubleshooting)
+- [Tips & best practices](#tips--best-practices)
+- [Version history](#version-history)
+
+---
+
+# Getting started
+
+## Installation & first sketch
+
+```bash
+pip install dorothy-cci
+```
+
+See the [Quick start](#quick-start) above for a minimal runnable sketch.
+
+## The Dorothy class
+
+The main class for creating Dorothy applications. A single instance (conventionally named `dot`) holds the window, renderer, and audio system.
+
+### Constructor
 
 ```python
 Dorothy(width=800, height=600, title="Dorothy")
 ```
 
-**Parameters:**
-- `width` (int): Window width in pixels (default: 800)
-- `height` (int): Window height in pixels (default: 600)
-- `title` (str): Window title (default: "Dorothy")
+**Parameters**
+- `width` *(int)* — Window width in pixels.
+- `height` *(int)* — Window height in pixels.
+- `title` *(str)* — Window title.
 
-**Example:**
+**Example**
 ```python
 dot = Dorothy(width=1920, height=1080, title="My Project")
 ```
 
-#### Methods
-
-##### start_loop(setup_fn, draw_fn)
+### `start_loop(setup_fn, draw_fn)`
 
 Start the main render loop.
 
-**Parameters:**
-- `setup_fn` (Callable): Function to run once at startup
-- `draw_fn` (Callable): Function to run every frame
+**Parameters**
+- `setup_fn` *(Callable)* — Runs once at startup.
+- `draw_fn` *(Callable)* — Runs every frame (~60fps).
 
-**Example:**
+**Example**
 ```python
 def setup():
     dot.background((255, 255, 255))
@@ -97,37 +181,31 @@ def draw():
 dot.start_loop(setup, draw)
 ```
 
-##### start_livecode_loop(sketch_module)
+### `start_livecode_loop(sketch_module)`
 
-Start a live coding loop that reloads code on file changes.
+Start a live coding loop that reloads your sketch on file save. See [Live coding](#live-coding) for the full pattern.
 
-**Parameters:**
-- `sketch_module`: Python module containing a `MySketch` class
-
-**Example:**
-```python
-import my_sketch
-dot.start_livecode_loop(my_sketch)
-```
+**Parameters**
+- `sketch_module` — Python module containing a `MySketch` class.
 
 ---
 
-## Drawing Functions
+# Drawing
 
-All drawing functions respect the current fill, stroke, and transform state.
+All drawing functions respect the current fill, stroke, and transform state. Set fill/stroke first, then draw.
 
-### 2D Shapes
+## 2D shapes
 
-#### circle(center, radius, annotate=False)
+### `circle(center, radius, annotate=False)`
 
 Draw a circle.
 
-**Parameters:**
-- `center` (Tuple[float, float]): (x, y) center position
-- `radius` (float): Circle radius
-- `annotate` (bool): Draw debug cross at center (default: False)
+**Parameters**
+- `center` *(Tuple[float, float])* — `(x, y)` center position.
+- `radius` *(float)* — Circle radius.
+- `annotate` *(bool)* — Draw a debug cross at the center.
 
-**Example:**
+**Example**
 ```python
 dot.fill((255, 0, 0))
 dot.stroke((0, 0, 0))
@@ -138,48 +216,49 @@ dot.circle((400, 300), 100)
 dot.circle((200, 200), 50, annotate=True)
 ```
 
-#### rectangle(pos1, pos2, annotate=False)
+### `rectangle(pos1, pos2, annotate=False)`
 
 Draw a rectangle.
 
-**Parameters:**
-- `pos1` (Tuple[float, float]): (x1, y1) top-left corner
-- `pos2` (Tuple[float, float]): (x2, y2) bottom-right corner
-- `annotate` (bool): Draw debug marker (default: False)
+**Parameters**
+- `pos1` *(Tuple[float, float])* — `(x1, y1)` top-left corner.
+- `pos2` *(Tuple[float, float])* — `(x2, y2)` bottom-right corner.
+- `annotate` *(bool)* — Draw a debug marker.
 
-**Example:**
+**Example**
 ```python
 dot.fill((0, 255, 0))
 dot.rectangle((100, 100), (300, 200))
 ```
 
-#### line(pos1, pos2, annotate=False)
+### `line(pos1, pos2, annotate=False)`
 
 Draw a line.
 
-**Parameters:**
-- `pos1` (Tuple[float, float]): (x1, y1) start point
-- `pos2` (Tuple[float, float]): (x2, y2) end point
-- `annotate` (bool): Draw debug marker (default: False)
+**Parameters**
+- `pos1` *(Tuple[float, float])* — `(x1, y1)` start point.
+- `pos2` *(Tuple[float, float])* — `(x2, y2)` end point.
+- `annotate` *(bool)* — Draw a debug marker.
 
-**Example:**
+**Example**
 ```python
 dot.stroke((255, 255, 0))
 dot.set_stroke_weight(5)
 dot.line((0, 0), (800, 600))
 ```
 
-#### polyline([pts],closed=False)
+### `polyline(points, closed=False)`
 
-Draw a multipoint line.
+Draw a multi-point line.
 
-**Parameters:**
-- `points` (List[int, int]): points of the line
-- `closed` (bool): close the line into a shape (beginning to end)
+**Parameters**
+- `points` *(List[Tuple[float, float]])* — Points of the line.
+- `closed` *(bool)* — Close the line into a shape (first point connected to last).
 
-**Example:**
+**Example**
 ```python
- # Star shape (concave)
+# Star shape (concave)
+import numpy as np
 points = []
 for i in range(10):
     angle = i * np.pi / 5 - np.pi / 2
@@ -190,84 +269,125 @@ for i in range(10):
 
 dot.stroke(dot.red)
 dot.set_stroke_weight(10)
-dot.polyline(points, closed = True)  
+dot.polyline(points, closed=True)
 ```
 
-#### polygon([pts])
+### `polygon(points)`
 
 Draw a filled polygon.
 
-**Parameters:**
-- `points` (List[int, int]): points of the polygon
+**Parameters**
+- `points` *(List[Tuple[float, float]])* — Points of the polygon.
 
-**Example:**
+**Example**
 ```python
- # Star shape (concave)
-points = []
-for i in range(10):
-    angle = i * np.pi / 5 - np.pi / 2
-    r = 100 if i % 2 == 0 else 50
-    x = 400 + r * np.cos(angle)
-    y = 300 + r * np.sin(angle)
-    points.append((x, y))
-
+# Same star as above, filled
 dot.fill(dot.red)
-dot.polygon(points)  
+dot.polygon(points)
 ```
 
+## Text
 
-#### text (text, x, y, size)
+### `text(text, x, y, size)`
 
-**Parameters:**
-- `text` (str): Text to render
-- `x` (int): x coordinate
-- `y` (int): y coordinate
-- `size` (int): font size
+Render a text string.
 
-**Example:**
+**Parameters**
+- `text` *(str)* — Text to render.
+- `x` *(int)* — X coordinate.
+- `y` *(int)* — Y coordinate.
+- `size` *(int)* — Font size.
+
+**Example**
+```python
+dot.text("hello world", 100, 200, 36)
+```
+
+## Style: fill, stroke, background
+
+### `fill(color)`
+
+Set fill color for shapes.
+
+**Parameters**
+- `color` *(Tuple[int, int, int] or Tuple[int, int, int, int])* — RGB or RGBA color (0–255).
+
+**Example**
+```python
+dot.fill((255, 0, 0))        # Red
+dot.fill((0, 255, 0, 128))   # Green, 50% transparent
+```
+
+### `no_fill()`
+
+Disable fill for shapes (only stroke will be drawn).
 
 ```python
-dot.text("hello world"), 100, 200, 36)
+dot.no_fill()
+dot.stroke((0, 0, 0))
+dot.circle((400, 300), 50)  # Hollow circle
 ```
 
-### 3D Shapes
+### `stroke(color)`
 
-#### camera_3d()
+Set stroke color for shape outlines.
 
-Must be called before drawing anything in 3d. Call `camera_2d()` to go back to 2D
+**Parameters**
+- `color` *(Tuple[int, int, int] or Tuple[int, int, int, int])* — RGB or RGBA color (0–255).
 
-#### set_camera(eye=(1,1,1), target = (0,0,0))
-**Parameters:**
-- `eye` (Tuple): Where the camera is
-- `target` (Tuple): What its looking at
-
-**Example:**
 ```python
-angle = dot.frames * 0.01
-x = 5 * math.cos(angle)
-z = 5 * math.sin(angle)
-dot.set_camera((x, 2, z), (0, 0, 0))
+dot.stroke((0, 0, 255))
+dot.set_stroke_weight(3)
 ```
 
-#### dot.renderer.light_pos = (x, y, z)
+### `no_stroke()`
 
-#### use_lighting(bool=True)
+Disable stroke for shapes (only fill will be drawn).
 
-**Example:**
 ```python
-if dot.frames%20==0:
-    dot.use_lighting(not dot.renderer.use_lighting)
+dot.fill((255, 0, 0))
+dot.no_stroke()
+dot.circle((400, 300), 50)  # Filled circle, no outline
 ```
 
-#### sphere(radius=1.0, pos = (0,0,0))
+### `set_stroke_weight(weight)`
 
-Draw a 3D sphere (requires 3D camera mode).
+Set stroke line width.
 
-**Parameters:**
-- `radius` (float): Sphere radius (default: 1.0)
-- `pos` (Tuple): position of sphere (default: 0,0,0)
+**Parameters**
+- `weight` *(float)* — Line width in pixels.
 
-**Example:**
+```python
+dot.set_stroke_weight(5)
+dot.line((0, 0), (100, 100))
+```
+
+### `background(color)`
+
+Clear the screen to a color. Call at the start of `draw()` to reset the canvas each frame.
+
+**Parameters**
+- `color` *(Tuple[int, int, int])* — RGB color (0–255).
+
+```python
+dot.background((30, 30, 40))  # Dark gray
+```
+
+> ⚠️ **Note:** If you're using baked effects or shaders (trails, feedback), *don't* call `background()` every frame — it will erase the accumulated canvas. See [Baked vs display filter](#baked-vs-display-filter).
+
+## 3D shapes
+
+All 3D drawing requires 3D camera mode. Call [`camera_3d()`](#cameras) before drawing 3D primitives, and [`camera_2d()`](#cameras) to return to flat drawing.
+
+### `sphere(radius=1.0, pos=(0, 0, 0))`
+
+Draw a 3D sphere.
+
+**Parameters**
+- `radius` *(float)* — Sphere radius.
+- `pos` *(Tuple)* — Position `(x, y, z)`.
+
+**Example**
 ```python
 dot.camera_3d()
 dot.set_camera((0, 0, 5), (0, 0, 0))
@@ -275,86 +395,89 @@ dot.fill((255, 100, 100))
 dot.sphere(1.0)
 ```
 
-#### box(size=(1,1,1), pos = (0,0,0), texture_layers= int or {} )
+### `box(size=(1, 1, 1), pos=(0, 0, 0), texture_layers=None)`
 
-Draw a 3D box (requires 3D camera mode).
+Draw a 3D box.
 
-**Parameters:**
-- `size` (Tuple): size of sphere (default: 1,1,1)
-- `pos` (Tuple): position of sphere (default: 0,0,0)
-- `texture_layers` (dict or layer): A pointer to a layer for all 6 sides (stretched to fit), or a dictionary of layers for each side 
+**Parameters**
+- `size` *(Tuple)* — Box dimensions `(x, y, z)`.
+- `pos` *(Tuple)* — Box position.
+- `texture_layers` *(layer_id or dict)* — A single layer applied to all 6 sides, or a dict mapping face names (`'front'`, `'back'`, `'left'`, `'right'`, `'top'`, `'bottom'`) to layers. See [Layers](#layers).
 
-**Example:**
+**Examples**
 ```python
+# Plain colored box
 dot.camera_3d()
 dot.fill((100, 100, 255))
 dot.box((2.0, 1.0, 1.5))
 ```
 
-**Example:**
 ```python
-dot.camera_3d()
-dot.fill((100, 100, 255))
-dot.box((2.0, 1.0, 1.5),(10,10,2))
+# Same layer on every face
+dot.box((20, 20, 20), texture_layers=self.front_layer)
 ```
 
 ```python
-dot.box((20, 20, 20),texture_layers = self.front_layer)
-```
-
-```python
-dot.box((20, 20, 20), 
-    texture_layers={
-    'front': self.front_layer,
-    'back': self.back_layer,
-    'right': self.right_layer,
-    'left': self.left_layer,
-    'top': self.top_layer,
-    'bottom': self.bottom_layer
+# Different layer per face
+dot.box((20, 20, 20), texture_layers={
+    'front':  self.front_layer,
+    'back':   self.back_layer,
+    'right':  self.right_layer,
+    'left':   self.left_layer,
+    'top':    self.top_layer,
+    'bottom': self.bottom_layer,
 })
 ```
 
+### `line_3d(pos1, pos2)`
 
-#### line_3d(pos1, pos2)
+Draw a 3D line.
 
-Draw a 3D line (requires 3D camera mode).
+**Parameters**
+- `pos1` *(Tuple[float, float, float])* — Start point.
+- `pos2` *(Tuple[float, float, float])* — End point.
 
-**Parameters:**
-- `pos1` ([x, y, z]): start point
-- `pos2` ([x, y, z]): end point
-
-**Example:**
 ```python
 dot.camera_3d()
 dot.stroke((100, 100, 255))
-dot.line_3d((0, 0,0), (2, 2,2))
+dot.line_3d((0, 0, 0), (2, 2, 2))
 ```
 
-#### polyline_3d([pos1...n], closed = True)
+### `polyline_3d(points, closed=True)`
 
-Draw a 3D polyline (requires 3D camera mode).
+Draw a 3D polyline.
 
-**Parameters:**
-- `pos` ([(x, y, z),(x, y, z),....]): Array of 3d coordinates
-- `closed` (bool): Is shaped closed? Defaults to True
+**Parameters**
+- `points` *(List[Tuple[float, float, float]])* — Array of 3D coordinates.
+- `closed` *(bool)* — Connect last point to first.
 
-**Example:**
 ```python
 dot.camera_3d()
 dot.stroke((100, 100, 255))
-dot.line_3d((0, 0,0), (2, 2,2))
+dot.polyline_3d([(0, 0, 0), (2, 2, 2), (2, 0, 2)], closed=True)
 ```
 
-#### .obj files
+### Lighting
 
-Load and texture a `.obj` file
+Enable per-fragment lighting for 3D surfaces.
 
-##### load_obj(filepath)
+```python
+dot.use_lighting(True)                     # toggle on
+dot.renderer.light_pos = (10, 10, 10)      # move the light
 
-##### draw_mesh(obj, texture)
+# Toggle at runtime
+if dot.frames % 20 == 0:
+    dot.use_lighting(not dot.renderer.use_lighting)
+```
 
-##### Example
+### Loading `.obj` meshes
 
+```python
+mesh = dot.load_obj(filepath)       # returns a mesh object
+dot.draw_mesh(mesh, texture_layer)  # draw with a layer as its texture
+```
+
+**Example** — render a mesh textured by a layer you drew into:
 ```python
 def setup(self):
     self.tree = dot.load_obj("model/Tree1.obj")
@@ -365,609 +488,489 @@ def draw(self):
     with dot.layer(self.texture_layer):
         dot.camera_2d()
         x = (dot.frames * 5) % dot.width
-        dot.circle((x, dot.height//2), 50)
-    
-    # Draw mesh
+        dot.circle((x, dot.height // 2), 50)
+
     dot.camera_3d()
     dot.draw_mesh(self.tree, self.texture_layer)
 ```
 
-### Style Functions
+## Cameras
 
-#### fill(color)
+### `camera_2d()`
 
-Set fill color for shapes.
+Switch to 2D orthographic camera (the default). Use this to return to flat drawing after a 3D block.
 
-**Parameters:**
-- `color` (Tuple[int, int, int] or Tuple[int, int, int, int]): RGB or RGBA color (0-255)
-
-**Example:**
-```python
-dot.fill((255, 0, 0))        # Red
-dot.fill((0, 255, 0, 128))   # Green, 50% transparent
-```
-
-#### no_fill()
-
-Disable fill for shapes (only stroke will be drawn).
-
-**Example:**
-```python
-dot.no_fill()
-dot.stroke((0, 0, 0))
-dot.circle((400, 300), 50)  # Hollow circle
-```
-
-#### stroke(color)
-
-Set stroke color for shape outlines.
-
-**Parameters:**
-- `color` (Tuple[int, int, int] or Tuple[int, int, int, int]): RGB or RGBA color (0-255)
-
-**Example:**
-```python
-dot.stroke((0, 0, 255))
-dot.set_stroke_weight(3)
-```
-
-#### no_stroke()
-
-Disable stroke for shapes (only fill will be drawn).
-
-**Example:**
-```python
-dot.fill((255, 0, 0))
-dot.no_stroke()
-dot.circle((400, 300), 50)  # Filled circle, no outline
-```
-
-#### set_stroke_weight(weight)
-
-Set stroke line width.
-
-**Parameters:**
-- `weight` (float): Line width in pixels
-
-**Example:**
-```python
-dot.set_stroke_weight(5)
-dot.line((0, 0), (100, 100))
-```
-
-#### background(color)
-
-Clear the screen with a color.
-
-**Parameters:**
-- `color` (Tuple[int, int, int]): RGB color (0-255)
-
-**Example:**
-```python
-dot.background((30, 30, 40))  # Dark gray
-```
-
-## Oscillators Reference
-
-Modulate parameters with cyclical oscillators for animation.
-
-### Creating LFOs
-
-#### `get_lfo(osc, freq, range)`
-Create an LFO that automatically updates each frame.
-```python
-lfo_id = dot.get_lfo(osc='sine', freq=1.0, range=(0, 1))
-```
-
-**Parameters:**
-- `osc` (str): Oscillator type - `'sine'`, `'saw'`, `'square'`, `'triangle'`
-- `freq` (float): Frequency in Hz (cycles per second)
-- `range` (tuple): `(min, max)` to map oscillator output to
-
-**Returns:** LFO ID (int) to use with `lfo_value()`
-
----
-
-### Reading LFO Values
-
-#### `lfo_value(lfo_id)`
-Get current value of an LFO.
-```python
-value = dot.lfo_value(lfo_id)
-```
-
-**Returns:** Current value mapped to the LFO's range
-
----
-
-### Oscillator Types
-
-- **`'sine'`**: Smooth wave oscillation
-- **`'saw'`**: Linear ramp up, sharp drop
-- **`'square'`**: Alternates between min/max
-- **`'triangle'`**: Linear ramp up and down
-
-### Examples
-
-See [Examples](examples/shapes/lfos.py)
-
-### Tips
-
-- **Frequency**: `0.5` = slow (2 seconds per cycle), `2.0` = fast (0.5 seconds per cycle)
-- **Ranges**: Can be any values - positions, sizes, colors, angles, etc.
-- **Multiple LFOs**: Create as many as needed, each with different frequencies for complex motion
-- **Modulation**: Change LFO frequency/range dynamically by modifying `dot.lfos[lfo_id]['freq']`
-
----
-
-## Transform Functions
-
-Transforms apply to all subsequent drawing within a given block.
-
-### with dot.transform():
-
-Save the current transformation state until the block ends.
-
-**Example:**
-```python
-with dot.transform():
-    dot.translate(400, 300)
-    dot.rotate(0.5)
-    dot.circle((0, 0), 50)  # Rotated circle at (400, 300)
-```
-
-
-### translate(x, y, z=0)
-
-Translate (move) the coordinate system.
-
-**Parameters:**
-- `x` (float): X-axis translation
-- `y` (float): Y-axis translation
-- `z` (float): Z-axis translation (default: 0)
-
-**Example:**
-```python
-dot.translate(400, 300)
-dot.circle((0, 0), 50)  # Circle at (400, 300)
-```
-
-### rotate(angle, x=0, y=0, z=1)
-
-Rotate the coordinate system.
-
-**Parameters:**
-- `angle` (float): Rotation angle in **radians**
-- `x` (float): X component of rotation axis (default: 0)
-- `y` (float): Y component of rotation axis (default: 0)
-- `z` (float): Z component of rotation axis (default: 1 for 2D rotation)
-
-**Example:**
-```python
-import math
-
-# 2D rotation (around Z axis)
-dot.translate(400, 300)
-dot.rotate(math.pi / 4)  # 45 degrees
-dot.rectangle((-50, -50), (50, 50))
-
-# 3D rotation (around Y axis)
-dot.rotate(math.pi / 6, x=0, y=1, z=0)
-```
-
-### scale(s, y=None, z=None)
-
-Scale the coordinate system.
-
-**Parameters:**
-- `s` (float): X-axis scale factor (or uniform scale if y and z are None)
-- `y` (float): Y-axis scale factor (default: same as s)
-- `z` (float): Z-axis scale factor (default: same as s)
-
-**Example:**
-```python
-# Uniform scaling
-dot.scale(2.0)
-dot.circle((0, 0), 50)  # Circle with radius 100
-
-# Non-uniform scaling
-dot.scale(2.0, 0.5)
-dot.circle((0, 0), 50)  # Ellipse
-```
-
-### reset_transforms()
-
-Reset all transformations to identity.
-
-**Example:**
-```python
-dot.translate(100, 100)
-dot.rotate(1.0)
-dot.reset_transforms()  # Back to original state
-```
-
-### Transform Pattern for Scaling Around Center
-
-```python
-# To scale around a specific point (e.g., center of image):
-center_x, center_y = 400, 300
-
-with dot.transform():
-    dot.translate(center_x, center_y, 0)     # Move to center
-    dot.scale(2.0)                            # Scale from center
-    dot.translate(-width/2, -height/2, 0)    # Offset for drawing
-    dot.paste(image, (0, 0))                 # Image scales from center
-```
-
----
-
-## Layer System
-
-Layers are offscreen framebuffers for advanced compositing and effects. There is always an active layer, and if you are not currently drawing to a specific offscreen layer, you are drawing to the main canvas. 
-
-If you are drawing to an offscreen layer, you will not see the outcomes on the main canvas until you `draw_layer()` 
-
-### get_layer()
-
-Create a new layer.
-
-**Returns:**
-- `int`: Layer ID
-
-**Example:**
-```python
-layer = dot.get_layer()
-```
-
-### with dot.layer(layer_id)
-
-Start rendering to a layer in a block, end when block ends
-
-**Parameters:**
-- `layer_id` (int): Layer ID from `get_layer()`
-
-**Example:**
-```python
-layer = dot.get_layer()
-with dot.layer(layer): # start drawing to layer
-    dot.circle((400, 300), 100)
-    dot.rectangle((400, 300), (500,500))
-# end drawing to layer
-```
-
-### draw_layer(layer_id, alpha=1.0)
-
-Draw a layer to the screen with transparency.
-
-**Parameters:**
-- `layer_id` (int): Layer ID to draw
-- `alpha` (float): Transparency (0.0 = invisible, 1.0 = opaque)
-
-**Example:**
-```python
-dot.draw_layer(layer, alpha=0.5)  # Draw layer at 50% opacity
-```
-
-### release_layer(layer_id)
-
-Free a layer's resources when done.
-
-**Parameters:**
-- `layer_id` (int): Layer ID to release
-
-**Example:**
-```python
-dot.release_layer(layer)
-```
-
-### Layer Examples
-
-#### Scale Layer with Transparency
-
-See [Examples](examples/transforms/scale_layer_with_transparency.py)
-
-## Image Functions
-
-### paste(image, position, size=None, alpha=1.0)
-
-Paste a NumPy array (image) onto the canvas.
-
-**Parameters:**
-- `image` (np.ndarray): Image array. Supports:
-  - `(H, W, 3)` - RGB
-  - `(H, W, 4)` - RGBA
-  - `(H, W)` - Grayscale
-  - Values: uint8 (0-255) or float (0.0-1.0)
-- `position` (Tuple[int, int]): (x, y) top-left corner
-- `size` (Tuple[int, int], optional): (width, height) to resize. None = original size
-- `alpha` (float): Overall transparency (0.0-1.0)
-
-**Respects transforms!** Use push/pop/translate/scale for positioning and effects.
-
-See [Examples](examples/video_and_images/image.py)
-
-### Working with OpenCV
-
-See [Examples](examples/video_and_images/webcam.py)
-
----
-
-## Camera Functions
-
-### camera_2d()
-
-Switch to 2D orthographic camera (default mode).
-
-**Example:**
 ```python
 dot.camera_2d()
-dot.circle((400, 300), 50)  # Standard 2D drawing
+dot.circle((400, 300), 50)
 ```
 
-### camera_3d()
+### `camera_3d()`
 
-Switch to 3D perspective camera.
+Switch to 3D perspective camera. Required before drawing any 3D primitive.
 
-**Example:**
 ```python
 dot.camera_3d()
 dot.set_camera((0, 0, 5), (0, 0, 0))
 dot.sphere(1.0)
 ```
 
-### set_camera(eye, target=(0, 0, 0))
+### `set_camera(eye, target=(0, 0, 0))`
 
-Set 3D camera position and look-at target.
+Set the 3D camera position and look-at target.
 
-**Parameters:**
-- `eye` (Tuple[float, float, float]): Camera position (x, y, z)
-- `target` (Tuple[float, float, float]): Look-at point (default: origin)
+**Parameters**
+- `eye` *(Tuple[float, float, float])* — Camera position.
+- `target` *(Tuple[float, float, float])* — Point to look at.
 
-See [Examples](examples/3d/camera_orbit.py)
-
-
----
-## Video Effects
-
-Apply visual effects to your canvas with these built-in shader methods.
-
-### Effect Methods
-
-#### `pixelate(pixel_size, accumulate)`
-Pixelate the canvas into larger blocks.
+**Example** — orbit the origin:
 ```python
-dot.pixelate(pixel_size=8.0, accumulate=False)
+import math
+angle = dot.frames * 0.01
+x = 5 * math.cos(angle)
+z = 5 * math.sin(angle)
+dot.set_camera((x, 2, z), (0, 0, 0))
 ```
 
-**Parameters:**
-- `pixel_size` (float): Size of pixel blocks. Larger = more pixelated (default: 8.0)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+---
 
-**Example:**
+# Animation, input, and state
+
+## Properties
+
+All properties are read-only and updated automatically each frame.
+
+| Property | Type | Meaning |
+|---|---|---|
+| `dot.mouse_x` | `int` | Current mouse X coordinate |
+| `dot.mouse_y` | `int` | Current mouse Y coordinate |
+| `dot.width` | `int` | Window width in pixels |
+| `dot.height` | `int` | Window height in pixels |
+| `dot.frames` | `int` | Frame count since start |
+| `dot.millis` | `float` | Milliseconds since start |
+
+**Examples**
+```python
+# Mouse-following circle
+dot.circle((dot.mouse_x, dot.mouse_y), 20)
+
+# Frame-driven animation
+import math
+x = 400 + 200 * math.sin(dot.frames * 0.05)
+dot.circle((x, 300), 50)
+
+# Time-driven animation (frame-rate independent)
+t = dot.millis / 1000
+x = 400 + 200 * math.sin(t * 2)
+dot.circle((x, 300), 50)
+```
+
+## LFOs / oscillators
+
+Modulate parameters with cyclical oscillators. Handy for smooth animation without hand-writing `sin` calls.
+
+### `get_lfo(osc, freq, range)`
+
+Create an LFO. It updates automatically each frame; read its current value with `lfo_value()`.
+
+**Parameters**
+- `osc` *(str)* — One of `'sine'`, `'saw'`, `'square'`, `'triangle'`.
+- `freq` *(float)* — Frequency in Hz (cycles per second).
+- `range` *(tuple)* — `(min, max)` — output is mapped to this range.
+
+**Returns:** *(int)* LFO ID to pass to `lfo_value()`.
+
+```python
+lfo_id = dot.get_lfo(osc='sine', freq=1.0, range=(0, 1))
+```
+
+### `lfo_value(lfo_id)`
+
+Get the current value of an LFO.
+
+```python
+value = dot.lfo_value(lfo_id)
+```
+
+### Oscillator shapes
+
+- `'sine'` — smooth wave.
+- `'saw'` — linear ramp up, sharp drop.
+- `'square'` — alternates between min and max.
+- `'triangle'` — linear ramp up and down.
+
+### Tips
+
+- **Frequency**: `0.5` = slow (2s per cycle); `2.0` = fast (0.5s per cycle).
+- **Ranges** can be anything — positions, sizes, colors, angles.
+- **Multiple LFOs** can run at once, each with its own frequency, for complex motion.
+- **Dynamic modulation**: change an LFO's frequency or range at runtime via `dot.lfos[lfo_id]['freq']`.
+
+## Interaction callbacks
+
+Assign a function to any of these hooks to react to input events.
+
+### Mouse
+
+```python
+dot.on_mouse_press   = fn(x, y, button)
+dot.on_mouse_release = fn(x, y, button)
+dot.on_mouse_drag    = fn(x, y, dx, dy)
+dot.on_scroll        = fn(x_offset, y_offset)
+```
+
+**Example** — toggle color on click:
+```python
+self.color = dot.red
+
+def mouse_pressed(x, y, b):
+    self.color = dot.blue if self.color == dot.red else dot.red
+
+dot.on_mouse_press = mouse_pressed
+```
+
+### Keyboard
+
+```python
+dot.on_key_press = fn(key, action, modifiers)
+```
+
+**Action types**
+- `dot.keys.ACTION_PRESS`
+- `dot.keys.ACTION_RELEASE`
+
+**Key constants** — see [Key constants](#key-constants) in the appendix.
+
+**Modifiers**
+- `dot.modifiers.shift`
+- `dot.modifiers.ctrl`
+- `dot.modifiers.alt`
+
+### Buttons
+
+Create clickable UI buttons directly on the canvas.
+
+```python
+def setup(self):
+    def on_click(btn):
+        print(f"Button '{btn.text}' was clicked!")
+
+    def on_hover(btn):
+        print(f"Button '{btn.text}' was hovered!")
+
+    dot.create_button(
+        300, 250, 200, 50,
+        text="Click Me",
+        id="button1",
+        on_release=on_click,
+        on_hover=on_hover,
+    )
+
+def draw(self):
+    dot.background((40, 40, 50))
+    dot.update_buttons()
+    dot.draw_buttons()
+```
+
+---
+
+# Composition
+
+## Transforms
+
+Transforms apply to all subsequent drawing within their block. Always prefer the `with` form — it auto-restores state when the block ends.
+
+### `with dot.transform():`
+
+Save and scope the current transformation state.
+
+```python
+with dot.transform():
+    dot.translate(400, 300)
+    dot.rotate(0.5)
+    dot.circle((0, 0), 50)  # rotated circle at (400, 300)
+# transform state restored here
+```
+
+### `translate(x, y, z=0)`
+
+Move the coordinate system.
+
+```python
+dot.translate(400, 300)
+dot.circle((0, 0), 50)  # drawn at (400, 300)
+```
+
+### `rotate(angle, x=0, y=0, z=1)`
+
+Rotate the coordinate system.
+
+**Parameters**
+- `angle` *(float)* — Rotation angle in **radians**.
+- `x`, `y`, `z` — Axis of rotation (default is Z, which is what you want for 2D).
+
+```python
+import math
+
+# 2D rotation (around Z)
+dot.translate(400, 300)
+dot.rotate(math.pi / 4)  # 45°
+dot.rectangle((-50, -50), (50, 50))
+
+# 3D rotation (around Y)
+dot.rotate(math.pi / 6, x=0, y=1, z=0)
+```
+
+### `scale(s, y=None, z=None)`
+
+Scale the coordinate system.
+
+**Parameters**
+- `s` *(float)* — X-axis scale factor (also used for Y and Z if they're omitted).
+- `y`, `z` *(float)* — Per-axis scale factors.
+
+```python
+dot.scale(2.0)                     # uniform
+dot.scale(2.0, 0.5)                # non-uniform (stretches)
+```
+
+### `reset_transforms()`
+
+Reset all transformations to identity. Usually you want `with dot.transform():` instead — it auto-restores.
+
+### Recipe: scale around a point
+
+To scale around a specific point (e.g., the center of an image), translate → scale → translate back:
+
+```python
+center_x, center_y = 400, 300
+with dot.transform():
+    dot.translate(center_x, center_y, 0)
+    dot.scale(2.0)
+    dot.translate(-width/2, -height/2, 0)
+    dot.paste(image, (0, 0))
+```
+
+## Layers
+
+Layers are offscreen framebuffers for compositing. There's always an active render target — by default it's the main canvas, but inside a `with dot.layer(...)` block it's that layer instead.
+
+Anything drawn to a layer is invisible until you explicitly `draw_layer()` it onto the canvas.
+
+### `get_layer()`
+
+Create a new layer.
+
+**Returns:** *(int)* Layer ID.
+
+```python
+layer = dot.get_layer()
+```
+
+### `with dot.layer(layer_id):`
+
+Render to a layer for the duration of the block.
+
+```python
+layer = dot.get_layer()
+with dot.layer(layer):
+    dot.circle((400, 300), 100)
+    dot.rectangle((400, 300), (500, 500))
+# drawing returns to the main canvas
+```
+
+### `draw_layer(layer_id, alpha=1.0)`
+
+Draw a layer to the screen (or to another active layer).
+
+**Parameters**
+- `layer_id` *(int)* — Layer to draw.
+- `alpha` *(float)* — Transparency (0.0 = invisible, 1.0 = opaque).
+
+```python
+dot.draw_layer(layer, alpha=0.5)
+```
+
+### `release_layer(layer_id)`
+
+Free a layer's GPU resources.
+
+```python
+dot.release_layer(layer)
+```
+
+## Images
+
+### `paste(image, position, size=None, alpha=1.0)`
+
+Paste a NumPy array onto the canvas. Respects the current transform — use translate/scale for positioning and effects.
+
+**Parameters**
+- `image` *(np.ndarray)* — Image array. Supports:
+  - `(H, W, 3)` — RGB
+  - `(H, W, 4)` — RGBA
+  - `(H, W)` — Grayscale
+  - Values: `uint8` (0–255) or `float` (0.0–1.0).
+- `position` *(Tuple[int, int])* — `(x, y)` top-left corner.
+- `size` *(Tuple[int, int], optional)* — `(width, height)` to resize. `None` = original size.
+- `alpha` *(float)* — Overall transparency.
+
+See the `examples/video_and_images/` folder for image and webcam recipes (including OpenCV integration).
+
+---
+
+# Effects & shaders
+
+Dorothy ships with a set of built-in video effects and also lets you write custom GLSL shaders. Both share the same `bake` parameter, explained [below](#baked-vs-display-filter).
+
+## Built-in effects
+
+All effects accept a `bake` parameter. Most also take effect-specific parameters. Effects are applied to the current canvas after your shapes are drawn.
+
+### `pixelate(pixel_size=8.0, bake=False)`
+Pixelate the canvas into larger blocks. Larger `pixel_size` = more pixelated.
+
 ```python
 dot.circle((dot.mouse_x, dot.mouse_y), 50)
 dot.pixelate(12.0)
 ```
 
----
+### `blur(bake=False)`
+Gaussian-style blur over the whole canvas.
 
-#### `blur(accumulate)`
-Apply blur effect to the canvas.
-```python
-dot.blur(accumulate=False)
-```
-
-**Parameters:**
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
-
-**Example:**
 ```python
 dot.circle((200, 200), 100)
 dot.blur()
 ```
 
----
+### `rgb_split(offset=0.01, bake=False)`
+Chromatic-aberration / glitch effect. `offset` in the range 0.0–0.1.
 
-#### `rgb_split(offset, accumulate)`
-Split RGB channels for glitch/chromatic aberration effect.
-```python
-dot.rgb_split(offset=0.01, accumulate=False)
-```
-
-**Parameters:**
-- `offset` (float): Distance to split channels, range 0.0-0.1 (default: 0.01)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
-
-**Example:**
 ```python
 dot.circle((dot.mouse_x, dot.mouse_y), 50)
 dot.rgb_split(0.02)
 ```
 
----
+### `feedback(zoom=0.98, bake=True)`
+Zoom-trail feedback. `zoom < 1.0` zooms out (trails grow outward); `> 1.0` zooms in. Defaults to `bake=True` because feedback only works when it compounds.
 
-#### `feedback(zoom, accumulate)`
-Create feedback/zoom effect with trails.
-```python
-dot.feedback(zoom=0.98, accumulate=True)
-```
-
-**Parameters:**
-- `zoom` (float): Zoom factor per frame. <1.0 zooms out, >1.0 zooms in (default: 0.98)
-- `accumulate` (bool): Should be True for feedback effects (default: True)
-
-**Example:**
 ```python
 dot.circle((dot.mouse_x, dot.mouse_y), 20)
-dot.feedback(0.99)  # Slow zoom out with trails
+dot.feedback(0.99)  # slow outward trails
 ```
 
----
+### `roll(offset_x=0.0, offset_y=0.0, bake=True)`
+Scroll/shift the canvas with wrap-around (like `np.roll`). Positive `offset_x` = right, positive `offset_y` = down.
 
-#### `roll(offset_x, offset_y, accumulate)`
-Scroll/shift the canvas with wrapping (like `np.roll`).
 ```python
-dot.roll(offset_x=0.0, offset_y=0.0, accumulate=True)
+dot.circle((dot.width // 2, dot.height // 2), 50)
+dot.roll(2.0, 0.0)  # continuously scrolls right
 ```
 
-**Parameters:**
-- `offset_x` (float): Horizontal shift in pixels. Positive = right (default: 0.0)
-- `offset_y` (float): Vertical shift in pixels. Positive = down (default: 0.0)
-- `accumulate` (bool): Should be True for rolling effects (default: True)
+### `invert(bake=False)`
+Invert all colors.
 
-**Example:**
-```python
-dot.circle((dot.width//2, dot.height//2), 50)
-dot.roll(2.0, 0.0)  # Scroll right continuously
-```
-
----
-
-#### `invert(accumulate)`
-Invert all colors on the canvas.
-```python
-dot.invert(accumulate=False)
-```
-
-**Parameters:**
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
-
-**Example:**
 ```python
 dot.background(dot.white)
 dot.fill(dot.red)
 dot.circle((200, 200), 100)
-dot.invert()  # White becomes black, red becomes cyan
+dot.invert()
 ```
 
----
+### `tile(grid_x=2, grid_y=2, bake=False)`
+Repeat the canvas in an `grid_x × grid_y` grid.
 
-#### `tile(grid_x, grid_y, accumulate)`
-Tile/repeat the canvas in a grid pattern.
-```python
-dot.tile(grid_x=2, grid_y=2, accumulate=False)
-```
-
-**Parameters:**
-- `grid_x` (int): Number of horizontal tiles (default: 2)
-- `grid_y` (int): Number of vertical tiles (default: 2)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
-
-**Example:**
 ```python
 dot.circle((100, 100), 50)
-dot.tile(4, 4)  # Create 4x4 grid of circles
+dot.tile(4, 4)  # 4×4 grid of circles
 ```
 
----
+### `cutout(color, threshold=0.1, bake=True)`
+Make pixels of a specific color transparent (chroma key / green screen).
 
-#### `cutout(color, threshold, accumulate)`
-Make pixels of a specific color transparent (chroma key/green screen).
-```python
-dot.cutout(color, threshold=0.1, accumulate=True)
-```
+**Parameters**
+- `color` — RGB color to remove, e.g. `(0, 0, 0)` or `dot.green`.
+- `threshold` — Matching tolerance. 0.0 = exact match, 0.5 = loose.
 
-**Parameters:**
-- `color` (tuple or constant): RGB color to cut out, e.g. `(0, 0, 0)` or `dot.green`
-- `threshold` (float): Color matching tolerance. 0.0 = exact, 0.5 = loose (default: 0.1)
-- `accumulate` (bool): If True, effect builds up over frames (default: True)
-
-**Example:**
 ```python
 dot.background(dot.black)
 dot.fill(dot.red)
 dot.circle((200, 200), 100)
-dot.cutout((0, 0, 0))  # Remove black background
+dot.cutout((0, 0, 0))  # remove black background
 ```
 
----
+## Baked vs display filter
 
-### Accumulating vs Non-Accumulating
+Every effect and shader has a `bake` flag. This is the single most important concept for compositing in Dorothy.
 
-**Accumulating (`accumulate=True`)**: Effect modifies the canvas permanently. Subsequent frames build on the modified version. Use for feedback effects, trails, and persistent transformations and for chaining effects together.
+| Mode | Effect on canvas | Use for |
+|---|---|---|
+| `bake=True` | Writes result **back into** the canvas. Persists across frames (if you don't clear with `background()`). | Feedback, trails, decay, generative effects that compound |
+| `bake=False` | Overlays the effect **on screen only**. Canvas stays unchanged. | Post-processing: blur, pixelate, color grade |
 
-**Non-Accumulating (`accumulate=False`)**: Effect is only a display filter. Canvas content remains unchanged. Use for post-processing like blur, pixelate, color correction.
-
-**Example - Accumulating:**
+**Baked (feedback loop)**
 ```python
 def draw(self):
     dot.circle((dot.mouse_x, dot.mouse_y), 20)
-    dot.feedback(0.99, accumulate=True)  # Creates trails
+    dot.feedback(0.99, bake=True)  # leaves trails
+# NOTE: no dot.background() — it would wipe the accumulated trails
 ```
 
-**Example - Non-Accumulating:**
+**Display filter**
 ```python
 def draw(self):
     dot.background(dot.white)
     dot.circle((200, 200), 50)
-    dot.pixelate(8.0, accumulate=False)  # Just a visual filter
+    dot.pixelate(8.0, bake=False)  # just a visual filter
 ```
 
----
+### Combining effects
 
-### Combining Effects
+Chain multiple effects by calling them in sequence. Use `bake=True` on all but the last — each baked result passes through to the next effect:
 
-Chain multiple effects together:
 ```python
 def draw(self):
     dot.circle((dot.mouse_x, dot.mouse_y), 30)
-    
-    # Apply multiple effects, remember to accumulate!
-    dot.feedback(0.98, accumulate = True)  # Zoom trails
-    dot.rgb_split(0.015, accumulate = True))  # Glitch
-    dot.pixelate(6.0)  # Retro look
+    dot.feedback(0.98, bake=True)     # zoom trails
+    dot.rgb_split(0.015, bake=True)   # glitch
+    dot.pixelate(6.0)                 # retro look (bake=False OK on the last one)
 ```
 
----
+## Custom GLSL shaders
 
+Apply arbitrary fragment shaders for effects beyond the built-ins.
 
-## Custom Shaders Reference
+### `apply_shader(shader_code, bake=True, **uniforms)`
 
-Apply custom GLSL fragment shaders to create visual effects and post-processing.
+**Parameters**
+- `shader_code` *(str)* — GLSL fragment shader source.
+- `bake` *(bool)* — See [Baked vs display filter](#baked-vs-display-filter).
+- `**uniforms` — Any additional uniforms to pass to the shader (e.g. `time=1.5`, `amount=0.1`).
 
-## Basic Usage
-
-```python
-dot.apply_shader(shader_code, accumulate=True, **uniforms)
-```
-
-**Parameters:**
-- `shader_code` (str): GLSL fragment shader source code
-- `accumulate` (bool): 
-  - `True`: Shader modifies persistent canvas, effects build up (feedback effects)
-  - `False`: Shader is display-only filter, canvas unchanged (post-processing)
-- `**uniforms`: Additional uniforms to pass to shader (e.g., `time=1.5`, `amount=0.1`)
-
-## Shader Template
+### Shader template
 
 ```glsl
 #version 330
 
-uniform sampler2D texture0;  // The canvas texture (always available)
-uniform vec2 resolution;      // Canvas size in pixels (optional)
-uniform float my_parameter;   // Add any user defined paramters (uniforms)
+uniform sampler2D texture0;   // the canvas (always available)
+uniform vec2 resolution;      // canvas size in pixels (optional)
+uniform float my_parameter;   // any user-defined uniform you pass in
 
-in vec2 v_texcoord;          // Texture coordinates (0-1)
-out vec4 fragColor;          // Output color
+in vec2 v_texcoord;           // texture coords 0–1
+out vec4 fragColor;
 
 void main() {
     vec4 color = texture(texture0, v_texcoord);
-    // Modify color here
+    // modify color here
     fragColor = color;
 }
 ```
 
 ```python
-dot.apply_shader(shader_code, accumulate=True, my_parameter=1.0)
+dot.apply_shader(shader_code, bake=True, my_parameter=1.0)
 ```
 
-
-## Accumulating vs Non-Accumulating
-
-### Accumulating (`accumulate=True`)
-Shader output **replaces** the persistent canvas. Effects build up over frames.
-
-**Use for:** Feedback effects, trails, decay, generative art
+### Example — feedback with fade (baked)
 
 ```python
 feedback_shader = '''
@@ -979,21 +982,18 @@ out vec4 fragColor;
 
 void main() {
     vec4 color = texture(texture0, v_texcoord);
-    color.rgb *= fade;  // Fade each frame
+    color.rgb *= fade;  // fade each frame
     fragColor = color;
 }
 '''
 
 def draw():
-    # Don't call background() - let trails accumulate
+    # Don't call background() — the canvas accumulates history
     dot.circle((dot.mouse_x, dot.mouse_y), 20)
-    dot.apply_shader(feedback_shader, accumulate=True, fade=0.98)
+    dot.apply_shader(feedback_shader, bake=True, fade=0.98)
 ```
 
-### Non-Accumulating (`accumulate=False`)
-Shader output is **displayed** but canvas remains unchanged. No feedback.
-
-**Use for:** Blur, color grading, pixelation, distortion
+### Example — blur (display filter)
 
 ```python
 blur_shader = '''
@@ -1006,238 +1006,92 @@ out vec4 fragColor;
 void main() {
     vec2 pixel = 1.0 / resolution;
     vec4 color = vec4(0.0);
-    
-    for(int x = -2; x <= 2; x++) {
-        for(int y = -2; y <= 2; y++) {
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) {
             color += texture(texture0, v_texcoord + vec2(x, y) * pixel);
         }
     }
-    
     fragColor = color / 25.0;
 }
 '''
 
 def draw():
-    dot.background((0, 0, 0))  # Can clear freely
+    dot.background((0, 0, 0))  # safe: display-filter shader doesn't touch canvas
     dot.circle((dot.mouse_x, dot.mouse_y), 50)
-    dot.apply_shader(blur_shader, accumulate=False)
+    dot.apply_shader(blur_shader, bake=False)
 ```
 
-## Tips
+### Shader tips
 
-- **Accumulating shaders**: Avoid calling `dot.background()` in draw loop or effects will be cleared
-- **Non-accumulating shaders**: Safe to call `dot.background()` - shader is just a filter
-- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects. Make sure you have `accumulate=True` in shaders before the last one in the chain to pass through effects 
-
-```python
-dot.apply_shader(self.pixelate, pixelSize=int(mean_amp*100), accumulate=True)
-dot.apply_shader(self.rgb_split, accumulate=False, offset=mean_amp*0.3)
-```
-
-- **Performance**: Complex shaders (many texture lookups) may reduce framerate
-- **Debugging**: If shader doesn't compile, check console for error messages
----
-
-## Properties
-
-Properties are read-only and updated automatically.
-
-### mouse_x
-
-Current mouse X coordinate.
-
-**Type:** `int`
-
-**Example:**
-```python
-dot.circle((dot.mouse_x, dot.mouse_y), 20)
-```
-
-### mouse_y
-
-Current mouse Y coordinate.
-
-**Type:** `int`
-
-
-### width
-
-Window width in pixels.
-
-**Type:** `int`
-
-**Example:**
-```python
-center_x = dot.width // 2
-dot.circle((center_x, 300), 50)
-```
-
-### height
-
-Window height in pixels.
-
-**Type:** `int`
-
-### frames
-
-Number of frames rendered since start.
-
-**Type:** `int`
-
-**Example:**
-```python
-# Animate based on frame count
-x = 400 + 200 * math.sin(dot.frames * 0.05)
-dot.circle((x, 300), 50)
-```
-
-### millis
-
-Time in milliseconds since start.
-
-**Type:** `float`
-
-**Example:**
-```python
-# Animate based on time
-t = dot.millis / 1000  # Convert to seconds
-x = 400 + 200 * math.sin(t * 2)
-dot.circle((x, 300), 50)
-```
+- **Baked shaders**: don't call `dot.background()` in your draw loop — it wipes the canvas each frame.
+- **Display-filter shaders**: safe to call `dot.background()` — the shader is just an overlay.
+- **Chaining**: call `apply_shader()` multiple times. Use `bake=True` on all but the last.
+  ```python
+  dot.apply_shader(self.pixelate, pixelSize=int(mean_amp * 100), bake=True)
+  dot.apply_shader(self.rgb_split, bake=False, offset=mean_amp * 0.3)
+  ```
+- **Performance**: shaders with many texture lookups can drop framerate.
+- **Debugging**: if a shader fails to compile, check the console for the GLSL error.
 
 ---
 
-## Interaction Callbacks
+# Audio
 
-### on_mouse_pressed(x,y,button)
+Dorothy has a full audio system for playback, analysis, and generation. All audio runs on background threads so it won't block rendering.
 
-**Example:**
-```python
-self.color = dot.red
-def mouse_pressed(x,y,b):
-    if self.color == dot.red:
-        self.color = dot.blue
-    else:
-        self.color = dot.red
-dot.on_mouse_press = mouse_pressed
-```
+**Audio section contents**
+- [Audio sources](#audio-sources) — file, device (mic), DSP callback, samples, RAVE, MAGNet
+- [Analysis](#audio-analysis) — amplitude, FFT, onset, beat detection
+- [Signal smoothing](#signal-smoothing)
+- [Playback control](#playback-control)
+- [Sequencing](#audio-sequencing) — Clock, Sequence, Note
+- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth
+- [Advanced](#advanced-audio-features) — RAVE timbre transfer, callbacks, gain
+- [Performance tips](#audio-performance-tips)
+- [Troubleshooting](#audio-troubleshooting)
 
-### on_mouse_released(x,y,button)
+All audio APIs live under `dot.music`. Running streams return an integer *output id* that you can use to index into `dot.music.audio_outputs[id]` for advanced control.
 
-### on_scroll(x_offset,x_offset)
+## Audio sources
 
-### on_mouse_drag(x,y,dx,dy)
+Multiple sources can run simultaneously — each returns its own id.
 
-### on_key_press(key, action, modifiers)
-
-#### Available Constants:
-##### Action Types:
-
-* dot.keys.ACTION_PRESS
-* dot.keys.ACTION_RELEASE
-
-##### Common Keys:
-
-* dot.keys.SPACE
-* dot.keys.ENTER
-* dot.keys.ESCAPE
-* dot.keys.TAB
-* dot.keys.BACKSPACE
-* Letters: dot.keys.A through dot.keys.Z
-* Numbers: dot.keys.NUMBER_0 through dot.keys.NUMBER_9
-* Arrows: dot.keys.UP, dot.keys.DOWN, dot.keys.LEFT, dot.keys.RIGHT
-
-##### Modifiers:
- 
-* dot.modifiers.shift
-* dot.modifiers.ctrl
-* dot.modifiers.alt
-
-See [Examples](examples/interaction/key_press.py)
-
-### Buttons!
-
-**Example:**
-```python
-def setup(self):
-    # Create a simple button
-    def on_button_click(btn):
-        print(f"Button '{btn.text}' was clicked!")
-    
-    def on_hover(btn):
-        print(f"Button '{btn.text}' was hovered!")
-    
-    dot.create_button(300, 250, 200, 50, 
-                    text="Click Me",
-                    id="button1",
-                    on_release=on_button_click, on_hover=on_hover)
-
-def draw(self):
-    dot.background((40, 40, 50))
-    
-    # Update and draw buttons
-    dot.update_buttons()
-    dot.draw_buttons()
-```
----
-
-## Color Constants
-
-Predefined colors for convenience (all css colours available).
-
-**Example:**
-```python
-dot.fill(dot.red)
-dot.circle((400, 300), 50)
-```
-
----
-
-## Audio Integration
-
-Dorothy integrates with a comprehensive audio system for playback, analysis, and generation. The audio system runs on separate threads to avoid interfering with rendering.
-
-
-### Audio Sources
-
-Dorothy supports multiple audio sources that can run simultaneously:
-
-#### File Playback
+### File playback
 
 ```python
-# Play an audio file
 file_id = dot.music.start_file_stream(
     "song.wav",
     fft_size=512,        # FFT window size for analysis
-    buffer_size=1024,    # Audio buffer size (larger = smoother, more latency)
-    sr=44100,            # Sample rate
-    output_device=None,  # None = default output, or device ID
-    analyse=True         # Enable FFT and amplitude analysis
+    buffer_size=1024,    # audio buffer size (larger = smoother, more latency)
+    sr=44100,            # sample rate
+    output_device=None,  # None = default output, or a device ID
+    analyse=True,        # enable FFT and amplitude analysis
 )
 ```
 
-#### Device Input (Microphone/System Audio)
+### Device input (microphone / system audio)
 
 ```python
-# Capture from microphone or system audio
 device_id = dot.music.start_device_stream(
-    device=2,            # Device ID (see sd.query_devices())
+    device=2,            # device ID — see sd.query_devices()
     fft_size=1024,
     buffer_size=2048,
     sr=44100,
-    analyse=True
+    analyse=True,
 )
 ```
 
-#### Custom Audio Generation (DSP)
+### Custom DSP (audio generation)
+
+Pass an `audio_callback(size)` function that returns a NumPy array of `size` samples.
 
 ```python
-# Generate audio with a callback function
+import numpy as np
 phase = 0
 
 def audio_callback(size):
     global phase
-    frequency = 440  # A4 note
+    frequency = 440   # A4
     sr = 44100
     delta = 2 * np.pi * frequency / sr
     x = delta * np.arange(size)
@@ -1251,14 +1105,183 @@ dsp_id = dot.music.start_dsp_stream(
     buffer_size=1024,
     sr=44100,
     output_device=None,
-    analyse=True
+    analyse=True,
 )
 ```
 
-### Audio Sequencing Reference
+### Pre-loaded sample buffer
 
-`Note`, `Sequence`, `Clock`, and audio devices (`PolySynth`, `Sampler`, `GranularSynth`) form a unified sequencing system. A `Sequence` is connected to a `Clock` and an audio device; the clock drives the sequence which fires `note_on` / `note_off` on the device.
+```python
+import numpy as np
 
+# Generate or load audio into a NumPy array
+samples = np.sin(2 * np.pi * 440 * np.arange(44100) / 44100)
+
+sample_id = dot.music.start_sample_stream(
+    samples,
+    fft_size=1024,
+    buffer_size=1024,
+    sr=44100,
+    output_device=None,
+    analyse=True,
+)
+```
+
+### RAVE neural vocoder
+
+```python
+rave_id = dot.music.start_rave_stream(
+    model_path="vintage.ts",
+    fft_size=1024,
+    buffer_size=2048,
+    sr=44100,
+    latent_dim=16,       # must match the model
+    output_device=None,
+)
+
+# Control the latent space
+import torch
+z = torch.randn(1, 16, 1)
+dot.music.audio_outputs[rave_id].current_latent = z
+
+# Or add a bias
+dot.music.audio_outputs[rave_id].z_bias = torch.randn(1, 16, 1) * 0.1
+```
+
+### MAGNet spectral model
+
+```python
+magnet_id = dot.music.start_magnet_stream(
+    model_path="model.pth",
+    dataset_path="audio_samples.wav",
+    buffer_size=2048,
+    sr=44100,
+    output_device=None,
+)
+```
+
+### Listing audio devices
+
+```python
+import sounddevice as sd
+print(sd.query_devices())   # list all audio devices
+print(sd.default.device)    # default [input, output]
+```
+
+## Audio analysis
+
+When a stream is started with `analyse=True`, these methods return real-time analysis. All accept `output=0` to pick which source to analyse (default = first).
+
+### `amplitude(output=0, smooth=1)`
+
+Current RMS amplitude (volume).
+
+**Returns:** *(float)* 0.0 and up (can exceed 1.0 for loud signals).
+
+```python
+amp = dot.music.amplitude()
+radius = 50 + amp * 200
+dot.circle((400, 300), radius)
+```
+
+### `fft(output=0)`
+
+Current FFT magnitude spectrum.
+
+**Returns:** *(np.ndarray)* length `(fft_size // 2) + 1`.
+
+```python
+fft = dot.music.fft()
+for i, magnitude in enumerate(fft[::4]):  # every 4th bin
+    x = i * 20
+    height = magnitude * 300
+    dot.rectangle((x, 600), (x + 18, 600 - height))
+```
+
+### `is_onset(output=0)`
+
+Detect if an onset (sudden energy spike) occurred since the last call. Works offline (on files) or online on device streams (less accurate online).
+
+**Returns:** *(bool)*
+
+```python
+# Enable onset analysis on a device stream
+o = dot.music.start_device_stream(1)
+dot.music.audio_outputs[o].onset_detector.threshold = 0.5
+dot.music.audio_outputs[o].analyse_onsets = True
+
+# In draw()
+if dot.music.is_onset():
+    dot.fill((255, 0, 0))
+```
+
+### `is_beat(output=0)`
+
+Detect if a beat occurred since the last call.
+
+**Returns:** *(bool)*
+
+```python
+# Enable beat analysis
+o = dot.music.start_device_stream(1)
+dot.music.audio_outputs[o].onset_detector.threshold = 0.5
+dot.music.audio_outputs[o].analyse_onsets = True
+dot.music.audio_outputs[o].analyse_beats = True
+
+# In draw()
+if dot.music.is_beat():
+    dot.fill((255, 0, 0))
+    dot.circle((400, 300), 200)
+```
+
+> ⚠️ **Note:** Beat detection only works with `start_file_stream()` or `start_sample_stream()` — it requires real audio data and runs beat tracking at stream initialization.
+
+## Signal smoothing
+
+A utility for smoothing any noisy signal (audio analysis values, sensor data, etc.) with a rolling window.
+
+### `get_window(window_size, method="average", dims=1)`
+
+Create a smoothing window.
+
+**Parameters**
+- `window_size` *(int)* — Number of values to average over.
+- `method` *(str)* — Smoothing method.
+- `dims` *(int)* — Dimensionality of inputs. Use `1` for scalars, higher for vectors.
+
+### `.add(value)`
+
+Add a new value; returns the current smoothed value.
+
+**Examples**
+```python
+# 1D
+w = dot.get_window(10)
+mean = w.add(new_val)
+
+# Multi-dimensional
+w = dot.get_window(10, dims=3)
+mean = w.add([x, y, z])
+```
+
+## Playback control
+
+All playback functions take an optional `output=0` parameter to target a specific stream.
+
+```python
+dot.music.play()        # start / resume
+dot.music.play(1)       # second output
+
+dot.music.stop()        # stop completely
+dot.music.pause()       # pause (resumable)
+dot.music.resume()      # resume from pause
+```
+
+## Audio sequencing
+
+`Note`, `Sequence`, `Clock`, and the instruments ([`PolySynth`](#polysynth), [`Sampler`](#sampler), [`GranularSynth`](#granularsynth)) form a unified sequencing system. A `Sequence` is connected to a `Clock` and an instrument — the clock drives the sequence, and the sequence fires `note_on` / `note_off` on the instrument.
+
+**Minimal example**
 ```python
 from dorothy.Audio import Sequence, Note
 
@@ -1270,155 +1293,147 @@ def setup(self):
     self.synth = dot.music.audio_outputs[idx]
 
     self.seq = Sequence(steps=8, ticks_per_step=4)
-    self.seq[0] = Note(60)
+    self.seq[0] = Note(60)                        # middle C on step 0
     self.seq.connect(self.clock, self.synth)
     self.clock.play()
 ```
 
----
+### Note
 
-#### Note
-
-`Note` is a dataclass representing a single step event.
+A dataclass representing a single step event.
 
 ```python
 Note(
-    midi,            # MIDI note number (0-127). Middle C = 60, A4 = 69
-    vel=0.8,         # Velocity 0.0–1.0
-    duration=1,      # Duration in steps before note_off fires
-    # Per-note ADSR overrides (None = use device default)
+    midi,             # MIDI note number (0–127). Middle C = 60, A4 = 69
+    vel=0.8,          # velocity 0.0–1.0
+    duration=1,       # duration in steps before note_off fires
+    # Per-note ADSR overrides (None = use instrument default)
     attack=None,
     decay=None,
     sustain=None,
     release=None,
     # Per-note oscillator overrides (PolySynth only)
-    waveform=None,   # 'sine'|'saw'|'triangle'|'noise'|'supersaw'|'fm'|'pwm'
+    waveform=None,    # 'sine'|'saw'|'triangle'|'noise'|'supersaw'|'fm'|'pwm'
     fm_ratio=None,
     fm_index=None,
     detune=None,
     n_oscs=None,
     pwm=None,
 )
+
+note.freq   # read-only: MIDI → Hz  (440 * 2**((midi - 69) / 12))
 ```
 
-```python
-note.freq   # Read-only: MIDI → Hz (440 * 2**((midi-69)/12))
-```
+### Clock
 
----
+Tempo-synced timing. Runs on a background thread.
 
-#### Clock
-
-Provides tempo-synced timing. Runs in a background thread.
-
-##### Creating a Clock
+**Create**
 ```python
 self.clock = dot.music.get_clock(bpm=120)
 self.clock.set_tpb(4)   # ticks per beat (default 4)
 ```
 
-##### Properties
+**Properties**
 ```python
-self.clock.tick_ctr       # Current tick count (increments before callbacks fire)
-self.clock.bpm            # Current BPM
-self.clock.ticks_per_beat # Subdivisions per beat
-self.clock.playing        # True if running
-self.clock.tick_length    # Milliseconds per tick
+self.clock.tick_ctr        # current tick count (increments before callbacks fire)
+self.clock.bpm             # current BPM
+self.clock.ticks_per_beat  # subdivisions per beat
+self.clock.playing         # True if running
+self.clock.tick_length     # milliseconds per tick
 ```
 
-##### Methods
+**Methods**
 ```python
-self.clock.play()              # Start (resets tick_ctr to 0)
-self.clock.stop()              # Stop
-self.clock.set_bpm(120)        # Change tempo
-self.clock.set_tpb(4)         # Change tick subdivision
+self.clock.play()             # start (resets tick_ctr to 0)
+self.clock.stop()             # stop
+self.clock.set_bpm(120)       # change tempo
+self.clock.set_tpb(4)         # change tick subdivision
 
-# Register callbacks — multiple callbacks are supported
+# Register extra callbacks (multiple supported)
 self.clock.on_tick_fns.append(self.my_fn)
 ```
 
-##### Timing grid
+**Timing grid**
 ```python
 # 4/4 — 16th-note steps
-self.clock.set_tpb(4)   # 4 ticks/beat → ticks_per_step=1 → 16th notes
-                         #              → ticks_per_step=4 → quarter notes
-
-# Tip: set_tpb() after set_bpm() so tick_length recalculates correctly
+self.clock.set_tpb(4)   # 4 ticks/beat  → ticks_per_step=1 → 16ths
+                        #                → ticks_per_step=4 → quarters
+# Tip: call set_tpb() after set_bpm() so tick_length recalculates
 ```
 
----
+### Sequence
 
-#### Sequence
+Step sequencer that drives any compatible instrument.
 
-Step sequencer that drives any compatible audio device.
-
-##### Creating and connecting
+**Create and connect**
 ```python
 seq = Sequence(steps=16, ticks_per_step=1)
 seq.connect(clock, synth)   # registers tick callback; call before clock.play()
 ```
 
-##### Step editing
+**Step editing**
 ```python
-seq[i] = Note(60)              # single note
-seq[i] = [Note(60), Note(64)]  # chord
-seq[i] = []                    # rest
-note = seq[i]                  # read a step
+seq[i] = Note(60)               # single note
+seq[i] = [Note(60), Note(64)]   # chord
+seq[i] = []                     # rest
+note = seq[i]                   # read a step
 
-seq.steps = 32                 # resize (current_step wraps into new range)
-seq.ticks_per_step = 2         # change step resolution live
+seq.steps = 32                  # resize (current_step wraps into new range)
+seq.ticks_per_step = 2          # change step resolution live
 ```
 
-##### Pattern methods
+**Pattern methods**
 ```python
-seq.clear()          # empty all steps
-seq.clear(i)         # empty one step
-seq.set_pattern([    # replace all steps atomically; sends all_notes_off first
+seq.clear()           # empty all steps
+seq.clear(i)          # empty one step
+seq.set_pattern([     # replace all steps atomically; fires all_notes_off first
     [Note(60)],
     [],
     [Note(64), Note(67)],
     [],
 ])
-seq.all_notes_off()  # immediately release all pending notes
+seq.all_notes_off()   # immediately release all pending notes
 ```
 
----
+## Instruments
 
-#### PolySynth
+All instruments are `AudioDevice`s that respond to `note_on` / `note_off`. They can be driven by a [`Sequence`](#sequence) or called directly (thread-safe).
 
-Polyphonic synthesizer AudioDevice. Up to `n_voices` simultaneous notes.
+### PolySynth
 
-##### Creating
+Polyphonic synthesizer. Up to `n_voices` simultaneous notes.
+
+**Create**
 ```python
 idx = dot.music.start_poly_synth_stream(
     n_voices=8,
     n_harmonics=4,
-    attack=0.01,    decay=0.1,    sustain=0.7,    release=0.3,
-    waveform='sine',             # default oscillator shape
+    attack=0.01, decay=0.1, sustain=0.7, release=0.3,
+    waveform='sine',   # default oscillator shape
     buffer_size=512,
     sr=44100,
 )
 synth = dot.music.audio_outputs[idx]
 ```
 
-##### Waveforms
-`'sine'` · `'saw'` · `'triangle'` · `'noise'` · `'supersaw'` · `'fm'` · `'pwm'`
+**Waveforms**: `'sine'` · `'saw'` · `'triangle'` · `'noise'` · `'supersaw'` · `'fm'` · `'pwm'`.
 
-##### Default parameters (read/write)
+**Default parameters** (read/write)
 ```python
-synth.attack        # ADSR attack (seconds)
-synth.decay         # ADSR decay (seconds)
+synth.attack        # ADSR attack (s)
+synth.decay         # ADSR decay  (s)
 synth.sustain       # ADSR sustain level 0–1
-synth.release       # ADSR release (seconds)
-synth.waveform      # Default oscillator shape
-synth.fm_ratio      # FM: modulator = fm_ratio × carrier (default 2.0)
-synth.fm_index      # FM: modulation depth in radians (default 1.0)
-synth.detune        # Supersaw: total semitone spread (default 0.2)
-synth.n_oscs        # Supersaw: oscillator count (default 7)
-synth.pwm           # PWM: duty cycle 0–1 (default 0.5 = square)
+synth.release       # ADSR release (s)
+synth.waveform      # default oscillator shape
+synth.fm_ratio      # FM: modulator = fm_ratio × carrier  (default 2.0)
+synth.fm_index      # FM: modulation depth in radians     (default 1.0)
+synth.detune        # supersaw: total semitone spread     (default 0.2)
+synth.n_oscs        # supersaw: oscillator count          (default 7)
+synth.pwm           # PWM: duty cycle 0–1 (0.5 = square)
 ```
 
-##### Direct API (thread-safe)
+**Direct API** (thread-safe)
 ```python
 synth.note_on(freq, vel=0.8, waveform='saw', attack=0.05, ...)
 synth.note_off(freq)
@@ -1427,57 +1442,53 @@ synth.all_notes_off()
 
 Per-note overrides in `note_on` apply to that note only; `None` falls back to the synth default. Notes passed through a `Sequence` carry overrides from their `Note` fields.
 
----
+### Sampler
 
-#### Sampler
+Sample player. `Note.midi` is used as the **slot index**, `Note.vel` scales volume.
 
-Sample player AudioDevice. `Note.midi` is used as the slot index; `Note.vel` scales volume.
-
-##### Creating
+**Create**
 ```python
 idx = dot.music.start_sampler_stream(
-    paths=["kick.wav", "snare.wav", "hat.wav"],  # optional pre-load
+    paths=["kick.wav", "snare.wav", "hat.wav"],   # optional pre-load
     sr=44100,
     buffer_size=512,
 )
 sampler = dot.music.audio_outputs[idx]
-sampler.load(["kick.wav", "snare.wav"])   # load or swap samples at any time
+sampler.load(["kick.wav", "snare.wav"])   # load or swap at any time
 ```
 
 Slot 0 = `paths[0]`, slot 1 = `paths[1]`, etc.
 
-##### Sequence usage
+**Sequence usage**
 ```python
 seq[0] = Note(0, vel=1.0)   # trigger slot 0
 seq[2] = Note(1, vel=0.8)   # trigger slot 1
 seq.connect(clock, sampler)
 ```
 
-Samples play to their natural end; `note_off` is a no-op (one-shots always complete).
+Samples play to their natural end; `note_off` is a no-op.
 
-##### Direct API (thread-safe)
+**Direct API**
 ```python
-sampler.trigger(0, vel=1.0)   # trigger by slot index directly
-sampler.all_notes_off()        # stop all playing voices immediately
+sampler.trigger(0, vel=1.0)    # trigger by slot index
+sampler.all_notes_off()         # stop all voices immediately
 ```
 
----
+### GranularSynth
 
-#### GranularSynth
-
-Granular synthesis AudioDevice. Loads one audio file and plays it as overlapping short grains.
+Loads a single audio file and plays it as overlapping short grains.
 
 `Note.midi` 69 (A4, 440 Hz) = original file pitch. Other values shift pitch by semitone distance from A4. `Note.vel` scales voice volume.
 
-##### Creating
+**Create**
 ```python
 idx = dot.music.start_granular_stream(
     path="texture.wav",     # optional pre-load
-    position=0.5,           # initial read position 0–1
+    position=0.5,           # initial read position (0–1)
     spread=0.1,
     grain_size=80.0,        # ms
     density=8.0,            # grains/sec/voice
-    attack=0.3,    decay=0.3,
+    attack=0.3, decay=0.3,
     n_grains=32,
     pitch=0.0,              # semitones
     pitch_spread=0.0,       # per-grain jitter (semitones std dev)
@@ -1488,397 +1499,147 @@ gran = dot.music.audio_outputs[idx]
 gran.load("texture.wav")    # load or swap source at any time
 ```
 
-##### Parameters (read/write at any time)
+**Parameters** (read/write at any time)
 ```python
-gran.position      # 0–1, read head centre in source file
-gran.spread        # 0–1, random position scatter (fraction of file)
+gran.position      # 0–1, read-head centre in source
+gran.spread        # 0–1, random position scatter
 gran.grain_size    # ms per grain
-gran.density       # grains per second per active voice
+gran.density       # grains per second per voice
 gran.attack        # fraction of grain for fade-in
 gran.decay         # fraction of grain for fade-out
 gran.n_grains      # max simultaneous grains
 gran.pitch         # global semitone shift
-gran.pitch_spread  # per-grain pitch jitter (Gaussian std dev, semitones)
+gran.pitch_spread  # per-grain pitch jitter (std dev)
 ```
 
-##### Direct API (thread-safe)
+**Direct API**
 ```python
 gran.note_on(freq, vel=0.8)   # start grain cloud at pitch/volume
 gran.note_off(freq)            # stop spawning; active grains play out
-gran.all_notes_off()           # silence immediately, clear all grains
+gran.all_notes_off()           # silence immediately
 ```
 
-### Stream Samples 
+## Advanced audio features
+
+### RAVE timbre transfer
+
+Route one audio source through a RAVE model to re-synthesize its timbre:
 
 ```python
-# Play pre-loaded samples
-import numpy as np
-
-# Generate or load samples
-samples = np.sin(2 * np.pi * 440 * np.arange(44100) / 44100)
-
-sample_id = dot.music.start_sample_stream(
-    samples,
-    fft_size=1024,
-    buffer_size=1024,
-    sr=44100,
-    output_device=None,
-    analyse=True
-)
-```
-
-### RAVE Model Generation
-
-```python
-# Generate audio with RAVE neural vocoder
-rave_id = dot.music.start_rave_stream(
-    model_path="vintage.ts",
-    fft_size=1024,
-    buffer_size=2048,
-    sr=44100,
-    latent_dim=16,       # Must match model
-    output_device=None
-)
-
-# Control latent space
-z = torch.randn(1, 16, 1)
-dot.music.audio_outputs[rave_id].current_latent = z
-
-# Add bias to latent
-dot.music.audio_outputs[rave_id].z_bias = torch.randn(1, 16, 1) * 0.1
-```
-
-### MAGNet Model Generation
-
-```python
-# Generate audio with MAGNet spectral model
-magnet_id = dot.music.start_magnet_stream(
-    model_path="model.pth",
-    dataset_path="audio_samples.wav",
-    buffer_size=2048,
-    sr=44100,
-    output_device=None
-)
-```
-
-### Analysis Properties
-
-All audio sources (when `analyse=True`) provide real-time analysis:
-
-#### amplitude(output=0, smooth=1)
-
-Get current audio amplitude (volume).
-
-**Parameters:**
-- `output` (int): Audio output index (default: 0)
-- `smooth` (int): Smoothing factor (default: 1)
-
-**Returns:**
-- `float`: RMS amplitude (0.0-1.0+)
-
-**Example:**
-```python
-amp = dot.music.amplitude()
-radius = 50 + amp * 200
-dot.circle((400, 300), radius)
-```
-
-#### fft(output=0)
-
-Get current FFT frequency spectrum.
-
-**Parameters:**
-- `output` (int): Audio output index (default: 0)
-
-**Returns:**
-- `np.ndarray`: FFT magnitudes, length = (fft_size // 2) + 1
-
-**Example:**
-```python
-fft = dot.music.fft()
-for i, magnitude in enumerate(fft[::4]):  # Every 4th bin
-    x = i * 20
-    height = magnitude * 300
-    dot.rectangle((x, 600), (x + 18, 600 - height))
-```
-#### is_onset(output=0)
-
-Detect if an onset occurred since last call. This works offline (if playing back audio loaded in at the beginning), or online in a streaming fashion (although this is less accurate)
-
-```python
-o = dot.music.start_device_stream(1)
-dot.music.audio_outputs[o].onset_detector.threshold = 0.5 
-dot.music.audio_outputs[o].analyse_onsets = True
-```
-
-**Parameters:**
-- `output` (int): Audio output index (default: 0)
-
-**Returns:**
-- `bool`: True if onset detected
-
-**Example:**
-```python
-if dot.music.is_onset():
-    dot.fill((255, 0, 0))
-```
-
-#### is_beat(output=0)
-
-Detect if a beat occurred since last call. This works offline (if playing back audio loaded in at the beginning), or online in a streaming fashion (although this is less accurate)
-
-```python
-o = dot.music.start_device_stream(1)
-dot.music.audio_outputs[o].onset_detector.threshold = 0.5 
-dot.music.audio_outputs[o].analyse_onsets = True
-dot.music.audio_outputs[o].analyse_beats = True
-```
-
-**Parameters:**
-- `output` (int): Audio output index (default: 0)
-
-**Returns:**
-- `bool`: True if beat detected
-
-**Example:**
-```python
-if dot.music.is_beat():
-    dot.fill((255, 0, 0))
-    dot.circle((400, 300), 200)
-```
-
-### Smoothing Signals
-
-#### get_window(window_size, method = "average", dims = 1)
-
-Make a window for smoothing signals 
-
-#### add(val or List)
-
-Add new value, returns current smoothed value 
-
-#### Example
-
-```python
-w = dot.get_window(10)
-mean = w.add(new_val)
-mean = w.add(new_val)
-mean = w.add(new_val)
-...
-```
-
-```python
-w = dot.get_window(10, dims = 3)
-mean = w.add([x,y,z])
-mean = w.add([x,y,z])
-mean = w.add([x,y,z])
-...
-```
-
-### Playback Control
-
-#### play(output=0)
-
-Start or resume audio playback.
-
-```python
-dot.music.play()        # Play first output
-dot.music.play(1)       # Play second output
-```
-
-#### stop(output=0)
-
-Stop audio playback completely.
-
-```python
-dot.music.stop()
-```
-
-#### pause(output=0)
-
-Pause audio playback (can be resumed).
-
-```python
-dot.music.pause()
-```
-
-#### resume(output=0)
-
-Resume paused audio.
-
-```python
-dot.music.resume()
-```
-
-### Multiple Audio Outputs
-
-You can have multiple audio sources running simultaneously:
-
-See [Examples](examples/audio_playback/multi_audio_outputs.py)
-
-### Advanced Features
-
-#### Timbre Transfer with RAVE
-
-Route one audio source through a RAVE model:
-
-```python
-# Start RAVE generator
 rave_id = dot.music.start_rave_stream("vintage.ts")
-
-# Start microphone input
-mic_id = dot.music.start_device_stream(device=0)
-
-# Route mic through RAVE
+mic_id  = dot.music.start_device_stream(device=0)
 dot.music.update_rave_from_stream(mic_id)
-
-# Now RAVE will encode mic input and generate audio
+# RAVE now encodes the mic input and generates audio
 ```
 
-#### Custom Callbacks
+### Custom callbacks
 
-Access raw audio buffers:
+Access raw audio buffers as they arrive:
 
 ```python
 def on_new_frame(buffer):
-    # Called when new audio buffer is available
     print(f"New audio: {buffer.shape}, max: {np.max(np.abs(buffer))}")
 
 file_id = dot.music.start_file_stream("song.wav")
 dot.music.audio_outputs[file_id].on_new_frame = on_new_frame
 ```
 
-#### Gain Control
+### Gain control
 
-Adjust output volume per source:
+Adjust volume per source:
 
 ```python
 file_id = dot.music.start_file_stream("song.wav")
-
-# Set gain (volume multiplier)
-dot.music.audio_outputs[file_id].gain = 0.5  # 50% volume
-
-# Mute
-dot.music.audio_outputs[file_id].gain = 0.0
+dot.music.audio_outputs[file_id].gain = 0.5   # 50% volume
+dot.music.audio_outputs[file_id].gain = 0.0   # mute
 ```
 
-### Query Available Devices
+### Multiple audio outputs
 
-```python
-import sounddevice as sd
+You can run many sources at once. See `examples/audio_playback/multi_audio_outputs.py`.
 
-# List all audio devices
-print(sd.query_devices())
+## Audio performance tips
 
-# Get default devices
-print(sd.default.device)  # [input_device, output_device]
-```
+**Buffer size** — larger = smoother audio, more latency.
+- Live input: 512–1024
+- Playback: 1024–2048
+- Glitching? try 4096.
 
-### Audio Performance Tips
+**FFT size** — balance frequency vs time resolution.
+- Music: 1024–2048
+- Speech: 512–1024
+- Real-time responsiveness: 512.
 
-1. **Buffer Size**: Larger buffers = smoother audio but more latency
-   - For live input: 512-1024
-   - For playback: 1024-2048
-   - If glitching: try 4096
-
-2. **FFT Size**: Balance between frequency resolution and time resolution
-   - Music: 1024-2048
-   - Speech: 512-1024
-   - Real-time: 512
-
-3. **Cache Audio Data**: Only read once per frame
+**Cache analysis values** — read `fft()` / `amplitude()` **once per frame**, not repeatedly:
 ```python
 def draw(self):
-    # GOOD: Read once
+    # GOOD
     fft = dot.music.fft()
     amp = dot.music.amplitude()
-    
-    # Use cached values
     for i, val in enumerate(fft):
-        pass
-    
-    # BAD: Reading multiple times
+        ...
+
+    # BAD — recomputes each call
     # for i in range(len(dot.music.fft())):
-    #     val = dot.music.fft()[i]  # Don't do this!
+    #     val = dot.music.fft()[i]
 ```
 
-4. **Reduce Visual Complexity**: If audio glitches, simplify drawing
+**Reduce visual complexity** — subsample data when rendering:
 ```python
-# Subsample FFT for fewer bars
-fft = dot.music.fft()[::4]  # Every 4th value
+fft = dot.music.fft()[::4]   # every 4th value
 ```
 
-### Complete Audio Examples
+## Audio troubleshooting
 
-See [Examples](examples)
+### Glitches / crackling
 
-### Troubleshooting Audio
+**Cause:** draw loop blocking the audio thread.
+**Fix:**
+- Increase `buffer_size` (try 4096).
+- Simplify `draw()`.
+- Reduce FFT size.
+- Keep VSync on (default in ModernGL build).
 
-#### Audio Glitches/Crackling
+### No audio output
 
-**Cause**: Render loop blocking audio thread  
-**Solution**:
-- Increase buffer size: `buffer_size=4096`
-- Simplify draw() function
-- Reduce FFT size
-- Enable VSync (already enabled in ModernGL version)
-
-#### No Audio Output
-
-**Check**:
 ```python
 import sounddevice as sd
-print(sd.query_devices())  # List devices
-print(sd.default.device)   # Check default
+print(sd.query_devices())  # list devices
+print(sd.default.device)   # check default
 ```
 
-**Set device explicitly**:
+Set a device explicitly:
 ```python
 dot.music.start_file_stream("song.wav", output_device=2)
 ```
 
-#### FFT Values All Zero
+### FFT values all zero
 
-**Causes**:
-- `analyse=False` was set
-- Buffer size too small
-- No audio playing yet
+- `analyse=False` was set — enable it.
+- Buffer size too small.
+- No audio actually playing.
 
-**Solution**:
 ```python
 dot.music.start_file_stream("song.wav", analyse=True, buffer_size=2048)
 dot.music.play()
 ```
 
-#### Beat Detection Not Working
+### Beat detection not working
 
-**Requirements**:
-- Only works with `start_file_stream()` or `start_sample_stream()`
-- Needs actual audio file, not live input
-- Beat tracking runs during stream initialization
+- Only works with `start_file_stream()` or `start_sample_stream()` — not live input.
+- Beat tracking runs once at stream initialization; needs a real audio file.
 
 ---
 
-## Live Coding
+# Live coding
 
-You can set up Dorothy to update the sketch everytime you save the file
+Dorothy can reload your sketch every time you save the file.
 
-The main changes are 
+**Three changes from the standard template:**
 
-1. No `__init__()` function in the `MySketch` class
-
-2. Don't make an instance of the `MySketch` class
-
-3. Instead, run the `start_livecode_loop()` function
-
-
-```python
-if __name__ == '__main__':
-    import __main__
-    dot.start_livecode_loop(__main__)
-```
-
-### Example
+1. **No `__init__()`** in the `MySketch` class.
+2. **Don't instantiate** `MySketch` yourself.
+3. **Call `start_livecode_loop()`** at the bottom of the file.
 
 ```python
 from dorothy import Dorothy
@@ -1887,32 +1648,32 @@ dot = Dorothy()
 
 class MySketch:
     def setup(self):
-        self.col = (0,255,0)
+        self.col = (0, 255, 0)
         print("start")
 
     def run_once(self):
         print("run once")
-        self.col = (0,0,0)
-                
+        self.col = (0, 0, 0)
+
     def draw(self):
         dot.background(self.col)
         dot.fill(dot.blue)
-        dot.rectangle((0,dot.frames%40),(400,100))
+        dot.rectangle((0, dot.frames % 40), (400, 100))
 
 if __name__ == '__main__':
     import __main__
     dot.start_livecode_loop(__main__)
 ```
 
-Now edit `my_sketch.py` and save - changes appear instantly!
+Now edit the file and save — changes appear instantly.
 
-### run_once() Method
+## The `run_once()` method
 
-Special method that runs only once when the code changes:
+A special method that runs **once** every time the file is reloaded. Use it to reset state when you change your code:
 
 ```python
 def run_once(self):
-    # Reset state when code updates
+    # Reset state on every code update
     self.particles = []
     self.angle = 0
     print("Code reloaded, state reset!")
@@ -1920,85 +1681,100 @@ def run_once(self):
 
 ---
 
-## Complete Examples
+# Appendix
 
-See [Examples](examples)
+## Color constants
 
-## Tips & Best Practices
+Predefined colors — all standard CSS colors are available as `dot.<color_name>`.
 
-### Performance
+```python
+dot.fill(dot.red)
+dot.circle((400, 300), 50)
 
-1. **Minimize state changes** - batch drawing with same colors
-2. **Use layers for static content** - draw once, reuse many times
-3. **Cache audio data** - read `fft_vals` once per frame
-4. **Reduce geometry complexity** - subsample data when possible
+dot.fill(dot.cornflowerblue)
+dot.fill(dot.hotpink)
+```
 
-### Transforms
+## Key constants
 
-1. **Order matters** - translate → rotate → scale is typical
-2. **Scale from center** - translate to center, scale, translate back
+For use with `dot.on_key_press` — see [Interaction callbacks](#interaction-callbacks).
 
-### Debugging
+**Common keys**
+- `dot.keys.SPACE`
+- `dot.keys.ENTER`
+- `dot.keys.ESCAPE`
+- `dot.keys.TAB`
+- `dot.keys.BACKSPACE`
+- Letters: `dot.keys.A` … `dot.keys.Z`
+- Numbers: `dot.keys.NUMBER_0` … `dot.keys.NUMBER_9`
+- Arrows: `dot.keys.UP`, `dot.keys.DOWN`, `dot.keys.LEFT`, `dot.keys.RIGHT`
 
-1. **Use annotate=True** - shows shape coordinates
-2. **Print frame count** - `if dot.frames % 60 == 0: print(...)`
-3. **Check mouse position** - `print(dot.mouse_x, dot.mouse_y)`
+**Actions**
+- `dot.keys.ACTION_PRESS`
+- `dot.keys.ACTION_RELEASE`
 
-### Code Organization
-
-1. **Use class for state** - store variables in `self`
-2. **Setup once** - expensive operations in `setup()`
-3. **Keep draw() fast** - called 60 times per second
-
----
+**Modifiers**
+- `dot.modifiers.shift`
+- `dot.modifiers.ctrl`
+- `dot.modifiers.alt`
 
 ## Troubleshooting
 
-### Audio Glitches
+### Audio glitches
+See [Audio troubleshooting](#audio-troubleshooting).
 
-- Increase buffer size: `blocksize=4096`
-- Simplify draw() function
-- Cache audio data once per frame
+### Shapes not visible
+- Check camera mode: `dot.camera_2d()` for flat drawing.
+- Check fill/stroke: make sure a color is set.
+- Check coordinates: are they inside the window?
 
-### Shapes Not Visible
+### Transforms not working
+- Use `with dot.transform():` to scope changes to a block.
+- Make sure your drawing code is **inside** the block.
+- Apply transforms **before** drawing.
+- Remember transforms accumulate within a block.
 
-- Check camera mode: `dot.camera_2d()` for 2D
-- Check fill/stroke: ensure colors are set
-- Check coordinates: are they within window bounds?
+### Images upside down
+- Dorothy handles orientation automatically.
+- If an image still looks flipped: `img = np.flipud(img)`.
 
-### Transforms Not Working
+### Mouse not responding
+- Mouse position is polled every frame — `dot.mouse_x` and `dot.mouse_y` update automatically.
+- If you need to *react* to clicks, use the callbacks under [Interaction callbacks](#interaction-callbacks).
 
-- Use `with dot.transforms:`
-- Is your drawing code within the block?
-- Set transforms BEFORE drawing
-- Remember transforms accumulate
+## Tips & best practices
 
-### Images Upside Down
+### Performance
+- **Minimize state changes** — batch drawing with the same fill/stroke.
+- **Use layers for static content** — draw once, reuse many times.
+- **Cache audio analysis** — call `fft()` / `amplitude()` once per frame, not per item.
+- **Subsample data** when rendering lots of points.
 
-- Dorothy handles this automatically
-- If issues persist, flip with: `img = np.flipud(img)`
+### Transforms
+- **Order matters** — the typical order is translate → rotate → scale.
+- **Scale around a point** — translate to point, scale, translate back. See [the recipe](#recipe-scale-around-a-point).
 
-### Mouse Not Working
+### Debugging
+- **`annotate=True`** on shape calls — shows coordinates.
+- **Periodic prints** — `if dot.frames % 60 == 0: print(...)`.
+- **Mouse position** — `print(dot.mouse_x, dot.mouse_y)`.
 
-- Mouse position updates via polling every frame
-- No action needed - `dot.mouse_x` and `dot.mouse_y` update automatically
+### Code organisation
+- **Use a class** for state — store variables on `self`.
+- **Do expensive setup once** in `setup()`.
+- **Keep `draw()` fast** — it runs ~60 times per second.
 
----
+## Version history
 
-## Version History
-
-### ModernGL Refactor (Current)
-
-- GPU-accelerated rendering with ModernGL
-- Native 3D support
-- 10-100x performance improvement
-- Full backward compatibility with original API
-- Transform-aware image pasting
-- Layer system with alpha blending
-
-
+### ModernGL refactor (current)
+- GPU-accelerated rendering with ModernGL.
+- Native 3D support.
+- 10–100× performance improvement.
+- Backward-compatible API with the original version.
+- Transform-aware image pasting.
+- Layer system with alpha blending.
 
 ## Credits
 
-Dorothy by Louis McCallum  
+Dorothy by Louis McCallum.
 ModernGL refactor maintains API compatibility while adding GPU acceleration and 3D support.
