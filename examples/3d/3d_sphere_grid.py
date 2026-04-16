@@ -31,7 +31,7 @@ class MySketch:
                 #dot.box((amp * 20,amp * 20,amp * 20),(x, y, z))
                 dot.sphere(amp * 20,(x, y, z))
                 # print(x,y)
-        dot.rgb_split(accumulate=False, offset=amp*0.5)
+        dot.rgb_split(bake=False, offset=amp*0.5)
 
 MySketch()   
     

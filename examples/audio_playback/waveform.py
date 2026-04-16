@@ -15,5 +15,6 @@ class MySketch:
     def draw(self):
         dot.background((255,255,255))
         dot.draw_waveform(col=dot.black, with_playhead=True)
+        dot.music.audio_outputs[0].gain = dot.mouse_x/640
 
 MySketch()          

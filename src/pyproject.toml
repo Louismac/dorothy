@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dorothy-cci"
-version = "0.0.66"
+version = "0.0.67.1"
 authors = [
   { name="Louis McCallum", email="louisbusby@yahoo.com" },
 ]
@@ -46,7 +46,7 @@ dependencies = [
   "requests==2.31.0",
   "scikit-learn==1.7.2",
   "scipy>=1.10.0",
-  "sounddevice==0.4.6",
+  "sounddevice>=0.4.6",
   "soundfile==0.12.1",
   "soxr==1.0.0",
   "threadpoolctl==3.2.0",
@@ -64,3 +64,5 @@ Issues = "https://github.com/Louismac/dorothy/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
+[tool.setuptools.package-data]
+"dorothy" = ["renderer/font_atlas.png", "renderer/font_atlas.json"]

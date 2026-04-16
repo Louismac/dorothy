@@ -252,9 +252,9 @@ class DorothyRenderer:
     
     # ===== Effects Methods (delegate to EffectsManager) =====
     
-    def apply_shader(self, fragment_shader_code: str, uniforms: dict = None, accumulate: bool = True):
+    def apply_shader(self, fragment_shader_code: str, uniforms: dict = None, bake: bool = True):
         """Apply a custom fragment shader"""
-        return self.effects.apply_shader(fragment_shader_code, uniforms, accumulate)
+        return self.effects.apply_shader(fragment_shader_code, uniforms, bake)
     
     def get_pixels(self, layer_id=None, components=3, flip=True, bgr=True) -> np.ndarray:
         """Get pixels from a framebuffer"""

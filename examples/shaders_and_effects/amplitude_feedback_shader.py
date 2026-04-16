@@ -34,7 +34,7 @@ class MySketch:
         dot.rectangle((dot.width//2,dot.height//2),(100,100))
         dot.set_stroke_weight(10)
         dot.line((dot.width//2,dot.height//2),(0,0))
-        dot.apply_shader(self.feedback, accumulate=True, zoom=1-(dot.music.amplitude()*0.25))
+        dot.apply_shader(self.feedback, bake=True, zoom=1-(dot.music.amplitude()*0.25))
 
 MySketch()   
     

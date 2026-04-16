@@ -44,7 +44,7 @@ class EffectsManager:
         
         return self.effect_shaders[shader_hash]
     
-    def apply_shader(self, fragment_shader_code: str, uniforms: Dict = None, accumulate: bool = True):
+    def apply_shader(self, fragment_shader_code: str, uniforms: Dict = None, bake: bool = True):
         """Apply a custom fragment shader to the current canvas"""
         if self.renderer.enable_batching and len(self.renderer.draw_queue) > 0:
             self._flush_for_fbo_change()
@@ -99,7 +99,7 @@ class EffectsManager:
         self.ctx.disable(moderngl.BLEND)
         custom_vao.render(moderngl.TRIANGLES)
         
-        if accumulate:
+        if bake:
             layer['texture'] = new_texture
             layer['fbo'] = new_fbo
             old_fbo.release()

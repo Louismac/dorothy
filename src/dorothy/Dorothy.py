@@ -819,118 +819,135 @@ class Dorothy:
         self._ensure_renderer()
         self.renderer.release_layer(layer_id)
 
-    def pixelate(self, pixel_size=8.0, accumulate=False):
+    def pixelate(self, pixel_size=8.0, bake=False):
         """Apply pixelation effect
-        
+
         Args:
             pixel_size: Size of pixels (larger = more pixelated)
-            accumulate: If True, effect accumulates; if False, just display filter
+            bake: If True, writes effect back into the canvas (use for feedback loops).
+                  If False, overlays as a display filter without modifying the canvas.
         """
         self._ensure_renderer()
-        self.apply_shader(DOTSHADERS.PIXELATE, 
-                            accumulate=accumulate,
+        self.apply_shader(DOTSHADERS.PIXELATE,
+                            bake=bake,
                             pixelSize=pixel_size
                         )
 
-    def blur(self, accumulate=False):
-        """Apply blur effect"""
-        self._ensure_renderer()
-        self.apply_shader(DOTSHADERS.BLUR, accumulate)
+    def blur(self, bake=False):
+        """Apply blur effect
 
-    def rgb_split(self, offset=0.01, accumulate=False):
+        Args:
+            bake: If True, writes effect back into the canvas (use for feedback loops).
+                  If False, overlays as a display filter without modifying the canvas.
+        """
+        self._ensure_renderer()
+        self.apply_shader(DOTSHADERS.BLUR, bake)
+
+    def rgb_split(self, offset=0.01, bake=False):
         """Apply RGB split/glitch effect
-        
+
         Args:
             offset: How far to split RGB channels (0.0-0.1)
-            accumulate: If True, effect accumulates
+            bake: If True, writes effect back into the canvas (use for feedback loops).
+                  If False, overlays as a display filter without modifying the canvas.
         """
         self._ensure_renderer()
         self.apply_shader(DOTSHADERS.RGB_SPLIT,
-                          accumulate=accumulate, 
-                            offset=offset 
+                          bake=bake,
+                            offset=offset
                             )
         
-    def feedback(self, zoom=0.98, accumulate=True):
-        """Apply RGB split/glitch effect
-        
+    def feedback(self, zoom=0.98, bake=True):
+        """Apply video feedback effect (canvas feeds into itself each frame)
+
         Args:
-            offset: How far to split RGB channels (0.0-0.1)
-            accumulate: If True, effect accumulates
+            zoom: Zoom factor per frame (< 1.0 zooms out, creating tunnel effect)
+            bake: If True, writes effect back into the canvas so it compounds each frame.
+                  If False, overlays as a one-shot display filter.
         """
         self._ensure_renderer()
-        self.apply_shader(DOTSHADERS.FEEDBACK, 
-                          accumulate=accumulate,
+        self.apply_shader(DOTSHADERS.FEEDBACK,
+                          bake=bake,
                           zoom=zoom
                         )
 
-    def roll(self, offset_x=0.0, offset_y=0.0, accumulate=True):
+    def roll(self, offset_x=0.0, offset_y=0.0, bake=True):
         """Roll/shift the canvas with wrapping
-        
+
         Args:
             offset_x: Horizontal shift in pixels
             offset_y: Vertical shift in pixels
-            accumulate: Usually True for rolling effects
+            bake: If True, writes effect back into the canvas so the shift compounds each frame.
+                  If False, overlays as a one-shot display filter.
         """
         self._ensure_renderer()
         self.apply_shader(DOTSHADERS.ROLL,
-                           accumulate = accumulate,
+                           bake=bake,
                            offset=(offset_x, offset_y))
         
-    def invert(self, accumulate=False):
-        """Invert colors"""
+    def invert(self, bake=False):
+        """Invert colors
+
+        Args:
+            bake: If True, writes effect back into the canvas (use for feedback loops).
+                  If False, overlays as a display filter without modifying the canvas.
+        """
         self._ensure_renderer()
-        self.apply_shader(DOTSHADERS.INVERT,accumulate=accumulate)
+        self.apply_shader(DOTSHADERS.INVERT, bake=bake)
     
-    def tile(self, grid_x=2, grid_y=2, accumulate=False):
+    def tile(self, grid_x=2, grid_y=2, bake=False):
         """Tile/repeat the canvas in a grid
-        
+
         Args:
             grid_x: Number of tiles horizontally (default: 2)
             grid_y: Number of tiles vertically (default: 2)
-            accumulate: If True, effect accumulates; if False, just display filter
-        
+            bake: If True, writes effect back into the canvas (use for feedback loops).
+                  If False, overlays as a display filter without modifying the canvas.
+
         """
         self._ensure_renderer()
         self.apply_shader(
             DOTSHADERS.TILE,
-            accumulate = accumulate,
+            bake=bake,
             grid_size = (float(grid_x), float(grid_y))
         )
 
-    def cutout(self, color, threshold=0.1, accumulate=True):
+    def cutout(self, color, threshold=0.1, bake=True):
         """Make pixels of a specific color transparent
-        
+
         Args:
             color: RGB tuple (0-255) or color constant to cut out
             threshold: How close colors need to match (0.0 = exact, 0.5 = loose)
-            accumulate: If True, effect accumulates (default: True)
+            bake: If True, writes effect back into the canvas (default: True).
+                  If False, overlays as a display filter without modifying the canvas.
 
         """
         self._ensure_renderer()
-        
+
         # Parse color and normalize to 0-1
         parsed = self._parse_color(color)
         normalized = (parsed[0], parsed[1], parsed[2])  # RGB only, no alpha
-        
+
         self.apply_shader(
             DOTSHADERS.CUTOUT,
-            accumulate=accumulate,
+            bake=bake,
             cutout_color=normalized,
             threshold=float(threshold)
         )
 
-    def apply_shader(self, fragment_shader_code: str, accumulate: bool = True, **uniforms):
+    def apply_shader(self, fragment_shader_code: str, bake: bool = True, **uniforms):
         """Apply a custom post-processing shader to the canvas
-        
+
         Args:
             fragment_shader_code: GLSL fragment shader source code
-            accumulate: If True, shader effects build up over frames (feedback)
-                    If False, shader is just a display filter (post-processing)
+            bake: If True, writes the shader result back into the canvas.
+                  Without background(), this creates feedback as each frame builds on the last.
+                  If False, overlays the shader as a display filter without modifying the canvas.
             **uniforms: Additional uniforms to pass to the shader
-        
+
         """
         self._ensure_renderer()
-        result = self.renderer.apply_shader(fragment_shader_code, uniforms, accumulate)
+        result = self.renderer.apply_shader(fragment_shader_code, uniforms, bake)
         
         # Store for on_render to display
         if result is not None:

@@ -57,10 +57,10 @@ class MySketch:
         dot.circle((dot.mouse_x, dot.mouse_y), 50)
         
         # Boost emission
-        dot.apply_shader(self.emit_shader, accumulate=True, glow_boost=0.99)
-        
+        dot.apply_shader(self.emit_shader, bake=True, glow_boost=0.99)
+
         # Blur multiple times for softer glow
         for _ in range(10):
-            dot.apply_shader(self.fast_blur, accumulate=True)
+            dot.apply_shader(self.fast_blur, bake=True)
 
 MySketch()

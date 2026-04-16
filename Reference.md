@@ -733,15 +733,15 @@ Apply visual effects to your canvas with these built-in shader methods.
 
 ### Effect Methods
 
-#### `pixelate(pixel_size, accumulate)`
+#### `pixelate(pixel_size, bake)`
 Pixelate the canvas into larger blocks.
 ```python
-dot.pixelate(pixel_size=8.0, accumulate=False)
+dot.pixelate(pixel_size=8.0, bake=False)
 ```
 
 **Parameters:**
 - `pixel_size` (float): Size of pixel blocks. Larger = more pixelated (default: 8.0)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+- `bake` (bool): If True, writes effect back into the canvas. If False, overlays as a display filter (default: False)
 
 **Example:**
 ```python
@@ -751,14 +751,14 @@ dot.pixelate(12.0)
 
 ---
 
-#### `blur(accumulate)`
+#### `blur(bake)`
 Apply blur effect to the canvas.
 ```python
-dot.blur(accumulate=False)
+dot.blur(bake=False)
 ```
 
 **Parameters:**
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+- `bake` (bool): If True, writes effect back into the canvas. If False, overlays as a display filter (default: False)
 
 **Example:**
 ```python
@@ -768,15 +768,15 @@ dot.blur()
 
 ---
 
-#### `rgb_split(offset, accumulate)`
+#### `rgb_split(offset, bake)`
 Split RGB channels for glitch/chromatic aberration effect.
 ```python
-dot.rgb_split(offset=0.01, accumulate=False)
+dot.rgb_split(offset=0.01, bake=False)
 ```
 
 **Parameters:**
 - `offset` (float): Distance to split channels, range 0.0-0.1 (default: 0.01)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+- `bake` (bool): If True, writes effect back into the canvas. If False, overlays as a display filter (default: False)
 
 **Example:**
 ```python
@@ -786,15 +786,15 @@ dot.rgb_split(0.02)
 
 ---
 
-#### `feedback(zoom, accumulate)`
+#### `feedback(zoom, bake)`
 Create feedback/zoom effect with trails.
 ```python
-dot.feedback(zoom=0.98, accumulate=True)
+dot.feedback(zoom=0.98, bake=True)
 ```
 
 **Parameters:**
 - `zoom` (float): Zoom factor per frame. <1.0 zooms out, >1.0 zooms in (default: 0.98)
-- `accumulate` (bool): Should be True for feedback effects (default: True)
+- `bake` (bool): If True, writes effect back into the canvas so it compounds each frame (default: True)
 
 **Example:**
 ```python
@@ -804,16 +804,16 @@ dot.feedback(0.99)  # Slow zoom out with trails
 
 ---
 
-#### `roll(offset_x, offset_y, accumulate)`
+#### `roll(offset_x, offset_y, bake)`
 Scroll/shift the canvas with wrapping (like `np.roll`).
 ```python
-dot.roll(offset_x=0.0, offset_y=0.0, accumulate=True)
+dot.roll(offset_x=0.0, offset_y=0.0, bake=True)
 ```
 
 **Parameters:**
 - `offset_x` (float): Horizontal shift in pixels. Positive = right (default: 0.0)
 - `offset_y` (float): Vertical shift in pixels. Positive = down (default: 0.0)
-- `accumulate` (bool): Should be True for rolling effects (default: True)
+- `bake` (bool): If True, writes effect back into the canvas so the shift compounds each frame (default: True)
 
 **Example:**
 ```python
@@ -823,14 +823,14 @@ dot.roll(2.0, 0.0)  # Scroll right continuously
 
 ---
 
-#### `invert(accumulate)`
+#### `invert(bake)`
 Invert all colors on the canvas.
 ```python
-dot.invert(accumulate=False)
+dot.invert(bake=False)
 ```
 
 **Parameters:**
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+- `bake` (bool): If True, writes effect back into the canvas. If False, overlays as a display filter (default: False)
 
 **Example:**
 ```python
@@ -842,16 +842,16 @@ dot.invert()  # White becomes black, red becomes cyan
 
 ---
 
-#### `tile(grid_x, grid_y, accumulate)`
+#### `tile(grid_x, grid_y, bake)`
 Tile/repeat the canvas in a grid pattern.
 ```python
-dot.tile(grid_x=2, grid_y=2, accumulate=False)
+dot.tile(grid_x=2, grid_y=2, bake=False)
 ```
 
 **Parameters:**
 - `grid_x` (int): Number of horizontal tiles (default: 2)
 - `grid_y` (int): Number of vertical tiles (default: 2)
-- `accumulate` (bool): If True, effect builds up over frames (default: False)
+- `bake` (bool): If True, writes effect back into the canvas. If False, overlays as a display filter (default: False)
 
 **Example:**
 ```python
@@ -861,16 +861,16 @@ dot.tile(4, 4)  # Create 4x4 grid of circles
 
 ---
 
-#### `cutout(color, threshold, accumulate)`
+#### `cutout(color, threshold, bake)`
 Make pixels of a specific color transparent (chroma key/green screen).
 ```python
-dot.cutout(color, threshold=0.1, accumulate=True)
+dot.cutout(color, threshold=0.1, bake=True)
 ```
 
 **Parameters:**
 - `color` (tuple or constant): RGB color to cut out, e.g. `(0, 0, 0)` or `dot.green`
 - `threshold` (float): Color matching tolerance. 0.0 = exact, 0.5 = loose (default: 0.1)
-- `accumulate` (bool): If True, effect builds up over frames (default: True)
+- `bake` (bool): If True, writes effect back into the canvas (default: True)
 
 **Example:**
 ```python
@@ -882,40 +882,39 @@ dot.cutout((0, 0, 0))  # Remove black background
 
 ---
 
-### Accumulating vs Non-Accumulating
+### Baked vs Display Filter
 
-**Accumulating (`accumulate=True`)**: Effect modifies the canvas permanently. Subsequent frames build on the modified version. Use for feedback effects, trails, and persistent transformations and for chaining effects together.
+**Baked (`bake=True`)**: Effect is written back into the persistent canvas. Without `background()`, subsequent frames build on the result — use for feedback effects, trails, and chaining effects together.
 
-**Non-Accumulating (`accumulate=False`)**: Effect is only a display filter. Canvas content remains unchanged. Use for post-processing like blur, pixelate, color correction.
+**Display filter (`bake=False`)**: Effect is overlaid on screen only. The canvas is unchanged — use for post-processing like blur, pixelate, color correction.
 
-**Example - Accumulating:**
+**Example - Baked (feedback loop):**
 ```python
 def draw(self):
     dot.circle((dot.mouse_x, dot.mouse_y), 20)
-    dot.feedback(0.99, accumulate=True)  # Creates trails
+    dot.feedback(0.99, bake=True)  # Creates trails
 ```
 
-**Example - Non-Accumulating:**
+**Example - Display filter:**
 ```python
 def draw(self):
     dot.background(dot.white)
     dot.circle((200, 200), 50)
-    dot.pixelate(8.0, accumulate=False)  # Just a visual filter
+    dot.pixelate(8.0, bake=False)  # Just a visual filter
 ```
 
 ---
 
 ### Combining Effects
 
-Chain multiple effects together:
+Chain multiple effects together. Use `bake=True` for all effects except the last so each result passes through to the next:
 ```python
 def draw(self):
     dot.circle((dot.mouse_x, dot.mouse_y), 30)
     
-    # Apply multiple effects, remember to accumulate!
-    dot.feedback(0.98, accumulate = True)  # Zoom trails
-    dot.rgb_split(0.015, accumulate = True))  # Glitch
-    dot.pixelate(6.0)  # Retro look
+    dot.feedback(0.98, bake=True)   # Zoom trails
+    dot.rgb_split(0.015, bake=True) # Glitch
+    dot.pixelate(6.0)               # Retro look (bake=False is fine for the last effect)
 ```
 
 ---
@@ -928,14 +927,14 @@ Apply custom GLSL fragment shaders to create visual effects and post-processing.
 ## Basic Usage
 
 ```python
-dot.apply_shader(shader_code, accumulate=True, **uniforms)
+dot.apply_shader(shader_code, bake=True, **uniforms)
 ```
 
 **Parameters:**
 - `shader_code` (str): GLSL fragment shader source code
-- `accumulate` (bool): 
-  - `True`: Shader modifies persistent canvas, effects build up (feedback effects)
-  - `False`: Shader is display-only filter, canvas unchanged (post-processing)
+- `bake` (bool):
+  - `True`: Writes shader result back into the canvas. Without `background()`, effects compound each frame (feedback effects).
+  - `False`: Shader is a display-only filter, canvas unchanged (post-processing)
 - `**uniforms`: Additional uniforms to pass to shader (e.g., `time=1.5`, `amount=0.1`)
 
 ## Shader Template
@@ -958,16 +957,16 @@ void main() {
 ```
 
 ```python
-dot.apply_shader(shader_code, accumulate=True, my_parameter=1.0)
+dot.apply_shader(shader_code, bake=True, my_parameter=1.0)
 ```
 
 
-## Accumulating vs Non-Accumulating
+## Baked vs Display Filter
 
-### Accumulating (`accumulate=True`)
-Shader output **replaces** the persistent canvas. Effects build up over frames.
+### Baked (`bake=True`)
+Shader output is written back into the persistent canvas.
 
-**Use for:** Feedback effects, trails, decay, generative art
+**Use for:** Feedback effects, trails, decay, generative art. Without `background()`, each frame builds on the last.
 
 ```python
 feedback_shader = '''
@@ -985,13 +984,13 @@ void main() {
 '''
 
 def draw():
-    # Don't call background() - let trails accumulate
+    # Don't call background() - canvas accumulates history
     dot.circle((dot.mouse_x, dot.mouse_y), 20)
-    dot.apply_shader(feedback_shader, accumulate=True, fade=0.98)
+    dot.apply_shader(feedback_shader, bake=True, fade=0.98)
 ```
 
-### Non-Accumulating (`accumulate=False`)
-Shader output is **displayed** but canvas remains unchanged. No feedback.
+### Display filter (`bake=False`)
+Shader output is displayed but the canvas is unchanged. No feedback.
 
 **Use for:** Blur, color grading, pixelation, distortion
 
@@ -1018,20 +1017,20 @@ void main() {
 '''
 
 def draw():
-    dot.background((0, 0, 0))  # Can clear freely
+    dot.background((0, 0, 0))  # Safe to clear - shader doesn't touch the canvas
     dot.circle((dot.mouse_x, dot.mouse_y), 50)
-    dot.apply_shader(blur_shader, accumulate=False)
+    dot.apply_shader(blur_shader, bake=False)
 ```
 
 ## Tips
 
-- **Accumulating shaders**: Avoid calling `dot.background()` in draw loop or effects will be cleared
-- **Non-accumulating shaders**: Safe to call `dot.background()` - shader is just a filter
-- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects. Make sure you have `accumulate=True` in shaders before the last one in the chain to pass through effects 
+- **Baked shaders**: Avoid calling `dot.background()` in draw loop or the canvas will be wiped each frame
+- **Display filter shaders**: Safe to call `dot.background()` - shader is just an overlay
+- **Chaining shaders**: Call `apply_shader()` multiple times for combined effects. Use `bake=True` on all but the last so each result passes through to the next.
 
 ```python
-dot.apply_shader(self.pixelate, pixelSize=int(mean_amp*100), accumulate=True)
-dot.apply_shader(self.rgb_split, accumulate=False, offset=mean_amp*0.3)
+dot.apply_shader(self.pixelate, pixelSize=int(mean_amp*100), bake=True)
+dot.apply_shader(self.rgb_split, bake=False, offset=mean_amp*0.3)
 ```
 
 - **Performance**: Complex shaders (many texture lookups) may reduce framerate

@@ -30,10 +30,10 @@ class MySketch:
             dot.background(dot.black)
             dot.fill(dot.white)
             dot.circle((dot.width//2,dot.height//2), 300)
-            #Remember to accumulate changes through the chain
-            dot.tile(5,5, accumulate=True)
-            dot.roll(offset_x=amp*-100,offset_y=amp*100,accumulate=True)
-            dot.cutout(dot.white, accumulate=True)
+            # bake=True writes each effect back into the canvas so the chain compounds
+            dot.tile(5,5, bake=True)
+            dot.roll(offset_x=amp*-100,offset_y=amp*100,bake=True)
+            dot.cutout(dot.white, bake=True)
 
         with dot.layer(self.trail_layer):
             with dot.transform():
@@ -46,7 +46,7 @@ class MySketch:
 
         with dot.layer(self.space_layer):
             dot.paste(self.rgb_image, (0, 0),(dot.width, dot.height))
-            dot.roll(offset_x=amp*40 + dot.frames*2, accumulate=True)
+            dot.roll(offset_x=amp*40 + dot.frames*2, bake=True)
 
         dot.draw_layer(self.space_layer)
         dot.draw_layer(self.trail_layer)

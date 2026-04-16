@@ -25,6 +25,8 @@ dorothy/renderer/__init__.py
 dorothy/renderer/batch_manager.py
 dorothy/renderer/core.py
 dorothy/renderer/effects.py
+dorothy/renderer/font_atlas.json
+dorothy/renderer/font_atlas.png
 dorothy/renderer/generate_atlas.py
 dorothy/renderer/geometry_cache.py
 dorothy/renderer/layers.py

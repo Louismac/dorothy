@@ -8,9 +8,12 @@ class MySketch:
 
     def __init__(self):
         dot.start_loop(self.setup, self.draw)  
+        
 
     def setup(self):
         # Create a simple button
+        file_path = "../audio/gospel.wav"
+        dot.music.start_file_stream(file_path)
         def on_button_click(btn):
             print(f"Button '{btn.text}' was clicked!")
         
@@ -24,8 +27,10 @@ class MySketch:
 
     def draw(self):
         dot.background((40, 40, 50))
+        # print(dot.mouse_x)
         
-        # Update and draw buttons
+        
+        # # Update and draw buttons
         dot.update_buttons()
         dot.draw_buttons()
 
