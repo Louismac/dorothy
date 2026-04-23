@@ -1,20 +1,19 @@
+"""Draw the audio waveform with a playhead; map mouse X to gain."""
 from dorothy import Dorothy
 
 dot = Dorothy()
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-        
     def setup(self):
-        print("setup")
-        file_path = "../audio/bass.wav"
-        dot.music.start_file_stream(file_path)
-        
-    def draw(self):
-        dot.background((255,255,255))
-        dot.draw_waveform(col=dot.black, with_playhead=True)
-        dot.music.audio_outputs[0].gain = dot.mouse_x/640
+        dot.music.start_file_stream("../audio/bass.wav")
 
-MySketch()          
+    def draw(self):
+        dot.background(dot.white)
+        dot.draw_waveform(col=dot.black, with_playhead=True)
+        # Map mouse position across the full window width to gain 0–1
+        dot.music.audio_outputs[0].gain = dot.mouse_x / dot.width
+
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

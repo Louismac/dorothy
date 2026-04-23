@@ -1,45 +1,22 @@
-
+"""Detect beats and flash the background on each one."""
 from dorothy import Dorothy
+
 dot = Dorothy()
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)           
-        
     def setup(self):
-        #Play file from your computer (offline beat tracking)
-        file_path = "../audio/disco.wav"
-        o = dot.music.start_file_stream(file_path, fft_size=512)
-
-        #Pick or just stream from your computer (online streaming beat tracking)
-        #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        # print(sd.query_devices())
-        #o = dot.music.start_device_stream(1)
-
-        dot.music.audio_outputs[o].analyse_onsets = True
+        o = dot.music.start_file_stream("../audio/disco.wav", fft_size=512)
+        # Enable beat tracking on this stream
         dot.music.audio_outputs[o].analyse_beats = True
+        self.flash = 0
 
-        self.show_beat = 0
-        
     def draw(self):
-        
-        col = dot.black
         if dot.music.is_beat():
-            self.show_beat = 10
-        
-        if self.show_beat > 0:
-            col = dot.white
-        
-        dot.background(col)
-        self.show_beat -= 1
+            self.flash = 10          # hold the flash for 10 frames
+        dot.background(dot.white if self.flash > 0 else dot.black)
+        self.flash = max(0, self.flash - 1)
 
-MySketch()   
-    
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

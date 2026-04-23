@@ -1,42 +1,25 @@
+"""FFT spectrum visualiser — vertical bars for each frequency bin."""
 from dorothy import Dorothy
-import sounddevice as sd
 
-dot = Dorothy()
+dot = Dorothy(640, 480)
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-            
-    def setup(self): 
+    def setup(self):
+        dot.music.start_file_stream("../audio/gospel.wav", fft_size=512, buffer_size=512)
 
-        #Play file from your computer
-        file_path = "../audio/gospel.wav"
-        dot.music.start_file_stream(file_path, fft_size=512, buffer_size=512)
-          
-        # #Pick or just stream from your computer
-        # #On MacOSX I use Blackhole and Multioutput device to pump audio to here, and to listen in speakers as well
-        #dot.music.start_device_stream(2)
-
-                
     def draw(self):
-        
         dot.background(dot.black)
+        # Sample every 8th bin; fft() returns normalised magnitudes (0–1)
+        bins  = dot.music.fft()[::8]
+        bar_w = dot.width // len(bins)
+        for i, val in enumerate(bins):
+            h = min(int(val * dot.height * 10), dot.height)
+            x = i * bar_w + bar_w // 2
+            dot.stroke((0, int((1 - val) * 255), 0))
+            dot.set_stroke_weight(max(1, int(val * 3)))
+            dot.line((x, dot.height), (x, dot.height - h))
 
-        for bin_num, bin_val in enumerate(dot.music.fft()[::8]):
-            bin_val = bin_val * 10
-            pt1 = (bin_num*50, dot.height)
-            pt2 = (0, dot.height-int(bin_val*1000))
-            color = (0,(1-bin_val)*255,0)
-            thickness = 1+int(bin_val*2)
-            dot.stroke(color)
-            dot.set_stroke_weight(thickness)
-            dot.line(pt1, pt2)
-
-MySketch()
-
-
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

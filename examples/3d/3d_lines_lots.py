@@ -1,92 +1,71 @@
-from dorothy import Dorothy 
+"""Infinite tunnel of wireframe cubes flying towards the camera."""
+from dorothy import Dorothy
 import numpy as np
 
-dot = Dorothy(640,480)
-class Example3D:
-    def __init__(self):
-        self.angle = 0
-        dot.start_loop(self.setup, self.draw)
-    
-    def setup(self):
-        print("3D Setup!")
-        dot.camera_3d()
-        self.camera_pos = (3,10,-65)
-        self.s = 10  # spacing between cubes
-        self.cube_size = 8  # grid dimensions
-        self.thick = np.ones((self.cube_size, self.cube_size,self.cube_size+1))
-        self.z = 0
-        self.speed = 1  # movement speed
-        self.dir_x = 0.02
-        self.angle_x = 0
-        self.dir_y = 0.02
-        self.angle_y = 0
-        dot.set_camera(self.camera_pos, (0, 0, 0))
+dot = Dorothy(640, 480)
 
-    def draw_cube(self, size, offset=(0, 0, 0)):
+class MySketch:
+
+    def setup(self):
+        dot.camera_3d()
+        self.s       = 10    # cube spacing
+        self.n       = 8     # grid size
+        self.z       = 0.0
+        self.speed   = 1
+        self.dir_x   = 0.02
+        self.dir_y   = 0.02
+        self.angle_x = 0.0
+        self.angle_y = 0.0
+        self.cam_pos = (3, 10, -65)
+        dot.set_camera(self.cam_pos, (0, 0, 0))
+        self._reset_weights()
+
+    def _reset_weights(self):
+        self.thick = np.ones((self.n, self.n, self.n + 1))
+        mask = np.random.random(self.thick.shape) > 0.95
+        self.thick[mask] = 10
+
+    def _draw_cube(self, size, offset=(0, 0, 0)):
         s = size / 2
         ox, oy, oz = offset
-        
-        vertices = [
-            (-s + ox, -s + oy, -s + oz), (s + ox, -s + oy, -s + oz), 
-            (s + ox, s + oy, -s + oz), (-s + ox, s + oy, -s + oz),
-            (-s + ox, -s + oy, s + oz), (s + ox, -s + oy, s + oz), 
-            (s + ox, s + oy, s + oz), (-s + ox, s + oy, s + oz),
-        ]
-        
-        edges = [
-            (0, 1), (1, 2), (2, 3), (3, 0),
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            (0, 4), (1, 5), (2, 6), (3, 7),
-        ]
-        
+        v = [(-s+ox,-s+oy,-s+oz),(s+ox,-s+oy,-s+oz),(s+ox,s+oy,-s+oz),(-s+ox,s+oy,-s+oz),
+             (-s+ox,-s+oy, s+oz),(s+ox,-s+oy, s+oz),(s+ox,s+oy, s+oz),(-s+ox,s+oy, s+oz)]
+        edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
         dot.stroke((0, 255, 255))
         for i, j in edges:
-            dot.line_3d(vertices[i], vertices[j])
+            dot.line_3d(v[i], v[j])
 
     def draw(self):
         dot.background((0, 0, 0))
-        
-        # Update position
-        self.z -= self.speed
+        self.z       -= self.speed
         self.angle_x += self.dir_x
         self.angle_y += self.dir_y
-        if np.random.random()>0.98:
-            self.dir_y = -self.dir_y
-        if np.random.random()>0.98:
-            self.dir_x = -self.dir_x
-        x = 8 * np.cos(self.angle_x)
-        y = 10 * np.sin(self.angle_y)
-        dot.set_camera(self.camera_pos,(x, y, 0))
-        
-        # Wrap z when it exceeds one cube spacing
-        if self.z <= self.s*7:
-            self.z += self.s*7
-            self.thick = np.ones((self.cube_size, self.cube_size,self.cube_size+1))
-            for i in range(self.cube_size):
-                for j in range(self.cube_size):
-                    for k in range(self.cube_size + 1):
-                        if np.random.random()>0.95:
-                            self.thick[i][j][k] = 10
-        
-        with dot.transform():
-            offset = (self.s * self.cube_size) / 2
-            
-            # Draw grid of cubes with wrapping in Z
-            for i in range(self.cube_size):
-                for j in range(self.cube_size):
-                    for k in range(self.cube_size + 1):  # Extra layer for seamless wrappingß
-                        dot.set_stroke_weight(self.thick[i][j][k])
-                        # Calculate base position
-                        x = (i * self.s) - offset
-                        y = (j * self.s) - offset
-                        z = (k * self.s) - offset - self.z
-    
-                        total_depth = self.s * self.cube_size
-                        while z < -total_depth / 2:
-                            z += total_depth
-                        while z > total_depth / 2:
-                            z -= total_depth
-                        
-                        self.draw_cube(self.s, (x, y, z))
+        if np.random.random() > 0.98: self.dir_y *= -1
+        if np.random.random() > 0.98: self.dir_x *= -1
 
-Example3D()
+        lx = 8  * np.cos(self.angle_x)
+        ly = 10 * np.sin(self.angle_y)
+        dot.set_camera(self.cam_pos, (lx, ly, 0))
+
+        # Wrap z so the tunnel loops seamlessly
+        if self.z <= self.s * 7:
+            self.z += self.s * 7
+            self._reset_weights()
+
+        with dot.transform():
+            off   = (self.s * self.n) / 2
+            total = self.s * self.n
+            for i in range(self.n):
+                for j in range(self.n):
+                    for k in range(self.n + 1):
+                        dot.set_stroke_weight(self.thick[i, j, k])
+                        x = i * self.s - off
+                        y = j * self.s - off
+                        z = k * self.s - off - self.z
+                        while z < -total / 2: z += total
+                        while z >  total / 2: z -= total
+                        self._draw_cube(self.s, (x, y, z))
+
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

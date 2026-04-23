@@ -1,4 +1,4 @@
-from cv2 import rectangle
+"""Grid of shapes, each rotating around its own centre."""
 from dorothy import Dorothy
 import numpy as np
 
@@ -6,55 +6,31 @@ dot = Dorothy()
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
     def setup(self):
-        print("setup")
-        #Play file from your computer
-        file_path = "../audio/disco.wav"
-        # dot.music.start_file_stream(file_path)
-        dot.music.start_device_stream(1)
-
+        dot.music.start_file_stream("../audio/disco.wav")
         dot.stroke(dot.grey)
-        
+
     def draw(self):
-        
         dot.background((22, 208, 165))
         dot.set_stroke_weight(2)
-        size = 40
-        border = 10
-        grid = 5
-        x_offset = (dot.width - ((size+border)*grid)) //2
-        y_offset = (dot.height - ((size+border)*grid)) //2
-        for i in range(grid):
-            for j in range(grid):
-                #Where to draw the shape?
-                x = i * (size+border) + x_offset
-                y = j * (size+border) + y_offset
-                #Draw to it
-                top_left = (x,y)
-                bottom_right = np.array([x+size, y+size])
-                
-                theta = dot.music.amplitude() * 15 * 2 * np.pi
-                origin = np.array([x+size/2, y+size/2])
-                #rotate around different origins depending on grid position
+        size, gap, cols = 40, 10, 5
+        x_off = (dot.width  - cols * (size + gap)) // 2
+        y_off = (dot.height - cols * (size + gap)) // 2
+        theta = dot.music.amplitude() * 15 * 2 * np.pi
+        for i in range(cols):
+            for j in range(cols):
+                x  = i * (size + gap) + x_off
+                y  = j * (size + gap) + y_off
+                cx, cy = x + size / 2, y + size / 2
                 with dot.transform():
-                    dot.translate(origin[0],origin[1])
-                    #rotate
+                    dot.translate(cx, cy)
                     dot.rotate(theta)
-                    dot.translate(-origin[0],-origin[1])
+                    dot.translate(-cx, -cy)
                     if i % 2 == 0:
-                        dot.line(top_left, origin)
+                        dot.line((x, y), (cx, cy))
                     else:
-                        dot.rectangle(top_left, bottom_right)
-                
+                        dot.rectangle((x, y), (x + size, y + size))
 
-MySketch()          
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

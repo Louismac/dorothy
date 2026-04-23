@@ -1,62 +1,44 @@
-import numpy as np
-import sounddevice as sd
+"""Scale a pre-drawn layer by audio amplitude each frame.
+
+The layer is regenerated every 100 frames to show a new random pattern.
+"""
 from dorothy import Dorothy
+import numpy as np
 
 dot = Dorothy()
 
 class MySketch:
-    
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
 
     def setup(self):
-        print("setup")
-        #Play file from your computer
-        file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path, fft_size=512)
+        dot.music.start_file_stream("../audio/disco.wav", fft_size=512)
         self.pattern_layer = dot.get_layer()
-        self.base_pattern()
+        self._draw_pattern()
 
-    def draw(self):
-        
-        if dot.frames %100==0:
-            self.base_pattern()
-
-        factor = dot.music.amplitude() * 15 
-        #factor = (dot.frames % 20) / 8
-        centre = np.array([dot.width//2, dot.height//2])
-        with dot.transform():
-            dot.translate(centre[0], centre[1])
-            dot.scale(factor)
-            dot.translate(-centre[0], -centre[1])
-            dot.draw_layer(self.pattern_layer)
-    
-    #Draw the vera molnar grid to the pattern_layer (this gets transformed later)
-    def base_pattern(self):
-        #clear main canvas
+    def _draw_pattern(self):
         dot.background(dot.beige)
-        
         with dot.layer(self.pattern_layer):
-            #clear pattern layer to transparent
-            dot.background((0,0,0,0))
+            dot.background((0, 0, 0, 0))
             dot.stroke((255, 37, 21))
             dot.set_stroke_weight(1)
             size = 30
-            for i in range(dot.width//size):
-                for j in range(dot.height//size):
-                    y1 = j*size
-                    if np.random.random()<0.5:
-                        y1 = (j+1)*size
-                    y2 = j*size
-                    if np.random.random()<0.5:
-                        y2 = (j+1)*size
-                    dot.line((i*size,y1), ((i+1)*size,y2)) 
-        
-MySketch()         
+            for i in range(dot.width // size):
+                for j in range(dot.height // size):
+                    y1 = (j + (1 if np.random.random() < 0.5 else 0)) * size
+                    y2 = (j + (1 if np.random.random() < 0.5 else 0)) * size
+                    dot.line((i * size, y1), ((i + 1) * size, y2))
 
+    def draw(self):
+        if dot.frames % 100 == 0:
+            self._draw_pattern()
 
+        factor = dot.music.amplitude() * 15
+        cx, cy = dot.width // 2, dot.height // 2
+        with dot.transform():
+            dot.translate(cx, cy)
+            dot.scale(factor)
+            dot.translate(-cx, -cy)
+            dot.draw_layer(self.pattern_layer)
 
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

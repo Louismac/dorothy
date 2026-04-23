@@ -1,31 +1,24 @@
+"""Scale bar heights by FFT frequency bin amplitudes."""
 from dorothy import Dorothy
-from cv2 import line
-import numpy as np
-from PIL import Image
 
 dot = Dorothy(640, 480)
 
 class MySketch:
-  
-  def __init__(self):
-    dot.start_loop(self.setup, self.draw)
-  
-  def setup(self):
-    file_path = "../audio/drums.wav"
-    self.rgb_images = np.array([np.array(Image.open(f'../images/aligned_faces/face_{i}.jpg')) for i in range(8)])
-    dot.music.start_file_stream(file_path, fft_size=512, buffer_size=512)
-  
-  def draw(self):
 
-    dot.background(dot.black)
-    dot.fill(dot.red)
-    dot.stroke(dot.red)
-    for bin_num, bin_val in enumerate(dot.music.fft()[:256:8]):
-      x = bin_num*50
-      with dot.transform():
-        dot.scale(1,bin_val)
-        dot.paste(self.rgb_images[bin_num%8], (x, 0))
-        
+    def setup(self):
+        dot.music.start_file_stream("../audio/drums.wav", fft_size=512, buffer_size=512)
+        dot.no_stroke()
 
+    def draw(self):
+        dot.background(dot.black)
+        # Sample 16 evenly-spaced FFT bins across the spectrum
+        bins  = dot.music.fft()[:256:16]
+        bar_w = dot.width // len(bins)
+        for i, val in enumerate(bins):
+            h = min(int(val * dot.height * 4), dot.height)
+            dot.fill((int(min(val * 255 * 4, 255)), 100, 200))
+            dot.rectangle((i * bar_w, dot.height - h), (i * bar_w + bar_w - 4, dot.height))
 
-MySketch() 
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

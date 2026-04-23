@@ -1,29 +1,24 @@
-import numpy as np
-from cv2 import circle
+"""Mouse position and press/release events."""
 from dorothy import Dorothy
-from dorothy.Audio import Sequence, Note
 
 dot = Dorothy()
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
     def setup(self):
-        print("setup")
         self.color = dot.red
-        def mouse_pressed(x,y,b):
-            if self.color == dot.red:
-                self.color = dot.blue
-            else:
-                self.color = dot.red
-            print("HERERERE",x,y,b)
-        dot.on_mouse_press = mouse_pressed
 
-    
+        def on_press(x, y, button):
+            print(f"button {button} pressed at ({x}, {y})")
+            self.color = dot.blue if self.color == dot.red else dot.red
+
+        dot.on_mouse_press = on_press
+
     def draw(self):
         dot.fill(self.color)
+        # dot.mouse_x / dot.mouse_y update every frame automatically
         dot.circle((dot.mouse_x, dot.mouse_y), 100)
 
-MySketch()          
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

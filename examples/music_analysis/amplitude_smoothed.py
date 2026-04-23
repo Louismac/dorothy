@@ -1,31 +1,21 @@
+"""Smooth amplitude with a sliding-window average to reduce jitter."""
 from dorothy import Dorothy
 
-dot = Dorothy(640,480)
+dot = Dorothy(640, 480)
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)           
-        
     def setup(self):
-        file_path = "../audio/disco.wav"
-        dot.music.start_file_stream(file_path)
-        #get object for running average
+        dot.music.start_file_stream("../audio/disco.wav")
+        # get_window(n) keeps the last n values and returns their mean
         self.mean_amp = dot.get_window(20)
-        
+
     def draw(self):
-        # add new value, get smoothed value
         r = self.mean_amp.add(dot.music.amplitude())
         dot.background(dot.white)
         dot.fill(dot.red)
-        dot.circle((dot.width//2,dot.height//2),1+int(r*dot.height))
+        dot.circle((dot.width // 2, dot.height // 2), 1 + int(r * dot.height))
 
-MySketch()   
-    
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

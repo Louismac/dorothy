@@ -1,29 +1,21 @@
+"""Batch-draw thousands of shapes with a list comprehension."""
 from dorothy import Dorothy
 import numpy as np
 
-dot = Dorothy(640,640)
+dot = Dorothy(640, 640)
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
     def setup(self):
-        dot.fill(dot.blue)
-        dot.stroke(dot.white)
+        dot.no_stroke()
 
-    def draw(self): 
+    def draw(self):
         dot.background(dot.black)
-        pts = np.random.random((5000,2))
-        # [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2) for pt in pts] 
-        pt = pts[0]
-        dot.circle((pt[0] * dot.width, pt[1] * dot.height), 2)           
+        dot.fill(dot.blue)
+        pts = np.random.random((2000, 2))
+        # List comprehension batches all calls into a single GPU flush
+        [dot.circle((pt[0] * dot.width, pt[1] * dot.height), 3) for pt in pts]
 
-MySketch()          
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

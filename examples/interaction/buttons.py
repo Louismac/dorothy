@@ -1,37 +1,30 @@
-import numpy as np
-from cv2 import circle
+"""GUI buttons with click and hover callbacks."""
 from dorothy import Dorothy
 
 dot = Dorothy()
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-        
-
     def setup(self):
-        # Create a simple button
-        file_path = "../audio/gospel.wav"
-        dot.music.start_file_stream(file_path)
-        def on_button_click(btn):
-            print(f"Button '{btn.text}' was clicked!")
-        
+        dot.music.start_file_stream("../audio/gospel.wav")
+
+        def on_click(btn):
+            print(f"'{btn.text}' clicked")
+
         def on_hover(btn):
-            print(f"Button '{btn.text}' was hovered!")
-        
-        dot.create_button(300, 250, 200, 50, 
-                        text="Click Me",
-                        id="button1",
-                        on_release=on_button_click, on_hover=on_hover)
+            print(f"'{btn.text}' hovered")
+
+        dot.create_button(300, 250, 200, 50,
+                          text="Click Me",
+                          id="button1",
+                          on_release=on_click,
+                          on_hover=on_hover)
 
     def draw(self):
         dot.background((40, 40, 50))
-        # print(dot.mouse_x)
-        
-        
-        # # Update and draw buttons
         dot.update_buttons()
         dot.draw_buttons()
 
-MySketch()
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)

@@ -1,25 +1,23 @@
+"""Stroke colour and weight — outlines with no fill."""
 from dorothy import Dorothy
 
-dot = Dorothy(800,800)
+dot = Dorothy(800, 600)
 
 class MySketch:
 
-    def __init__(self):
-        dot.start_loop(self.setup, self.draw)  
-
     def setup(self):
-        print("setup")
-        
-    def draw(self):
-        dot.stroke((255, 0, 0))
-        dot.background(dot.black)
-        # dot.no_fill()
-        # Try different weights
-        for i in range(1, 2):
-            dot.set_stroke_weight(3)
-            dot.rectangle((50, 51), (dot.mouse_x, dot.mouse_y))
-            # dot.circle((50+ i*20, 50 + i*20), (100))
-            # dot.line((50, 50 + i*20), (250, 50 + i*20))
-            
+        pass
 
-MySketch()          
+    def draw(self):
+        dot.background(dot.black)
+        dot.no_fill()
+        for i, weight in enumerate([1, 2, 4, 8, 16]):
+            y = 80 + i * 100
+            dot.stroke((255, 255 - i * 40, i * 40))
+            dot.set_stroke_weight(weight)
+            dot.line((50, y), (dot.width - 50, y))
+            dot.circle((dot.width // 2, y), 35)
+
+if __name__ == '__main__':
+    import __main__
+    dot.start_livecode_loop(__main__)
