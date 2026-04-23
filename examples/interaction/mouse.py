@@ -1,6 +1,7 @@
 import numpy as np
 from cv2 import circle
 from dorothy import Dorothy
+from dorothy.Audio import Sequence, Note
 
 dot = Dorothy()
 

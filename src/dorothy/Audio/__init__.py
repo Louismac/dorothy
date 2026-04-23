@@ -42,6 +42,8 @@ from .sampler import Sampler
 
 from .granular import GranularSynth
 
+from .concat import ConcatSynth
+
 from .engine import Audio
 
 __all__ = [
@@ -72,5 +74,6 @@ __all__ = [
     "Sequence",
     "Sampler",
     "GranularSynth",
+    "ConcatSynth",
     "Audio",
 ]

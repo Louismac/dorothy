@@ -80,6 +80,11 @@ The most-used APIs, grouped by what you're trying to do. Follow the links for fu
 | `dot.music.amplitude()` | Current volume |
 | `dot.music.fft()` | Current FFT spectrum |
 | `dot.music.is_beat()` / `is_onset()` | Beat / onset detection |
+| `device.add_effect(fx)` | Add an effect to any audio source |
+| `Reverb(room_size, damping, wet)` | Algorithmic reverb |
+| `Delay(time_ms, feedback, wet)` | Feedback delay |
+| `LowPassFilter(cutoff, q)` | Resonant low-pass filter |
+| `Chorus(rate, depth, wet)` | Chorus / flanger |
 
 ### Lifecycle
 | Signature | Does |
@@ -123,7 +128,8 @@ The most-used APIs, grouped by what you're trying to do. Follow the links for fu
 - [Signal smoothing](#signal-smoothing)
 - [Playback control](#playback-control)
 - [Sequencing](#audio-sequencing) — Clock, Sequence, Note
-- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth
+- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth, ConcatSynth
+- [Audio effects](#audio-effects) — filters, gain, distortion, delay, reverb, chorus
 - [Advanced](#advanced-audio-features) — RAVE timbre transfer, callbacks, gain
 - [Performance tips](#audio-performance-tips)
 - [Troubleshooting](#audio-troubleshooting)
@@ -1053,7 +1059,8 @@ Dorothy has a full audio system for playback, analysis, and generation. All audi
 - [Signal smoothing](#signal-smoothing)
 - [Playback control](#playback-control)
 - [Sequencing](#audio-sequencing) — Clock, Sequence, Note
-- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth
+- [Instruments](#instruments) — PolySynth, Sampler, GranularSynth, ConcatSynth
+- [Audio effects](#audio-effects) — filters, gain, distortion, delay, reverb, chorus
 - [Advanced](#advanced-audio-features) — RAVE timbre transfer, callbacks, gain
 - [Performance tips](#audio-performance-tips)
 - [Troubleshooting](#audio-troubleshooting)
@@ -1526,6 +1533,239 @@ gran.note_on(freq, vel=0.8)   # start grain cloud at pitch/volume
 gran.note_off(freq)            # stop spawning; active grains play out
 gran.all_notes_off()           # silence immediately
 ```
+
+### ConcatSynth
+
+Concatenative granular synthesizer. Slices a corpus into fixed units, extracts audio descriptors (MFCCs, spectral centroid, RMS, etc.) for each, and at playback time selects the grain whose descriptors best match the current `target`. All granular controls are inherited from `GranularSynth` — density, grain size, envelopes, pitch shifting, and `Sequence`/`Clock` integration all work identically.
+
+**Create**
+```python
+from dorothy.Audio import ConcatSynth
+
+idx = dot.music.start_concat_stream(
+    path="../audio",       # audio file OR directory (recursive)
+    unit_size=100.0,       # corpus slice size in ms
+    n_candidates=5,        # top-K units to pick randomly from (1 = always best match)
+    features=('mfcc', 'centroid', 'rms'),  # descriptors to match on
+    grain_size=None,       # playback grain size in ms (defaults to unit_size)
+    density=8.0,
+    attack=0.3, decay=0.3,
+    n_grains=32,
+    pitch=0.0,
+    pitch_spread=0.0,
+    spread=0.0,            # within-unit scatter: 0 = unit head, 1 = anywhere in unit
+    sr=44100,
+    buffer_size=512,
+)
+cat = dot.music.audio_outputs[idx]
+```
+
+Loading happens in the background — the synth plays silence until the corpus analysis is complete.
+
+**Target control** (read/write at any time)
+```python
+# Steer grain selection towards specific descriptor values
+cat.target['centroid'] = 3000   # prefer brighter units
+cat.target['rms']      = 0.6    # prefer louder units
+cat.target['mfcc_0']   = -10.0  # individual MFCC coefficient
+
+# Clear target to return to random selection
+cat.target = {}
+```
+
+Available descriptor keys depend on the `features` tuple. Multi-dimensional features are indexed as `mfcc_0`…`mfcc_12` and `chroma_0`…`chroma_11`.
+
+**Drive target from a live audio stream**
+```python
+mic_idx = dot.music.start_device_stream("MacBook Pro Microphone")
+dot.music.drive_concat_from_stream(mic_idx, idx)
+# Cat now chases the microphone's timbre in real time
+```
+
+**Continuous playback (always on)**
+```python
+cat.note_on(440, vel=0.8)   # start grain cloud, runs until note_off
+```
+
+**With Sequence/Clock**
+```python
+from dorothy.Audio import Sequence, Note
+
+seq = Sequence(steps=4, ticks_per_step=8)
+seq[0] = Note(69, vel=0.8)    # original pitch
+seq[2] = Note(81, vel=0.5)    # octave up
+seq.connect(clock, cat)
+clock.play()
+```
+
+**Parameters** (read/write at any time — same as GranularSynth)
+```python
+cat.grain_size    # ms per grain
+cat.density       # grains per second per voice
+cat.spread        # within-unit scatter (0–1)
+cat.attack        # fraction of grain for fade-in
+cat.decay         # fraction of grain for fade-out
+cat.n_grains      # max simultaneous grains
+cat.pitch         # global semitone shift
+cat.pitch_spread  # per-grain pitch jitter (std dev in semitones)
+cat.n_candidates  # KNN candidates to pick from
+```
+
+**Supported features**: `'mfcc'` (13-dim), `'centroid'`, `'rms'`, `'flatness'`, `'zcr'`, `'chroma'` (12-dim).
+
+---
+
+## Audio effects
+
+Effects are added to any `AudioDevice` via `add_effect()`. They run in a chain after the device generates audio, in the order they were added. Parameters are plain attributes — write to them at any time (including from `draw()`) for live modulation.
+
+```python
+from dorothy.Audio import LowPassFilter, Reverb, Delay, Chorus, HighPassFilter, BandPassFilter, Gain, Distortion
+
+idx = dot.music.start_granular_stream("texture.wav")
+device = dot.music.audio_outputs[idx]
+
+# add_effect() returns the effect so you can keep a reference for live control
+lpf = device.add_effect(LowPassFilter(800))
+rev = device.add_effect(Reverb(room_size=0.7, wet=0.4))
+```
+
+**Enable / disable**
+```python
+rev.enabled = False   # bypass without removing from chain
+rev.enabled = True    # re-enable
+```
+
+### `LowPassFilter(cutoff, q=0.707)`
+
+Resonant biquad low-pass filter. Frequencies above `cutoff` are attenuated; `q > 1` adds a resonant peak at the cutoff.
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `cutoff` | — | Cutoff frequency in Hz |
+| `q` | 0.707 | Resonance (0.707 = Butterworth, >1 = resonant peak) |
+
+```python
+lpf = device.add_effect(LowPassFilter(2000))
+
+# Modulate cutoff from draw()
+def draw(self):
+    lpf.cutoff = dot.mouse_x / dot.width * 8000 + 200
+```
+
+### `HighPassFilter(cutoff, q=0.707)`
+
+Resonant biquad high-pass filter. Frequencies below `cutoff` are attenuated.
+
+```python
+hpf = device.add_effect(HighPassFilter(300))
+hpf.q = 1.5   # add a little resonance
+```
+
+### `BandPassFilter(cutoff, q=0.707)`
+
+Resonant biquad band-pass filter. Only frequencies near `cutoff` pass; `q` controls bandwidth (higher = narrower).
+
+```python
+bpf = device.add_effect(BandPassFilter(1000, q=2.0))
+```
+
+### `Gain(db=0.0)`
+
+Simple dB gain stage. Negative values attenuate, positive values boost.
+
+```python
+g = device.add_effect(Gain(-6.0))   # -6 dB (half amplitude)
+g.db = 3.0                          # boost 3 dB
+```
+
+### `Distortion(drive=2.0, mix=1.0)`
+
+Soft-clip saturation via `tanh`. `drive` scales the input before clipping; `mix` blends wet/dry.
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `drive` | 2.0 | Input gain before clipping (1 = clean, higher = more saturation) |
+| `mix` | 1.0 | Wet/dry blend 0–1 |
+
+```python
+dist = device.add_effect(Distortion(drive=5.0, mix=0.8))
+
+def draw(self):
+    dist.drive = 1.0 + dot.music.amplitude() * 10
+```
+
+### `Delay(time_ms=250.0, feedback=0.4, wet=0.3)`
+
+Feedback delay line (up to 2 seconds).
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `time_ms` | 250.0 | Delay time in milliseconds |
+| `feedback` | 0.4 | Fraction fed back (0 = single echo, approaching 1 = infinite repeats) |
+| `wet` | 0.3 | Wet/dry mix 0–1 |
+
+```python
+dly = device.add_effect(Delay(time_ms=375, feedback=0.5, wet=0.35))
+
+def draw(self):
+    dly.time_ms = 60000 / clock.bpm / 2   # sync to half-beat
+```
+
+### `Reverb(room_size=0.5, damping=0.5, wet=0.33)`
+
+Canonical Freeverb algorithmic reverb (8 parallel comb filters + 4 series allpass diffusers).
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `room_size` | 0.5 | Tail length 0–1 (maps to comb feedback 0.70–0.98) |
+| `damping` | 0.5 | High-frequency absorption 0–1 (higher = darker, shorter tail) |
+| `wet` | 0.33 | Wet/dry mix 0–1 |
+
+```python
+rev = device.add_effect(Reverb(room_size=0.8, damping=0.3, wet=0.4))
+
+def draw(self):
+    rev.room_size = dot.mouse_x / dot.width
+    rev.damping   = dot.mouse_y / dot.height
+```
+
+### `Chorus(rate=1.0, depth=0.3, wet=0.5)`
+
+Chorus / flanger via a sinusoidally modulated delay line (15 ms centre ± 12.5 ms swing).
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `rate` | 1.0 | LFO frequency in Hz |
+| `depth` | 0.3 | Modulation depth 0–1 |
+| `wet` | 0.5 | Wet/dry mix 0–1 |
+
+```python
+cho = device.add_effect(Chorus(rate=0.5, depth=0.6, wet=0.4))
+
+def draw(self):
+    cho.rate  = 0.2 + dot.music.amplitude() * 3
+    cho.depth = 0.3
+```
+
+### Chaining effects
+
+Effects run in the order they were added. A typical signal chain:
+
+```python
+from dorothy.Audio import HighPassFilter, Distortion, Delay, Reverb
+
+idx = dot.music.start_granular_stream("corpus.wav", density=12)
+device = dot.music.audio_outputs[idx]
+device.note_on(440, vel=0.8)
+
+hpf  = device.add_effect(HighPassFilter(200))        # remove rumble
+dist = device.add_effect(Distortion(drive=3.0, mix=0.5))
+dly  = device.add_effect(Delay(time_ms=250, feedback=0.4, wet=0.3))
+rev  = device.add_effect(Reverb(room_size=0.75, wet=0.35))
+```
+
+---
 
 ## Advanced audio features
 

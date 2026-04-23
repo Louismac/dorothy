@@ -68,7 +68,8 @@ class Dorothy:
         self.on_scroll = None
         self.on_key_press = None
         
-        # Processing-like properties
+        # Processing-like properties — start at centre so mouse-driven code
+        # produces sensible values before the first mouse_move event arrives.
         self.mouse_x = 0
         self.mouse_y = 0
         self.mouse_down = False

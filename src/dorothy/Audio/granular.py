@@ -53,11 +53,7 @@ class GranularSynth(AudioDevice):
         gran.position = 0.4
         gran.spread = 0.05
 
-        seq = Sequence(steps=4, ticks_per_step=8)
-        seq[0] = Note(69, vel=0.7)   # original pitch
-        seq[2] = Note(81, vel=0.5)   # octave up
-        seq.connect(clock, gran)
-        clock.play()
+        gran.note_on(440, vel=0.8)   # starts the grain cloud, never stops
     """
 
     def __init__(

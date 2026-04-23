@@ -3,6 +3,7 @@ Main Audio engine class.
 """
 
 import os
+import threading
 import warnings
 from typing import Optional, Callable, List
 
@@ -19,6 +20,7 @@ from .synth import Note, SynthVoice, PolySynth
 from .sequencer import Clock, Sequence
 from .sampler import Sampler
 from .granular import GranularSynth
+from .concat import ConcatSynth
 
 
 class Audio:
@@ -377,6 +379,129 @@ class Audio:
         if path:
             self.audio_outputs[idx].load(path)
         return idx
+
+    def start_concat_stream(
+        self,
+        path: Optional[str] = None,
+        unit_size: float = 80.0,
+        n_candidates: int = 5,
+        features: tuple = ('mfcc', 'centroid', 'rms'),
+        grain_size: Optional[float] = None,
+        density: float = 8.0,
+        attack: float = 0.3,
+        decay: float = 0.3,
+        n_grains: int = 32,
+        pitch: float = 0.0,
+        pitch_spread: float = 0.0,
+        spread: float = 0.0,
+        sr: int = 44100,
+        buffer_size: int = 512,
+        output_device: Optional[int] = None,
+    ) -> int:
+        """Start a concatenative granular synthesis stream.
+
+        Slices the corpus into fixed-size units, builds a descriptor index,
+        and plays back a grain cloud where each grain is drawn from the unit
+        whose descriptors best match ``device.target``.  All granular controls
+        (density, grain_size, attack, decay, pitch, …) work as in
+        :meth:`start_granular_stream`, and the device is fully compatible with
+        :class:`Sequence` / :class:`Clock`::
+
+            cat_idx = audio.start_concat_stream("corpus.wav", density=12)
+            cat = audio.audio_outputs[cat_idx]
+            cat.target['centroid'] = 3000   # prefer brighter grains
+            cat.target['rms'] = 0.6
+
+            seq = Sequence(steps=4, ticks_per_step=8)
+            seq[0] = Note(69, vel=0.8)
+            seq.connect(clock, cat)
+            clock.play()
+
+        To steer the target from a live input stream use
+        :meth:`drive_concat_from_stream`.
+
+        Args:
+            path:          Corpus audio file or directory to load immediately (optional).
+            unit_size:     Corpus slice duration in milliseconds; ``grain_size``
+                           defaults to the same value.
+            n_candidates:  KNN candidates to randomly pick from (1 = best match).
+            features:      Descriptor tuple: any of ``'mfcc'``, ``'centroid'``,
+                           ``'rms'``, ``'flatness'``, ``'zcr'``, ``'chroma'``.
+            grain_size:    Playback grain size in ms (defaults to ``unit_size``).
+            density:       Grains spawned per second per active voice.
+            attack:        Fraction of grain for fade-in envelope.
+            decay:         Fraction of grain for fade-out envelope.
+            n_grains:      Maximum simultaneous grains.
+            pitch:         Global pitch shift in semitones.
+            pitch_spread:  Per-grain random pitch jitter (semitone std dev).
+            spread:        Within-unit scatter: 0 = unit head, 1 = full unit.
+            sr:            Sample rate.
+            buffer_size:   Audio buffer size in samples.
+            output_device: Output device index (None = system default).
+
+        Returns:
+            Index of the device in ``audio_outputs``.
+        """
+        device = ConcatSynth(
+            sr=sr,
+            buffer_size=buffer_size,
+            unit_size=unit_size,
+            n_candidates=n_candidates,
+            features=features,
+            grain_size=grain_size,
+            density=density,
+            attack=attack,
+            decay=decay,
+            n_grains=n_grains,
+            pitch=pitch,
+            pitch_spread=pitch_spread,
+            spread=spread,
+            output_device=output_device,
+        )
+        idx = self._register_and_play(device)
+        if path:
+            threading.Thread(
+                target=self.audio_outputs[idx].load,
+                args=(path,),
+                daemon=True,
+            ).start()
+        return idx
+
+    def drive_concat_from_stream(
+        self,
+        input_idx: int,
+        concat_idx: int,
+    ) -> None:
+        """Route an existing stream's audio to drive a ConcatSynth's target.
+
+        After calling this the ConcatSynth at *concat_idx* will chase the
+        timbre of whatever is playing at *input_idx* (microphone, file, etc.).
+        The input stream is silenced so it doesn't double-play.
+
+        Args:
+            input_idx:  Index of the source stream in ``audio_outputs``.
+            concat_idx: Index of the :class:`ConcatSynth` in ``audio_outputs``.
+        """
+        if input_idx >= len(self.audio_outputs):
+            raise IndexError(f"drive_concat_from_stream: invalid input_idx {input_idx}")
+        if concat_idx >= len(self.audio_outputs):
+            raise IndexError(f"drive_concat_from_stream: invalid concat_idx {concat_idx}")
+
+        input_device = self.audio_outputs[input_idx]
+        concat_device = self.audio_outputs[concat_idx]
+
+        if not isinstance(concat_device, ConcatSynth):
+            raise TypeError(f"audio_outputs[{concat_idx}] is not a ConcatSynth")
+
+        _orig_callback = input_device.audio_callback
+
+        def _patched_callback():
+            out = _orig_callback()
+            concat_device.set_target_from_audio(out)
+            return out
+
+        input_device.audio_callback = _patched_callback
+        input_device.gain = 0.0  # silence — we only want its features
 
     def start_sample_stream(
         self,

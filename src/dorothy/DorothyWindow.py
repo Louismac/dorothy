@@ -44,7 +44,13 @@ class DorothyWindow(mglw.WindowConfig):
         self.dorothy.keys = self.wnd.keys
         self.dorothy.modifiers = self.wnd.modifiers
 
-    
+        # Activate the window so mouse/keyboard events arrive immediately
+        # without the user needing to click off-screen first.
+        try:
+            self.wnd._window.activate()
+        except Exception:
+            pass
+
         self.dorothy._ensure_persistent_canvas()
             
         # Now ALL drawing in setup goes to the persistent canvas

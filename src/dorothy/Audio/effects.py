@@ -246,84 +246,117 @@ class Delay(AudioFX):
 
 
 # ---------------------------------------------------------------------------
-# Reverb (Freeverb-style: 8 comb + 2 allpass)
+# Reverb — canonical Freeverb (8 parallel comb + 4 series allpass)
 # ---------------------------------------------------------------------------
 
-def _read_ring(buf: npt.NDArray, ptr: int, delay: int, n: int) -> npt.NDArray:
-    """Read *n* samples from *buf* starting at *ptr* - *delay* (wrapping)."""
-    buf_len = len(buf)
-    r = (ptr - delay) % buf_len
-    if r + n <= buf_len:
-        return buf[r:r + n].copy()
-    split = buf_len - r
-    return np.concatenate([buf[r:], buf[:n - split]])
-
-
-def _write_ring(buf: npt.NDArray, ptr: int, data: npt.NDArray) -> int:
-    """Write *data* into *buf* at *ptr* (wrapping). Returns new ptr."""
-    n = len(data)
-    buf_len = len(buf)
-    end = ptr + n
-    if end <= buf_len:
-        buf[ptr:end] = data
-    else:
-        split = buf_len - ptr
-        buf[ptr:] = data[:split]
-        buf[:n - split] = data[split:]
-    return (ptr + n) % buf_len
+# Canonical Freeverb constants (tuned for 44 100 Hz, scaled for other rates)
+_FV_COMB_DELAYS  = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
+_FV_AP_DELAYS    = [556, 441, 341, 225]
+_FV_FIXED_GAIN   = 0.015   # input pre-scale; prevents saturation in the network
+_FV_SCALE_WET    = 3.0     # compensates for fixed_gain attenuation
+_FV_SCALE_DAMP   = 0.4     # maps 0-1 damping knob → actual damp1 coefficient
+_FV_SCALE_ROOM   = 0.28    # }
+_FV_OFFSET_ROOM  = 0.7     # } feedback = 0.7 + room * 0.28  (Freeverb standard)
 
 
 class _CombFilter:
-    """Freeverb-style comb filter (vectorized over a buffer)."""
+    """Freeverb comb filter with a stateful one-pole LP in the feedback path."""
 
-    def __init__(self, delay_samps: int, feedback: float, damping: float):
+    def __init__(self, delay_samps: int, feedback: float, damp1: float):
+        self._buf = np.zeros(delay_samps, dtype=np.float32)
         self._delay = delay_samps
-        self.feedback = feedback
-        self.damping = damping
-        # Extra headroom avoids index edge cases when delay ≈ buf size
-        self._buf = np.zeros(delay_samps + 1024, dtype=np.float32)
         self._ptr = 0
+        self._filterstore = 0.0   # one-pole LP state
+        self.feedback = feedback
+        self.damp1 = float(damp1)
+        self.damp2 = 1.0 - self.damp1
+
+    def set_damping(self, damp1: float) -> None:
+        self.damp1 = float(damp1)
+        self.damp2 = 1.0 - self.damp1
 
     def process(self, signal: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
         n = len(signal)
-        delayed = _read_ring(self._buf, self._ptr, self._delay, n)
-        # Simple one-pole LP damping: scale by (1 - damping)
-        damped = delayed * (1.0 - self.damping)
-        self._ptr = _write_ring(self._buf, self._ptr, (signal + damped * self.feedback).astype(np.float32))
-        return delayed
+        delay = self._delay
+        buf = self._buf
+        ptr = self._ptr
+
+        # Read n delayed samples (Freeverb comb delays are all > 512 so no wrap overlap)
+        if ptr + n <= delay:
+            output = buf[ptr:ptr + n].copy()
+        else:
+            split = delay - ptr
+            output = np.concatenate([buf[ptr:], buf[:n - split]])
+
+        # Stateful one-pole LP applied to delayed signal for the feedback path:
+        # filterstore[i] = output[i] * damp2 + filterstore[i-1] * damp1
+        filtered_f64, new_zi = scipy_signal.lfilter(
+            [self.damp2], [1.0, -self.damp1],
+            output.astype(np.float64),
+            zi=np.array([self._filterstore]),
+        )
+        self._filterstore = float(new_zi[0])
+
+        # Write back: input + LP-filtered-delayed * feedback
+        write = (signal + filtered_f64.astype(np.float32) * self.feedback)
+        if ptr + n <= delay:
+            buf[ptr:ptr + n] = write
+        else:
+            split = delay - ptr
+            buf[ptr:] = write[:split]
+            buf[:n - split] = write[split:]
+
+        self._ptr = (ptr + n) % delay
+        return output
 
 
 class _AllpassFilter:
-    """Schroeder allpass filter (vectorized over a buffer)."""
+    """Freeverb allpass diffuser.
+
+    Processes in chunks of at most ``delay`` samples so that short-delay
+    allpasses (delay < buffer_size) correctly feed their own output back
+    within the same callback — identical to the sample-by-sample original.
+    """
 
     def __init__(self, delay_samps: int, gain: float = 0.5):
+        self._buf = np.zeros(delay_samps, dtype=np.float32)
         self._delay = delay_samps
         self.gain = gain
-        self._buf = np.zeros(delay_samps + 1024, dtype=np.float32)
         self._ptr = 0
 
     def process(self, signal: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
         n = len(signal)
-        delayed = _read_ring(self._buf, self._ptr, self._delay, n)
-        out = (-self.gain * signal + delayed).astype(np.float32)
-        self._ptr = _write_ring(self._buf, self._ptr, (signal + self.gain * delayed).astype(np.float32))
-        return out
+        delay = self._delay
+        buf = self._buf
+        output = np.empty(n, dtype=np.float32)
+        pos = 0
+
+        while pos < n:
+            ptr = self._ptr
+            # Stay within the current linear run of the ring buffer so that
+            # numpy slices are contiguous and don't overlap with the write.
+            chunk = min(n - pos, delay - ptr)
+
+            bufout = buf[ptr:ptr + chunk].copy()
+            output[pos:pos + chunk] = -signal[pos:pos + chunk] + bufout
+            buf[ptr:ptr + chunk] = signal[pos:pos + chunk] + bufout * self.gain
+
+            self._ptr = (ptr + chunk) % delay
+            pos += chunk
+
+        return output
 
 
 class Reverb(AudioFX):
-    """Freeverb-style algorithmic reverb: 8 parallel comb + 2 series allpass filters.
+    """Canonical Freeverb algorithmic reverb: 8 parallel comb + 4 series allpass.
 
     Args:
-        room_size: Reverb tail length 0–1 (scales comb filter feedback).
-        damping:   High-frequency absorption 0–1 (higher = darker tail).
+        room_size: Tail length 0–1 (maps to comb feedback 0.7–0.98).
+        damping:   High-frequency absorption 0–1 (higher = darker, shorter tail).
         wet:       Wet/dry mix 0–1.
     """
 
-    # Standard Freeverb delay lengths (samples at 44100 Hz)
-    _COMB_DELAYS = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617]
-    _AP_DELAYS = [556, 441]
-
-    def __init__(self, room_size: float = 0.5, damping: float = 0.5, wet: float = 0.3):
+    def __init__(self, room_size: float = 0.5, damping: float = 0.5, wet: float = 0.33):
         self.room_size = room_size
         self.damping = damping
         self.wet = wet
@@ -332,21 +365,24 @@ class Reverb(AudioFX):
         self._last_room = -1.0
         self._last_damp = -1.0
 
-    @staticmethod
-    def _room_to_fb(room: float) -> float:
-        return 0.5 + float(np.clip(room, 0.0, 1.0)) * 0.48
+    def _feedback(self) -> float:
+        return _FV_OFFSET_ROOM + float(np.clip(self.room_size, 0.0, 1.0)) * _FV_SCALE_ROOM
+
+    def _damp1(self) -> float:
+        return float(np.clip(self.damping, 0.0, 1.0)) * _FV_SCALE_DAMP
 
     def _init(self, sr: int, buffer_size: int) -> None:
         super()._init(sr, buffer_size)
         scale = sr / 44100.0
-        fb = self._room_to_fb(self.room_size)
+        fb = self._feedback()
+        d1 = self._damp1()
         self._combs = [
-            _CombFilter(max(4, round(d * scale)), fb, self.damping)
-            for d in self._COMB_DELAYS
+            _CombFilter(max(4, round(d * scale)), fb, d1)
+            for d in _FV_COMB_DELAYS
         ]
         self._allpasses = [
             _AllpassFilter(max(4, round(d * scale)))
-            for d in self._AP_DELAYS
+            for d in _FV_AP_DELAYS
         ]
         self._last_room = self.room_size
         self._last_damp = self.damping
@@ -354,10 +390,11 @@ class Reverb(AudioFX):
     def _sync_params(self) -> None:
         if self.room_size == self._last_room and self.damping == self._last_damp:
             return
-        fb = self._room_to_fb(self.room_size)
+        fb = self._feedback()
+        d1 = self._damp1()
         for comb in self._combs:
             comb.feedback = fb
-            comb.damping = self.damping
+            comb.set_damping(d1)
         self._last_room = self.room_size
         self._last_damp = self.damping
 
@@ -366,20 +403,16 @@ class Reverb(AudioFX):
             return signal
         self._sync_params()
 
-        # Sum 8 parallel comb filters
-        wet = np.zeros(len(signal), dtype=np.float32)
+        inp = signal * _FV_FIXED_GAIN
+
+        wet_out = np.zeros(len(signal), dtype=np.float32)
         for comb in self._combs:
-            wet += comb.process(signal)
-        wet /= len(self._combs)
+            wet_out += comb.process(inp)
 
-        # 2 series allpass diffusers
         for ap in self._allpasses:
-            wet = ap.process(wet)
+            wet_out = ap.process(wet_out)
 
-        # Soft-limit comb sum to prevent hard clipping at high wet levels
-        wet = np.tanh(wet)
-
-        return (signal * (1.0 - self.wet) + wet * self.wet).astype(np.float32)
+        return (signal * (1.0 - self.wet) + wet_out * (_FV_SCALE_WET * self.wet)).astype(np.float32)
 
 
 # ---------------------------------------------------------------------------
