@@ -554,10 +554,14 @@ class Dorothy:
     
     @property
     def width(self) -> int:
+        if self.renderer is not None:
+            return self.renderer.width
         return self.window_size[0]
-    
+
     @property
     def height(self) -> int:
+        if self.renderer is not None:
+            return self.renderer.height
         return self.window_size[1]
     
     @property

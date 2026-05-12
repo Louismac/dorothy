@@ -2,6 +2,8 @@ import numpy as np
 import moderngl_window as mglw
 import time
 import traceback
+import sys
+import os
 
 
 class DorothyWindow(mglw.WindowConfig):
@@ -44,12 +46,7 @@ class DorothyWindow(mglw.WindowConfig):
         self.dorothy.keys = self.wnd.keys
         self.dorothy.modifiers = self.wnd.modifiers
 
-        # Activate the window so mouse/keyboard events arrive immediately
-        # without the user needing to click off-screen first.
-        try:
-            self.wnd._window.activate()
-        except Exception:
-            pass
+        self._focused = False
 
         self.dorothy._ensure_persistent_canvas()
             
@@ -67,8 +64,26 @@ class DorothyWindow(mglw.WindowConfig):
 
 
 
+    def _request_focus(self):
+        try:
+            self.wnd._window.activate()
+        except Exception:
+            pass
+        if sys.platform == 'darwin':
+            try:
+                import subprocess
+                subprocess.Popen([
+                    'osascript', '-e',
+                    f'tell application "System Events" to set frontmost of first process whose unix id is {os.getpid()} to true'
+                ])
+            except Exception:
+                pass
+
     def on_render(self, render_time: float, frame_time: float):
         """Called every frame"""
+        if not self._focused:
+            self._request_focus()
+            self._focused = True
         # Create persistent canvas if needed
         try:
             self.dorothy._ensure_persistent_canvas()
@@ -133,6 +148,12 @@ class DorothyWindow(mglw.WindowConfig):
                 self.dorothy.renderer.camera.height = height
                 self.dorothy.renderer.camera.aspect = width / height
                 self.ctx.viewport = (0, 0, width, height)
+                # Recreate the persistent canvas at the new resolution.
+                # The old FBO texture is still the original size and will
+                # render incorrectly into the enlarged viewport.
+                if self.dorothy._persistent_canvas is not None:
+                    self.dorothy.renderer.release_layer(self.dorothy._persistent_canvas)
+                    self.dorothy._persistent_canvas = None
             self._resize_pending = False
         
         self.dorothy.frames += 1
