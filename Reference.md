@@ -393,13 +393,13 @@ dot.background((30, 30, 40))  # Dark gray
 
 All 3D drawing requires 3D camera mode. Call [`camera_3d()`](#cameras) before drawing 3D primitives, and [`camera_2d()`](#cameras) to return to flat drawing.
 
-### `sphere(radius=1.0, pos=(0, 0, 0))`
+### `sphere(radius=1.0, position=(0, 0, 0))`
 
 Draw a 3D sphere.
 
 **Parameters**
 - `radius` *(float)* — Sphere radius.
-- `pos` *(Tuple)* — Position `(x, y, z)`.
+- `position` *(Tuple)* — Position `(x, y, z)`.
 
 **Example**
 ```python
@@ -409,13 +409,13 @@ dot.fill((255, 100, 100))
 dot.sphere(1.0)
 ```
 
-### `box(size=(1, 1, 1), pos=(0, 0, 0), texture_layers=None)`
+### `box(size=(1, 1, 1), position=(0, 0, 0), texture_layers=None)`
 
 Draw a 3D box.
 
 **Parameters**
 - `size` *(Tuple)* — Box dimensions `(x, y, z)`.
-- `pos` *(Tuple)* — Box position.
+- `position` *(Tuple)* — Box position.
 - `texture_layers` *(layer_id or dict)* — A single layer applied to all 6 sides, or a dict mapping face names (`'front'`, `'back'`, `'left'`, `'right'`, `'top'`, `'bottom'`) to layers. See [Layers](#layers).
 
 **Examples**
