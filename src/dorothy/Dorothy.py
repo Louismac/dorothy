@@ -158,10 +158,15 @@ class Dorothy:
         self._ensure_renderer()
         return self.renderer.get_pixels()
     
-    def start_loop(self, setup_fn: Callable, draw_fn: Callable):
-        """Start the render loop with setup and draw functions"""
-        self.setup_fn = setup_fn
-        self.draw_fn = draw_fn
+    def start_loop(self, setup_fn: Optional[Callable] = None, draw_fn: Optional[Callable] = None):
+        """Start the render loop with setup and draw functions.
+
+        Either function may be omitted (e.g. a sketch with nothing to
+        set up, or a static one with no per-frame draw) - a no-op is
+        used in its place.
+        """
+        self.setup_fn = setup_fn or (lambda: None)
+        self.draw_fn = draw_fn or (lambda: None)
         
         # Configure and run the window
         DorothyWindow.window_size = self.window_size

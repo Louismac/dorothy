@@ -142,18 +142,38 @@ class DorothyWindow(mglw.WindowConfig):
             width, height = self._last_resize
             if self.dorothy.renderer:
                 print(f"Window resize finished, updating to {width} x {height}")
+
+                # Grab the old canvas's pixels before we tear anything down,
+                # so whatever setup()/draw() had already painted survives.
+                old_canvas = self.dorothy._persistent_canvas
+                old_pixels = None
+                if old_canvas is not None:
+                    old_pixels = self.dorothy.renderer.get_pixels(
+                        layer_id=old_canvas, components=4, flip=True, bgr=False
+                    )
+
                 self.dorothy.renderer.width = width
                 self.dorothy.renderer.height = height
                 self.dorothy.renderer.camera.width = width
                 self.dorothy.renderer.camera.height = height
                 self.dorothy.renderer.camera.aspect = width / height
                 self.ctx.viewport = (0, 0, width, height)
+
                 # Recreate the persistent canvas at the new resolution.
-                # The old FBO texture is still the original size and will
-                # render incorrectly into the enlarged viewport.
-                if self.dorothy._persistent_canvas is not None:
-                    self.dorothy.renderer.release_layer(self.dorothy._persistent_canvas)
-                    self.dorothy._persistent_canvas = None
+                # The old FBO texture is still the original size and would
+                # render incorrectly into the enlarged viewport, so we
+                # rebuild it and paste the captured content back in
+                # (top-left anchored, unscaled) instead of leaving it blank.
+                if old_canvas is not None:
+                    self.dorothy.renderer.release_layer(old_canvas)
+                    self.dorothy._persistent_canvas = self.dorothy.renderer.get_layer()
+                    if old_pixels is not None:
+                        prev_camera_mode = self.dorothy.renderer.camera.mode
+                        self.dorothy.renderer.camera.mode = '2d'
+                        self.dorothy.renderer.begin_layer(self.dorothy._persistent_canvas)
+                        self.dorothy.paste(old_pixels, (0, 0), size=(width, height))
+                        self.dorothy.renderer.end_layer()
+                        self.dorothy.renderer.camera.mode = prev_camera_mode
             self._resize_pending = False
         
         self.dorothy.frames += 1
@@ -229,7 +249,15 @@ class DorothyWindow(mglw.WindowConfig):
     
     
     def on_resize(self, width: int, height: int):
-        
+
+        # Window activation/focus can trigger a spurious resize event with
+        # the same dimensions (e.g. on macOS when we force the window
+        # frontmost). Ignore it so we don't needlessly wipe the persistent
+        # canvas and lose whatever setup() drew.
+        if self.dorothy.renderer is not None and \
+           (width, height) == (self.dorothy.renderer.width, self.dorothy.renderer.height):
+            return
+
         # Store the resize but don't process immediately during drag
         print(f"Window was resized to {width} x {height}")
         self._last_resize = (width, height)

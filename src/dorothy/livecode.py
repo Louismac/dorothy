@@ -34,15 +34,14 @@ class LiveCodeLoop:
             return Path(self.sketch_module.__file__)
     
     def _find_sketch_class(self):
-        """Find the sketch class with setup and draw methods"""
+        """Find the sketch class with a setup and/or draw method"""
         for name in dir(self.sketch_module):
             obj = getattr(self.sketch_module, name)
-            if (inspect.isclass(obj) and 
-                hasattr(obj, 'setup') and 
-                hasattr(obj, 'draw') and
+            if (inspect.isclass(obj) and
+                (hasattr(obj, 'setup') or hasattr(obj, 'draw')) and
                 obj.__module__ == self.sketch_module.__name__):
                 return obj
-        raise ValueError("No sketch class found with 'setup' and 'draw' methods")
+        raise ValueError("No sketch class found with a 'setup' or 'draw' method")
     
     def _print_debug_info(self):
         """Print debug information"""
@@ -87,15 +86,16 @@ class LiveCodeLoop:
     def _find_sketch_class_in_globals(self, globals_dict):
         """Find sketch class in a globals dictionary"""
         for name, obj in globals_dict.items():
-            if (inspect.isclass(obj) and 
-                hasattr(obj, 'setup') and 
-                hasattr(obj, 'draw')):
+            if (inspect.isclass(obj) and
+                (hasattr(obj, 'setup') or hasattr(obj, 'draw'))):
                 return obj
         raise ValueError("No sketch class found after reload")
     
     def setup_wrapper(self):
         """Initial setup"""
         print(f"🔍 DEBUG: setup_wrapper called")
+        if not hasattr(self.my_sketch, 'setup'):
+            return
         try:
             self.my_sketch.setup()
             self.was_error = False
@@ -104,7 +104,7 @@ class LiveCodeLoop:
                 print("❌ Error in setup:")
                 print(traceback.format_exc())
                 self.was_error = True
-    
+
     def draw_wrapper(self):
         """Draw loop with reload checking"""
         if self.reload_requested:
@@ -112,7 +112,11 @@ class LiveCodeLoop:
             print("self.my_sketch", self.my_sketch)
             self.reload_sketch()
             self._check_run_once_changed()
-        
+
+        if not hasattr(self.my_sketch, 'draw'):
+            self._handle_run_once()
+            return
+
         try:
             self._handle_run_once()
             self.my_sketch.draw()
